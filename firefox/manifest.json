@@ -1,0 +1,34 @@
+{
+  "manifest_version": 2,
+  "name": "WaniKani Voice Input",
+  "version": "0.5.0",
+  "description": "Enables doing WaniKani reviews and lessons via voice input using Web Speech API",
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": true
+  },
+  "permissions": [
+    "storage",
+    "https://www.wanikani.com/*",
+    "https://api.wanikani.com/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": ["https://www.wanikani.com/*"],
+      "js": ["content.js"],
+      "run_at": "document_end"
+    }
+  ],
+  "web_accessible_resources": [
+    "injected.js",
+    "bundle.js",
+    "data/jmdict.json",
+    "data/kanjidic2.json"
+  ],
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "wanikani-voice-input@wkvi",
+      "strict_min_version": "109.0"
+    }
+  }
+}

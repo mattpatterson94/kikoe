@@ -1,0 +1,27 @@
+{
+  "name": "wanikani-koe",
+  "version": "0.5.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "bash build.sh",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "pack:chrome": "mkdir -p dist && cd chrome && zip -r ../dist/wanikani-koe-chrome.zip .",
+    "pack:firefox": "mkdir -p dist && cd firefox && zip -r ../dist/wanikani-koe-firefox.zip .",
+    "pack": "npm run pack:chrome && npm run pack:firefox"
+  },
+  "dependencies": {
+    "js-levenshtein": "^1.1.6",
+    "kansuji": "^1.0.1",
+    "to-words": "^3.7.0",
+    "wanakana": "^5.3.1"
+  },
+  "devDependencies": {
+    "@vitest/coverage-v8": "^2.1.0",
+    "esbuild": "^0.21.0",
+    "jsdom": "^25.0.0",
+    "vitest": "^2.1.0"
+  }
+}
