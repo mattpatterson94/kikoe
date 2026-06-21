@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WaniKani Voice Input — Settings</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 560px; margin: 40px auto; padding: 0 20px; color: #333; }
+    h1 { font-size: 1.3rem; border-bottom: 1px solid #ddd; padding-bottom: 8px; }
+    h2 { font-size: 1rem; margin: 28px 0 10px; color: #555; }
+    .field { display: flex; align-items: center; justify-content: space-between; margin: 10px 0; gap: 16px; }
+    .field label { flex: 1; }
+    .field .hint { font-size: 0.8rem; color: #888; }
+    input[type=text], input[type=number], select { width: 160px; padding: 4px 6px; border: 1px solid #ccc; border-radius: 4px; }
+    input[type=checkbox] { width: 18px; height: 18px; }
+    input[type=color] { width: 60px; height: 30px; border: 1px solid #ccc; border-radius: 4px; padding: 2px; }
+    #status { margin-top: 16px; font-size: 0.9rem; color: green; min-height: 1.2em; }
+    button { margin-top: 20px; padding: 8px 20px; background: #f05; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-size: 0.95rem; }
+    button:hover { background: #d04; }
+    a { color: #f05; }
+    .api-hint { font-size: 0.8rem; color: #888; margin-top: 4px; }
+  </style>
+</head>
+<body>
+  <h1>WaniKani Voice Input</h1>
+
+  <h2>WaniKani API</h2>
+  <div class="field">
+    <label for="apiToken">
+      API Token
+      <div class="hint">Read-only token from <a href="https://www.wanikani.com/settings/personal_access_tokens" target="_blank">WaniKani settings</a>.</div>
+    </label>
+    <input type="text" id="apiToken" placeholder="paste token here" style="width:220px">
+  </div>
+
+  <h2>Lightning Mode</h2>
+  <div class="field">
+    <label for="lightning">Lightning mode<br><span class="hint">Auto-advance on correct answer</span></label>
+    <input type="checkbox" id="lightning">
+  </div>
+  <div class="field">
+    <label for="lightning_delay">Lightning delay (s)</label>
+    <input type="number" id="lightning_delay" min="0" step="0.1">
+  </div>
+  <div class="field">
+    <label for="mistake_delay">Mistake delay (s)<br><span class="hint">Before showing item info on wrong answer</span></label>
+    <input type="number" id="mistake_delay" min="0" step="0.1">
+  </div>
+  <div class="field">
+    <label for="speed_show_info">Show item info on wrong answer<br><span class="hint">Auto-opens the item info panel when you answer incorrectly</span></label>
+    <input type="checkbox" id="speed_show_info">
+  </div>
+
+  <h2>Live Transcript</h2>
+  <div class="field">
+    <label for="transcript">Show live transcript</label>
+    <input type="checkbox" id="transcript">
+  </div>
+  <div class="field">
+    <label for="transcript_background">Background color</label>
+    <input type="color" id="transcript_background">
+  </div>
+  <div class="field">
+    <label for="transcript_foreground">Text color</label>
+    <input type="color" id="transcript_foreground">
+  </div>
+  <div class="field">
+    <label for="transcript_position">Position</label>
+    <select id="transcript_position">
+      <option value="top">Top</option>
+      <option value="bottom">Bottom</option>
+    </select>
+  </div>
+  <div class="field">
+    <label for="transcript_delay">Fade delay (s)</label>
+    <input type="number" id="transcript_delay" min="0" step="0.5">
+  </div>
+  <div class="field">
+    <label for="transcript_count">Max visible transcripts</label>
+    <input type="number" id="transcript_count" min="1" step="1">
+  </div>
+  <div class="field">
+    <label for="transcript_clear">Clear transcript between cards</label>
+    <input type="checkbox" id="transcript_clear">
+  </div>
+
+  <button id="save">Save settings</button>
+  <div id="status"></div>
+
+  <script src="options.js"></script>
+</body>
+</html>
