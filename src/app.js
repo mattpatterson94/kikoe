@@ -51,16 +51,18 @@ function handleSpeechRecognition(subjects, transformers, state, commands, raw, f
 
   if (state === 'Ready') {
     const context = wk.getContext(subjects);
-    const result = checkAnswer(context, transformers, raw);
-    console.log('[wkvi]', raw, result, context);
-    if (result.candidate && transcript.raw !== result.candidate.data) {
-      transcript.matched = result.candidate.data;
-    }
-    if (result.success) {
-      answer = result.answer;
-      if (!final) newState = 'Waiting';
-    } else if (result.error) {
-      transcript = '!! ' + result.message + ' !!';
+    if (context) {
+      const result = checkAnswer(context, transformers, raw);
+      console.log('[wkvi]', raw, result, context);
+      if (result.candidate && transcript.raw !== result.candidate.data) {
+        transcript.matched = result.candidate.data;
+      }
+      if (result.success) {
+        answer = result.answer;
+        if (!final) newState = 'Waiting';
+      } else if (result.error) {
+        transcript = { raw: '!! ' + result.message + ' !!' };
+      }
     }
   }
   if (state === 'Waiting' && final) {

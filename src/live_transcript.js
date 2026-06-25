@@ -26,6 +26,7 @@ let COUNTER = 1;
 
 export function clearTranscript() {
   const container = document.querySelector('div#wanikani-voice-input-transcript-container');
+  if (!container) return;
   container.textContent = '';
 }
 
@@ -47,6 +48,14 @@ export function logTranscript(settings, transcript) {
   if (!settings.transcript) {
     return;
   }
+  const container = document.querySelector('div#wanikani-voice-input-transcript-container');
+  if (!container) return;
+
+  // Normalise: the error path in handleSpeechRecognition can pass a plain string.
+  if (typeof transcript !== 'object' || transcript === null) {
+    transcript = { raw: String(transcript) };
+  }
+
   const previous = document.getElementById(`transcript-${COUNTER - 1}`);
 
   // handle overwriting (or not) previous transcript without (or with) match:
@@ -66,7 +75,6 @@ export function logTranscript(settings, transcript) {
   el.style = getTranscriptStyle(settings);
   el.textContent = newText;
 
-  const container = document.querySelector('div#wanikani-voice-input-transcript-container');
   container.style = getContainerStyle(settings);
   container.appendChild(el);
 
