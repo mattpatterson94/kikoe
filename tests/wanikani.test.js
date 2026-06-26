@@ -1,7 +1,7 @@
 import {
   getPrompt, getLanguage, getContext,
   didContextChange, didAnswerCorrectly,
-  getUserSynonyms,
+  getUserSynonyms, inputAnswer,
 } from '../src/wanikani.js';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -201,6 +201,30 @@ describe('didAnswerCorrectly', () => {
 
   test('malformed event (no results) → false', () => {
     expect(didAnswerCorrectly({ detail: {} })).toBe(false);
+  });
+});
+
+// ── getUserSynonyms ───────────────────────────────────────────────────────────
+
+// ── inputAnswer ───────────────────────────────────────────────────────────────
+
+describe('inputAnswer', () => {
+  test('sets #user-response value via native setter and fires an input event', () => {
+    setDOM('<input id="user-response" type="text" />');
+    const el = document.getElementById('user-response');
+
+    const events = [];
+    el.addEventListener('input', (e) => events.push(e.type));
+
+    inputAnswer('なんにち');
+
+    expect(el.value).toBe('なんにち');
+    expect(events).toContain('input');
+  });
+
+  test('does nothing when #user-response is absent', () => {
+    setDOM('');
+    expect(() => inputAnswer('なんにち')).not.toThrow();
   });
 });
 

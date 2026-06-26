@@ -138,7 +138,17 @@ export function markWrong() {
 
 export function inputAnswer(input) {
   const userResponse = document.querySelector('#user-response');
-  if (userResponse) userResponse.value = input;
+  if (!userResponse) return;
+  // WaniKani's quiz input is a React controlled component. Setting .value
+  // directly only changes the DOM property; React's state (which controls what
+  // gets submitted) never sees the change. We use the native HTMLInputElement
+  // value setter to bypass React's override, then fire a bubbling input event
+  // so React's synthetic event handler picks up the new value.
+  const nativeSetter = Object.getOwnPropertyDescriptor(
+    window.HTMLInputElement.prototype, 'value'
+  ).set;
+  nativeSetter.call(userResponse, input);
+  userResponse.dispatchEvent(new Event('input', { bubbles: true }));
 }
 
 export function submitAnswer(input) {
