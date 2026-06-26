@@ -6,7 +6,7 @@ const Selectors = {
   Type: 'span.quiz-input__question-type',
   Prompt: 'div.character-header__characters',
   Synonyms: '#quiz-user-synonyms script',
-  Next: 'div.quiz-input__input-container button',
+  Next: 'button.quiz-input__submit-button',
 };
 
 function getCategory() {
@@ -139,16 +139,9 @@ export function markWrong() {
 export function inputAnswer(input) {
   const userResponse = document.querySelector('#user-response');
   if (!userResponse) return;
-  // WaniKani's quiz input is a React controlled component. Setting .value
-  // directly only changes the DOM property; React's state (which controls what
-  // gets submitted) never sees the change. We use the native HTMLInputElement
-  // value setter to bypass React's override, then fire a bubbling input event
-  // so React's synthetic event handler picks up the new value.
-  const nativeSetter = Object.getOwnPropertyDescriptor(
-    window.HTMLInputElement.prototype, 'value'
-  ).set;
-  nativeSetter.call(userResponse, input);
-  userResponse.dispatchEvent(new Event('input', { bubbles: true }));
+  // WaniKani's quiz uses Stimulus.js which reads input.value directly on
+  // submit, so setting the DOM property is sufficient.
+  userResponse.value = input;
 }
 
 export function submitAnswer(input) {

@@ -209,17 +209,10 @@ describe('didAnswerCorrectly', () => {
 // ── inputAnswer ───────────────────────────────────────────────────────────────
 
 describe('inputAnswer', () => {
-  test('sets #user-response value via native setter and fires an input event', () => {
+  test('sets #user-response value', () => {
     setDOM('<input id="user-response" type="text" />');
-    const el = document.getElementById('user-response');
-
-    const events = [];
-    el.addEventListener('input', (e) => events.push(e.type));
-
     inputAnswer('なんにち');
-
-    expect(el.value).toBe('なんにち');
-    expect(events).toContain('input');
+    expect(document.getElementById('user-response').value).toBe('なんにち');
   });
 
   test('does nothing when #user-response is absent', () => {
