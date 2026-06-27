@@ -1,10 +1,9 @@
-import { checkAnswer } from '../src/flashcards.js';
+import { checkAnswer, normalize } from '../src/flashcards.js';
 import { ToHiragana } from '../src/candidates/to_hiragana.js';
 import { BasicDictionary } from '../src/candidates/basic_dictionary.js';
 import { FuzzyVowels } from '../src/candidates/fuzzy_vowels.js';
 import { ConvertWo } from '../src/candidates/convert_wo.js';
 
-// Minimal dictionary extracted from jmdict.
 const dictionary = {
   'せんだい': [
     { id: '1388080', type: 'word', kanji: ['先代'], kana: ['せんだい'] },
@@ -16,131 +15,170 @@ function makeTransformers(dict = {}) {
   return [new ToHiragana(), new BasicDictionary(dict)];
 }
 
-// ── Meaning matching ──────────────────────────────────────────────────────────
+// ── normalize ─────────────────────────────────────────────────────────────────
 
-describe('meaning matching', () => {
-  const ctx = {
-    meanings: ['Cold Hearted'],
-    readings: ['はくじょう'],
-    prompt: '薄情',
-    category: 'vocabulary',
-    type: 'meaning',
-    items: [],
-  };
-
-  test('exact meaning match', () => {
-    const r = checkAnswer(ctx, makeTransformers(), 'Cold Hearted');
-    expect(r.success).toBe(true);
-    expect(r.answer).toBe('Cold Hearted');
+describe('normalize', () => {
+  test('strips leading article "the"', () => {
+    expect(normalize('the village')).toBe('village');
   });
 
-  test('case-insensitive meaning match', () => {
-    const r = checkAnswer(ctx, makeTransformers(), 'cold hearted');
-    expect(r.success).toBe(true);
-    expect(r.answer).toBe('Cold Hearted');
+  test('strips leading article "a"', () => {
+    expect(normalize('a dog')).toBe('dog');
   });
 
-  test('levenshtein distance tolerates hyphen from speech recognition', () => {
-    // upstream regression: 'cold-hearted' → 1 edit distance from 'cold hearted'
-    const r = checkAnswer(ctx, makeTransformers(), 'cold-hearted');
-    expect(r.success).toBe(true);
-    expect(r.answer).toBe('Cold Hearted');
+  test('strips trailing punctuation', () => {
+    expect(normalize('village.')).toBe('village');
   });
 
-  test('wrong meaning fails', () => {
-    const r = checkAnswer(ctx, makeTransformers(), 'warm hearted');
-    expect(r.success).toBe(false);
-    expect(r.error).toBe(false);
+  test('lowercases English', () => {
+    expect(normalize('Cold Hearted')).toBe('cold hearted');
   });
 
-  // Upstream regression: should return the *meaning* match, not the reading.
-  test('romaji that matches a meaning (not reading) returns the meaning', () => {
-    const meaningCtx = {
-      meanings: ['sendai'],
-      readings: ['せんだい'],
-      prompt: '仙台',
-      category: 'vocabulary',
-      type: 'meaning',
-      items: [],
-    };
-    const r = checkAnswer(meaningCtx, makeTransformers(dictionary), 'sendai');
-    expect(r.success).toBe(true);
-    expect(r.answer).toBe('sendai');
+  test('preserves spaces in multi-word English meanings', () => {
+    expect(normalize('put on clothes')).toBe('put on clothes');
+  });
+
+  test('converts Japanese to hiragana and removes spaces', () => {
+    expect(normalize('センダイ')).toBe('せんだい');
   });
 });
 
-// ── Reading matching ──────────────────────────────────────────────────────────
+// ── Meaning questions ─────────────────────────────────────────────────────────
 
-describe('reading matching', () => {
-  const ctx = {
-    meanings: ['Sendai'],
-    readings: ['せんだい'],
-    prompt: '仙台',
-    category: 'vocabulary',
-    type: 'reading',
-    items: [],
-  };
+describe('meaning questions', () => {
+  test('returns normalised English text when it matches a meaning', () => {
+    const ctx = { type: 'meaning', prompt: '薄情', category: 'vocabulary', meanings: ['Cold Hearted', 'Coldhearted'] };
+    const r = checkAnswer(ctx, makeTransformers(), 'Cold Hearted');
+    expect(r.success).toBe(true);
+    expect(r.answer).toBe('cold hearted');
+  });
 
-  test('exact hiragana reading match', () => {
+  test('strips leading article before matching', () => {
+    const ctx = { type: 'meaning', prompt: '村', category: 'vocabulary', meanings: ['village'] };
+    const r = checkAnswer(ctx, makeTransformers(), 'the village');
+    expect(r.success).toBe(true);
+    expect(r.answer).toBe('village');
+  });
+
+  test('preserves spaces in multi-word answers', () => {
+    const ctx = { type: 'meaning', meanings: ['put on clothes'] };
+    const r = checkAnswer(ctx, makeTransformers(), 'put on clothes');
+    expect(r.success).toBe(true);
+    expect(r.answer).toBe('put on clothes');
+  });
+
+  test('does not submit when answer does not match any meaning', () => {
+    const ctx = { type: 'meaning', meanings: ['wheat'] };
+    const r = checkAnswer(ctx, makeTransformers(), 'wait');
+    expect(r.success).toBe(false);
+  });
+
+  test('does not submit when meanings list is empty (subjects not yet loaded)', () => {
+    const ctx = { type: 'meaning', meanings: [] };
+    const r = checkAnswer(ctx, makeTransformers(), 'anything');
+    expect(r.success).toBe(false);
+  });
+
+  test('matches compound word with space ("rib cage" → "ribcage")', () => {
+    const ctx = { type: 'meaning', meanings: ['ribcage'] };
+    const r = checkAnswer(ctx, makeTransformers(), 'rib cage');
+    expect(r.success).toBe(true);
+    expect(r.answer).toBe('ribcage');
+  });
+});
+
+// ── Reading questions ─────────────────────────────────────────────────────────
+
+describe('reading questions', () => {
+  const ctx = { type: 'reading', prompt: '仙台', category: 'vocabulary', readings: ['せんだい'] };
+
+  test('returns hiragana when input is already hiragana', () => {
     const r = checkAnswer(ctx, makeTransformers(dictionary), 'せんだい');
     expect(r.success).toBe(true);
     expect(r.answer).toBe('せんだい');
   });
 
-  test('katakana input converts to hiragana and matches reading', () => {
+  test('converts katakana input to hiragana', () => {
     const r = checkAnswer(ctx, makeTransformers(dictionary), 'センダイ');
     expect(r.success).toBe(true);
     expect(r.answer).toBe('せんだい');
   });
 
-  test('wrong reading fails', () => {
-    const r = checkAnswer(ctx, makeTransformers(dictionary), 'とうきょう');
-    expect(r.success).toBe(false);
-  });
-
-  test('meaning answer does not succeed when type is reading', () => {
-    const r = checkAnswer(ctx, makeTransformers(dictionary), 'Sendai');
-    expect(r.success).toBe(false);
-  });
-});
-
-// ── Literal prompt matching (kana vocabulary) ─────────────────────────────────
-
-describe('literal prompt matching', () => {
-  test('spoken kana matches prompt directly when readings exist', () => {
-    const ctx = {
-      meanings: ['Beautiful'],
-      readings: ['きれい'],
-      prompt: 'きれい',
-      category: 'kana_vocabulary',
-      type: 'reading',
-      items: [],
-    };
-    const r = checkAnswer(ctx, makeTransformers(), 'きれい');
-    expect(r.success).toBe(true);
-    expect(r.answer).toBe('きれい');
-  });
-});
-
-// ── Homonym handling ──────────────────────────────────────────────────────────
-
-describe('homonym handling', () => {
-  test('"b" maps to び via the homonym table', () => {
-    const ctx = {
-      meanings: [],
-      readings: ['び'],
-      prompt: '美',
-      category: 'kanji',
-      type: 'reading',
-      items: [],
-    };
-    const r = checkAnswer(ctx, makeTransformers(), 'b');
+  test('uses homonym table for mishearings ("b" → "び")', () => {
+    const r = checkAnswer({ type: 'reading', prompt: '美', readings: ['び'] }, makeTransformers(), 'b');
     expect(r.success).toBe(true);
     expect(r.answer).toBe('び');
   });
+
+  test('uses homonym table for short "ta" reading', () => {
+    const r = checkAnswer({ type: 'reading', prompt: '田', readings: ['た'] }, makeTransformers(), 'ta');
+    expect(r.success).toBe(true);
+    expect(r.answer).toBe('た');
+  });
+
+  test('uses homonym table for "ta" heard as English-ish variants', () => {
+    const ctx = { type: 'reading', prompt: '田', readings: ['た'] };
+    expect(checkAnswer(ctx, makeTransformers(), 'tar').answer).toBe('た');
+    expect(checkAnswer(ctx, makeTransformers(), 'tah').answer).toBe('た');
+  });
+
+  test('uses numeric speech correction for "go" heard as 5', () => {
+    const r = checkAnswer({ type: 'reading', prompt: '五', readings: ['ご'] }, makeTransformers(), '5');
+    expect(r.success).toBe(true);
+    expect(r.answer).toBe('ご');
+  });
+
+  test('uses numeric speech correction for "kuu" heard as 9', () => {
+    const r = checkAnswer({ type: 'reading', prompt: '空', readings: ['くう'] }, makeTransformers(), '9');
+    expect(r.success).toBe(true);
+    expect(r.answer).toBe('くう');
+  });
+
+  test('keeps numeric speech correction for "kyuu" heard as 9', () => {
+    const r = checkAnswer({ type: 'reading', prompt: '九', readings: ['きゅう'] }, makeTransformers(), '9');
+    expect(r.success).toBe(true);
+    expect(r.answer).toBe('きゅう');
+  });
+
+  test('does not submit when kana does not match any accepted reading', () => {
+    const r = checkAnswer(ctx, makeTransformers(), 'とうきょう');
+    expect(r.success).toBe(false);
+  });
+
+  test('does not submit when readings list is empty (subjects not yet loaded)', () => {
+    const r = checkAnswer({ type: 'reading', readings: [] }, makeTransformers(), 'せんだい');
+    expect(r.success).toBe(false);
+  });
+
+  test('falls back to best-effort conversion for unrecognised input', () => {
+    const r = checkAnswer(ctx, makeTransformers(), 'tokyo');
+    expect(r.success).toBe(false);
+  });
 });
 
-// ── Full pipeline ─────────────────────────────────────────────────────────────
+// ── Name questions ────────────────────────────────────────────────────────────
+
+describe('name questions (radicals)', () => {
+  const ctx = { type: 'name', prompt: '一', category: 'radical', meanings: ['Ground'] };
+
+  test('returns normalised English for name type', () => {
+    const r = checkAnswer(ctx, makeTransformers(), 'Ground');
+    expect(r.success).toBe(true);
+    expect(r.answer).toBe('ground');
+  });
+});
+
+// ── Unknown type ──────────────────────────────────────────────────────────────
+
+describe('unknown question type', () => {
+  test('returns error result', () => {
+    const r = checkAnswer({ type: 'unknown' }, makeTransformers(), 'test');
+    expect(r.success).toBe(false);
+    expect(r.error).toBe(true);
+  });
+});
+
+// ── Full transformer pipeline ─────────────────────────────────────────────────
 
 describe('full transformer pipeline', () => {
   const transformers = [
@@ -150,33 +188,10 @@ describe('full transformer pipeline', () => {
     new BasicDictionary(dictionary),
   ];
 
-  test('katakana speech input matches hiragana reading via ToHiragana', () => {
-    const ctx = {
-      meanings: [],
-      readings: ['せんだい'],
-      prompt: '仙台',
-      category: 'vocabulary',
-      type: 'reading',
-      items: [],
-    };
-    expect(checkAnswer(ctx, transformers, 'センダイ').success).toBe(true);
-  });
-});
-
-// ── Empty context ─────────────────────────────────────────────────────────────
-
-describe('empty context (no subjects loaded)', () => {
-  test('no readings or meanings → always incorrect', () => {
-    const ctx = {
-      meanings: [],
-      readings: [],
-      prompt: '下',
-      category: 'kanji',
-      type: 'reading',
-      items: [],
-    };
-    const r = checkAnswer(ctx, makeTransformers(), 'した');
-    expect(r.success).toBe(false);
-    expect(r.error).toBe(false);
+  test('katakana speech input converts to hiragana via ToHiragana', () => {
+    const ctx = { type: 'reading', prompt: '仙台', category: 'vocabulary', readings: ['せんだい'] };
+    const r = checkAnswer(ctx, transformers, 'センダイ');
+    expect(r.success).toBe(true);
+    expect(r.answer).toBe('せんだい');
   });
 });

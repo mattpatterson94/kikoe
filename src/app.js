@@ -3,7 +3,7 @@ import { createRecognition, setLanguage } from './recognition.js';
 import * as wk from './wanikani.js';
 import { initSettings, updateSettings, getSettings } from './settings.js';
 import { startSpeedEnhancer } from './speed.js';
-import { createTranscriptContainer, logTranscript, clearTranscript } from './live_transcript.js';
+import { createTranscriptContainer, logTranscript, clearTranscript, showIdleIndicator, setIdleIndicatorState } from './live_transcript.js';
 import { loadDictionary } from './dict.js';
 
 import { ToHiragana } from './candidates/to_hiragana.js';
@@ -16,6 +16,9 @@ import { FuzzyVowels } from './candidates/fuzzy_vowels.js';
 import { MultipleWords } from './candidates/multiple.js';
 import { Numerals } from './candidates/numerals.js';
 
+const EMPTY_FINAL_RESTART_THRESHOLD = 3;
+const RESTARTING_INDICATOR_MS = 900;
+
 // Read config stamped by content.js, then remove the attribute immediately.
 const _encoded = document.documentElement.dataset.wkviConfig;
 document.documentElement.removeAttribute('data-wkvi-config');
@@ -27,8 +30,19 @@ document.addEventListener('wkvi:settingsChanged', (e) => {
   updateSettings(e.detail);
 });
 
-// Request subject data for a given prompt/category from the content script.
-// The content script holds the API token and handles caching.
+// If the user repeats themselves ("night night"), collapse to the first half.
+function deduplicate(raw) {
+  const words = raw.trim().split(/\s+/);
+  if (words.length >= 2 && words.length % 2 === 0) {
+    const half = words.length / 2;
+    const first = words.slice(0, half).join(' ');
+    const second = words.slice(half).join(' ');
+    if (first.toLowerCase() === second.toLowerCase()) return first;
+  }
+  return raw;
+}
+
+// Request subject data from the content script (which holds the API token).
 function requestSubjects(prompt, category) {
   return new Promise((resolve) => {
     function handler(e) {
@@ -44,67 +58,19 @@ function requestSubjects(prompt, category) {
   });
 }
 
-function handleSpeechRecognition(subjects, transformers, state, commands, raw, final) {
-  let newState = state;
-  let answer = null;
-  let transcript = { raw };
-
-  if (state === 'Ready') {
-    const context = wk.getContext(subjects);
-    if (context) {
-      const result = checkAnswer(context, transformers, raw);
-      console.log('[wkvi]', raw, result, context);
-      if (result.candidate && transcript.raw !== result.candidate.data) {
-        transcript.matched = result.candidate.data;
-      }
-      if (result.success) {
-        answer = result.answer;
-        if (!final) newState = 'Waiting';
-      } else if (result.error) {
-        transcript = { raw: '!! ' + result.message + ' !!' };
-      }
-    }
-  }
-  if (state === 'Waiting' && final) {
-    newState = 'Ready';
-  }
-
-  const context = wk.getContext(subjects);
-  if (state === 'Ready' && final && commands[raw]) {
-    return { newState, transcript, answer: null, command: commands[raw] };
-  }
-
-  return { newState, transcript, answer, command: null };
-}
-
 async function startListener(dictionary) {
   createTranscriptContainer(getSettings());
 
   let subjects = [];
-  let state = 'Ready';
   let context = wk.getContext(subjects);
 
   // Pre-fetch subjects for the initial card.
   if (context?.prompt && context?.category) {
+    setIdleIndicatorState('loading');
     subjects = await requestSubjects(context.prompt, context.category);
     context = wk.getContext(subjects);
+    setIdleIndicatorState('listening');
   }
-
-  function setState(s) { state = s; }
-
-  function next() {
-    wk.clickNext();
-    setState('Ready');
-  }
-
-  const commands = {
-    'wrong': wk.markWrong, 'incorrect': wk.markWrong, 'mistake': wk.markWrong,
-    '不正解': wk.markWrong, 'ふせいかい': wk.markWrong, '間違い': wk.markWrong,
-    'まちがい': wk.markWrong, 'だめ': wk.markWrong, 'ダメ': wk.markWrong,
-    '駄目': wk.markWrong,
-    'next': next, 'つぎ': next, '次': next, 'NEXT': next,
-    'ねくすと': next, 'ネクスト': next,
-  };
 
   const transformers = [
     new ToHiragana(), new ConvertWo(),
@@ -113,53 +79,160 @@ async function startListener(dictionary) {
     new MultipleWords(dictionary), new Numerals(),
   ];
 
-  const lang = wk.getLanguage();
-  const recognition = createRecognition(lang, function(raw, final) {
-    logTranscript(getSettings(), { raw });
-    const outcome = handleSpeechRecognition(subjects, transformers, state, commands, raw, final);
-    logTranscript(getSettings(), outcome.transcript);
-    if (state !== outcome.newState) setState(outcome.newState);
-    if (outcome.answer) wk.submitAnswer(outcome.answer);
-    if (outcome.command) outcome.command();
+  const commands = {
+    'wrong': wk.markWrong, 'incorrect': wk.markWrong, 'mistake': wk.markWrong,
+    '不正解': wk.markWrong, 'ふせいかい': wk.markWrong, '間違い': wk.markWrong,
+    'まちがい': wk.markWrong, 'だめ': wk.markWrong, 'ダメ': wk.markWrong,
+    '駄目': wk.markWrong,
+    'next': wk.clickNext, 'つぎ': wk.clickNext, '次': wk.clickNext, 'NEXT': wk.clickNext,
+    'ねくすと': wk.clickNext, 'ネクスト': wk.clickNext,
+  };
 
-    const newContext = wk.getContext(subjects);
-    if (final && wk.didContextChange(context, newContext)) {
-      context = newContext;
-      if (getSettings().transcript_clear) clearTranscript();
+  let submitted = false;
+  let pendingRaw = null;
+  let emptyFinals = 0;
+  let restartIndicatorTimer;
+
+  function restoreIdleIndicator() {
+    setIdleIndicatorState(_config.hasApiToken ? 'listening' : 'no-token');
+  }
+
+  function isPageActive() {
+    const hidden = document.hidden || document.visibilityState === 'hidden';
+    const blurred = typeof document.hasFocus === 'function' && !document.hasFocus();
+    return !hidden && !blurred;
+  }
+
+  const recognition = createRecognition(() => wk.getLanguage(), function(rawInput, final) {
+    const raw = deduplicate(rawInput);
+    if (!raw.trim()) {
+      if (final && ++emptyFinals >= EMPTY_FINAL_RESTART_THRESHOLD) {
+        emptyFinals = 0;
+        clearTimeout(restartIndicatorTimer);
+        setIdleIndicatorState('restarting');
+        recognition.restart();
+        restartIndicatorTimer = setTimeout(restoreIdleIndicator, RESTARTING_INDICATOR_MS);
+      }
+      return;
+    }
+    emptyFinals = 0;
+    logTranscript(getSettings(), { raw });
+
+    // Only process on final results — interim results are shown for feedback only.
+    if (!final) return;
+
+    // Voice commands take priority over answer submission.
+    if (commands[raw]) {
+      commands[raw]();
+      return;
+    }
+
+    // Ignore further speech after the answer has been submitted — wait for card change.
+    if (submitted) { console.log('[wkvi] skipped — already submitted'); return; }
+
+    const ctx = wk.getContext(subjects);
+    if (!ctx) { console.log('[wkvi] skipped — no context'); return; }
+
+    const result = checkAnswer(ctx, transformers, raw);
+    logTranscript(getSettings(), result.transcript);
+    console.log('[wkvi] checkAnswer', { raw, type: ctx.type, readings: ctx.readings, meanings: ctx.meanings, result });
+
+    if (result.success && result.answer) {
+      submitted = true;
+      wk.submitAnswer(result.answer);
+    } else if (!ctx.readings?.length && !ctx.meanings?.length) {
+      // Subjects not loaded yet — store transcript and retry once they arrive.
+      pendingRaw = raw;
+      console.log('[wkvi] subjects not loaded, stored pending transcript:', raw);
     }
   });
 
-  // Refresh subjects and language when the card changes.
+  // Refresh subjects + language and clear transcript when the card changes.
   async function onCardChange() {
     const newContext = wk.getContext(subjects);
     if (wk.didContextChange(context, newContext)) {
+      submitted = false;
+      pendingRaw = null;
       context = newContext;
       if (newContext?.prompt && newContext?.category) {
+        setIdleIndicatorState('loading');
         subjects = await requestSubjects(newContext.prompt, newContext.category);
+        context = wk.getContext(subjects);
+        setIdleIndicatorState('listening');
+        // Retry any transcript that arrived while subjects were loading.
+        if (pendingRaw && !submitted) {
+          const result = checkAnswer(context, transformers, pendingRaw);
+          console.log('[wkvi] retrying pending transcript', { pendingRaw, result });
+          if (result.success && result.answer) {
+            submitted = true;
+            wk.submitAnswer(result.answer);
+          }
+          pendingRaw = null;
+        }
       }
-      const newLang = wk.getLanguage();
-      setLanguage(recognition, newLang);
+      setLanguage(recognition, wk.getLanguage());
       if (getSettings().transcript_clear) clearTranscript();
     }
   }
 
-  const observer = new MutationObserver(onCardChange);
-  observer.observe(document.body, { attributes: true, childList: true, subtree: true });
+  // Only trigger card change when the prompt+type DOM elements settle on new
+  // values. This ignores unrelated mutations (animations, the `correct`
+  // attribute, progress bars) that would otherwise reset a naive debounce and
+  // prevent onCardChange from ever firing.
+  let lastSeenPrompt = context?.prompt;
+  let lastSeenType = context?.type;
+  let cardChangeTimer;
+
+  const observer = new MutationObserver(() => {
+    const prompt = document.querySelector('div.character-header__characters')?.textContent?.trim();
+    const type = document.querySelector('span.quiz-input__question-type')?.textContent?.trim().toLowerCase();
+    if (!prompt || !type) return;
+    if (prompt === lastSeenPrompt && type === lastSeenType) return;
+    lastSeenPrompt = prompt;
+    lastSeenType = type;
+    clearTimeout(cardChangeTimer);
+    cardChangeTimer = setTimeout(onCardChange, 50);
+  });
+  observer.observe(document.body, { childList: true, subtree: true });
 
   startSpeedEnhancer(getSettings);
 
-  recognition.start();
-  state = 'Ready';
+  showIdleIndicator(getSettings());
+
+  function updateRecognitionForPageActivity() {
+    clearTimeout(restartIndicatorTimer);
+    emptyFinals = 0;
+    if (isPageActive()) {
+      recognition.resume();
+      restoreIdleIndicator();
+    } else {
+      recognition.pause();
+      setIdleIndicatorState('paused');
+    }
+  }
+
+  document.addEventListener('visibilitychange', updateRecognitionForPageActivity);
+  window.addEventListener('focus', updateRecognitionForPageActivity);
+  window.addEventListener('blur', updateRecognitionForPageActivity);
+  updateRecognitionForPageActivity();
 }
 
 async function init() {
   const dictionary = await loadDictionary(_config.base);
-  const context = wk.getContext([]);
+  let listenerStarted = false;
 
-  if (!context) return;
-  if (context.page === 'review' || context.page === 'lesson' || context.page === 'quiz') {
-    startListener(dictionary);
+  function tryStart() {
+    if (listenerStarted) return;
+    const context = wk.getContext();
+    if (!context) return;
+    if (context.page === 'review' || context.page === 'lesson' || context.page === 'quiz') {
+      listenerStarted = true;
+      startListener(dictionary);
+    }
   }
+
+  tryStart();
+  document.addEventListener('turbo:load', tryStart);
 }
 
 init().catch(err => console.error('[wkvi] init error:', err));

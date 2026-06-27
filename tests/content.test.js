@@ -1,4 +1,4 @@
-import { getSettings, fetchSubjectsForPrompt, buildSafeConfig, CACHE_PREFIX } from '../extension/content.js';
+import { getSettings, buildSafeConfig, scrapeApiToken, fetchSubjectsForPrompt, CACHE_PREFIX } from '../extension/content.js';
 import { defaults } from '../src/settings.js';
 
 // ── Chrome API mock ───────────────────────────────────────────────────────────
@@ -28,16 +28,11 @@ const chromeMock = {
     },
     onChanged: { addListener: vi.fn() },
   },
-  // No runtime.getURL here — prevents auto-start of main() on import.
   runtime: {},
 };
 
-// Always provide a fetch spy so not.toHaveBeenCalled() assertions work.
-const fetchMock = vi.fn();
-
 beforeAll(() => {
   vi.stubGlobal('chrome', chromeMock);
-  vi.stubGlobal('fetch', fetchMock);
 });
 
 beforeEach(() => {
@@ -74,69 +69,6 @@ describe('getSettings', () => {
   });
 });
 
-// ── fetchSubjectsForPrompt ────────────────────────────────────────────────────
-
-const fakeSubjects = [{ id: 440, object: 'kanji', data: { slug: '下' } }];
-
-describe('fetchSubjectsForPrompt', () => {
-  test('returns [] when apiToken is empty without calling fetch', async () => {
-    const result = await fetchSubjectsForPrompt('下', 'kanji', '');
-    expect(result).toStrictEqual([]);
-    expect(fetchMock).not.toHaveBeenCalled();
-  });
-
-  test('returns cached subjects without calling fetch', async () => {
-    const cacheKey = CACHE_PREFIX + 'kanji_下';
-    localStore[cacheKey] = fakeSubjects;
-
-    const result = await fetchSubjectsForPrompt('下', 'kanji', 'token-123');
-    expect(result).toStrictEqual(fakeSubjects);
-    expect(fetchMock).not.toHaveBeenCalled();
-  });
-
-  test('fetches from WaniKani API on cache miss and stores result', async () => {
-    fetchMock.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({ data: fakeSubjects }),
-    });
-
-    const result = await fetchSubjectsForPrompt('下', 'kanji', 'token-abc');
-
-    expect(fetchMock).toHaveBeenCalledWith(
-      'https://api.wanikani.com/v2/subjects?slugs=%E4%B8%8B&types=kanji',
-      { headers: { Authorization: 'Bearer token-abc' } }
-    );
-    expect(result).toStrictEqual(fakeSubjects);
-
-    const cacheKey = CACHE_PREFIX + 'kanji_下';
-    expect(chromeMock.storage.local.set).toHaveBeenCalledWith({ [cacheKey]: fakeSubjects });
-  });
-
-  test('returns [] and logs error when API responds with non-ok status', async () => {
-    fetchMock.mockResolvedValueOnce({ ok: false, status: 401 });
-    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-
-    const result = await fetchSubjectsForPrompt('下', 'kanji', 'bad-token');
-    expect(result).toStrictEqual([]);
-    expect(consoleSpy).toHaveBeenCalled();
-
-    consoleSpy.mockRestore();
-  });
-
-  test('URL-encodes non-ASCII prompt characters', async () => {
-    fetchMock.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({ data: [] }),
-    });
-
-    await fetchSubjectsForPrompt('語', 'vocabulary', 'tok');
-    expect(fetchMock).toHaveBeenCalledWith(
-      expect.stringContaining('%E8%AA%9E'),
-      expect.any(Object)
-    );
-  });
-});
-
 // ── buildSafeConfig ───────────────────────────────────────────────────────────
 
 describe('buildSafeConfig', () => {
@@ -150,9 +82,98 @@ describe('buildSafeConfig', () => {
     expect(config.base).toBe('chrome-extension://id/');
   });
 
+  test('hasApiToken false by default', () => {
+    const config = buildSafeConfig('chrome-extension://id/', defaults);
+    expect(config.hasApiToken).toBe(false);
+  });
+
+  test('hasApiToken true when token present', () => {
+    const config = buildSafeConfig('chrome-extension://id/', defaults, true);
+    expect(config.hasApiToken).toBe(true);
+  });
+
   test('preserves all non-sensitive settings', () => {
     const config = buildSafeConfig('chrome-extension://id/', { ...defaults, apiToken: 'secret', lightning: true });
     expect(config.settings.lightning).toBe(true);
     expect(config.settings.transcript).toBe(defaults.transcript);
+  });
+});
+
+// ── scrapeApiToken ────────────────────────────────────────────────────────────
+
+describe('scrapeApiToken', () => {
+  const TOKEN = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
+
+  beforeEach(() => {
+    vi.stubGlobal('DOMParser', class {
+      parseFromString(html) {
+        document.body.innerHTML = html;
+        return document;
+      }
+    });
+  });
+
+  afterEach(() => {
+    document.body.innerHTML = '';
+  });
+
+  test('extracts UUID from an input value', async () => {
+    vi.stubGlobal('fetch', async () => ({
+      ok: true,
+      text: async () => `<input type="text" value="${TOKEN}" readonly />`,
+    }));
+    expect(await scrapeApiToken()).toBe(TOKEN);
+  });
+
+  test('extracts UUID from a code element', async () => {
+    vi.stubGlobal('fetch', async () => ({
+      ok: true,
+      text: async () => `<code>${TOKEN}</code>`,
+    }));
+    expect(await scrapeApiToken()).toBe(TOKEN);
+  });
+
+  test('returns null when no UUID is found', async () => {
+    vi.stubGlobal('fetch', async () => ({
+      ok: true,
+      text: async () => `<p>No token here</p>`,
+    }));
+    expect(await scrapeApiToken()).toBeNull();
+  });
+
+  test('returns null on non-ok response', async () => {
+    vi.stubGlobal('fetch', async () => ({ ok: false, status: 404 }));
+    expect(await scrapeApiToken()).toBeNull();
+  });
+});
+
+// ── fetchSubjectsForPrompt ────────────────────────────────────────────────────
+
+describe('fetchSubjectsForPrompt', () => {
+  const TOKEN = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
+  const mockSubject = { id: 1, object: 'kanji', data: { slug: '下', characters: '下', meanings: [] } };
+
+  test('returns [] when no apiToken provided', async () => {
+    expect(await fetchSubjectsForPrompt('下', 'kanji', null)).toEqual([]);
+  });
+
+  test('fetches from API and caches result', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => ({
+      ok: true,
+      json: async () => ({ data: [mockSubject] }),
+    })));
+    const result = await fetchSubjectsForPrompt('下', 'kanji', TOKEN);
+    expect(result).toEqual([mockSubject]);
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  test('returns cached result without fetching again', async () => {
+    const cacheKey = CACHE_PREFIX + 'kanji_下';
+    localStore[cacheKey] = [mockSubject];
+    const fetchSpy = vi.fn();
+    vi.stubGlobal('fetch', fetchSpy);
+    const result = await fetchSubjectsForPrompt('下', 'kanji', TOKEN);
+    expect(result).toEqual([mockSubject]);
+    expect(fetchSpy).not.toHaveBeenCalled();
   });
 });

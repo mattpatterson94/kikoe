@@ -108,14 +108,14 @@ describe('startSpeedEnhancer', () => {
     expect(_getContainer()).not.toBeNull();
   });
 
-  test('reads settings lazily — respects updated setting at fire time', async () => {
+  test('reads settings lazily — clickInfo respects updated setting at fire time', async () => {
     const el = addContainer();
-    let lightning = false;
-    startSpeedEnhancer(() => makeSettings({ lightning, lightning_delay: 0.1 }));
-    lightning = true; // flip after init, before the attribute fires
-    el.setAttribute('correct', 'true');
+    let showInfo = false;
+    startSpeedEnhancer(() => makeSettings({ speed_show_info: showInfo, mistake_delay: 0.1 }));
+    showInfo = true; // flip after init, before the attribute fires
+    el.setAttribute('correct', 'false');
     await Promise.resolve();
     vi.runAllTimers();
-    expect(clickNext).toHaveBeenCalledTimes(1);
+    expect(clickInfo).toHaveBeenCalledTimes(1);
   });
 });

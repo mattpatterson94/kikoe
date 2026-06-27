@@ -4,6 +4,7 @@ import {
   getUserSynonyms, inputAnswer,
 } from '../src/wanikani.js';
 
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 // vi.stubGlobal('location', ...) replaces window.location, which is what
@@ -20,25 +21,6 @@ afterEach(() => {
   vi.unstubAllGlobals();
   document.body.innerHTML = '';
 });
-
-function makeSubject(overrides = {}) {
-  return {
-    id: 440,
-    object: 'kanji',
-    data: {
-      slug: '下',
-      characters: '下',
-      meanings: [{ meaning: 'Below', accepted_answer: true }],
-      auxiliary_meanings: [{ meaning: 'Under', accepted_answer: true }],
-      readings: [
-        { reading: 'した', accepted_answer: true },
-        { reading: 'しも', accepted_answer: false },
-      ],
-      ...overrides.data,
-    },
-    ...overrides,
-  };
-}
 
 // ── getPrompt ─────────────────────────────────────────────────────────────────
 
@@ -101,64 +83,63 @@ describe('getContext', () => {
 
   test('review URL → page = "review"', () => {
     setURL('https://www.wanikani.com/subjects/review');
-    expect(getContext([]).page).toBe('review');
+    expect(getContext().page).toBe('review');
   });
 
-  test('returns correct prompt and type from DOM', () => {
+  test('returns correct prompt, type, and category from DOM', () => {
     setURL('https://www.wanikani.com/subjects/review');
-    const ctx = getContext([makeSubject()]);
+    const ctx = getContext();
     expect(ctx.prompt).toBe('下');
     expect(ctx.type).toBe('reading');
     expect(ctx.category).toBe('kanji');
   });
 
-  test('populates accepted readings from matching subject', () => {
-    setURL('https://www.wanikani.com/subjects/review');
-    const ctx = getContext([makeSubject()]);
-    expect(ctx.readings).toContain('した');
-    expect(ctx.readings).not.toContain('しも'); // accepted_answer: false
-  });
-
-  test('populates meanings and auxiliary_meanings from matching subject', () => {
-    setURL('https://www.wanikani.com/subjects/review');
-    const ctx = getContext([makeSubject()]);
-    expect(ctx.meanings).toContain('Below');
-    expect(ctx.meanings).toContain('Under');
-  });
-
-  test('non-matching subject yields empty readings and meanings', () => {
-    setURL('https://www.wanikani.com/subjects/review');
-    const other = makeSubject({ data: { slug: '上', characters: '上' } });
-    const ctx = getContext([other]);
-    expect(ctx.readings).toStrictEqual([]);
-    expect(ctx.meanings).toStrictEqual([]);
-  });
-
-  test('empty subjects array yields empty readings and meanings', () => {
+  test('returns empty meanings and readings when no subjects provided', () => {
     setURL('https://www.wanikani.com/subjects/review');
     const ctx = getContext([]);
-    expect(ctx.readings).toStrictEqual([]);
-    expect(ctx.meanings).toStrictEqual([]);
+    expect(ctx.meanings).toEqual([]);
+    expect(ctx.readings).toEqual([]);
+    expect(ctx.items).toEqual([]);
+  });
+
+  test('extracts accepted meanings from matching subjects', () => {
+    setURL('https://www.wanikani.com/subjects/review');
+    const subjects = [{
+      id: 1, object: 'kanji',
+      data: {
+        slug: '下', characters: '下',
+        meanings: [
+          { meaning: 'Below', accepted_answer: true },
+          { meaning: 'Under', accepted_answer: true },
+          { meaning: 'Beneath', accepted_answer: false },
+        ],
+        auxiliary_meanings: [],
+      }
+    }];
+    const ctx = getContext(subjects);
+    expect(ctx.meanings).toContain('Below');
+    expect(ctx.meanings).toContain('Under');
+    expect(ctx.meanings).not.toContain('Beneath');
   });
 
   test('lesson URL → page = "lesson"', () => {
     setURL('https://www.wanikani.com/subjects/6259/lesson');
-    expect(getContext([]).page).toBe('lesson');
+    expect(getContext().page).toBe('lesson');
   });
 
   test('quiz URL → page = "quiz"', () => {
     setURL('https://www.wanikani.com/subjects/lesson/quiz');
-    expect(getContext([]).page).toBe('quiz');
+    expect(getContext().page).toBe('quiz');
   });
 
   test('extra_study URL → page = "quiz"', () => {
     setURL('https://www.wanikani.com/subjects/extra_study?queue_type=recent_lessons');
-    expect(getContext([]).page).toBe('quiz');
+    expect(getContext().page).toBe('quiz');
   });
 
   test('recent-mistakes URL → page = "quiz"', () => {
     setURL('https://www.wanikani.com/recent-mistakes');
-    expect(getContext([]).page).toBe('quiz');
+    expect(getContext().page).toBe('quiz');
   });
 });
 

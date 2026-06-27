@@ -53,8 +53,15 @@ export function getPrompt() {
   return prompt === '' ? null : prompt;
 }
 
-// Filters pre-fetched WaniKani API subjects for the current card.
-// subjects: array of WaniKani API v2 subject objects
+export function getUserSynonyms(id) {
+  const script = document.querySelector(Selectors.Synonyms);
+  if (script) {
+    const data = JSON.parse(script.textContent);
+    if (data[id]) return data[id];
+  }
+  return [];
+}
+
 function getItems(subjects, category, slug) {
   return subjects.filter(s =>
     s.object === category &&
@@ -83,15 +90,6 @@ function getReadingsFromItems(items) {
     }
   }
   return readings;
-}
-
-export function getUserSynonyms(id) {
-  const script = document.querySelector(Selectors.Synonyms);
-  if (script) {
-    const data = JSON.parse(script.textContent);
-    if (data[id]) return data[id];
-  }
-  return [];
 }
 
 // subjects: WaniKani API v2 subject objects for the current card (may be empty)
@@ -139,8 +137,6 @@ export function markWrong() {
 export function inputAnswer(input) {
   const userResponse = document.querySelector('#user-response');
   if (!userResponse) return;
-  // WaniKani's quiz uses Stimulus.js which reads input.value directly on
-  // submit, so setting the DOM property is sufficient.
   userResponse.value = input;
 }
 

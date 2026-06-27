@@ -1,8 +1,7 @@
-import * as wk from './wanikani.js';
-import { clickSelector } from './util.js';
-import { toHiragana, isJapanese, isKanji } from 'wanakana';
-import levenshtein from 'js-levenshtein';
+import { toHiragana, isJapanese, isKana } from 'wanakana';
 
+// Speech recognition frequently mishears Japanese phonemes as Latin letters or
+// English words. Map known mishearings to their hiragana equivalents.
 const homonyms = {
   'b': 'び',
   'ezone': 'いぞん',
@@ -18,6 +17,9 @@ const homonyms = {
   'c': 'し',
   'cd': 'しり',
   'ck': 'しけい',
+  'ta': 'た',
+  'tar': 'た',
+  'tah': 'た',
   'y': 'わい',
   'uber': 'うば',
   'hulu': 'ふる',
@@ -27,7 +29,7 @@ const homonyms = {
   '2': 'つ',
   '3': 'さん',
   '5': 'ご',
-  '9': 'きゅう',
+  '9': ['きゅう', 'く', 'くう'],
   '10': 'じゅ',
   'x': 'じゅ',
   '1000': 'せん',
@@ -62,77 +64,23 @@ const homonyms = {
   '性感': 'せいかん'
 };
 
-function literalMatches(candidate, prompt) {
-  if (!isJapanese(candidate.data)) {
-    return null;
+// Common English SR mishearings mapped to the correct WaniKani meaning.
+// Add entries here as you encounter new ones.
+const meaningCorrections = {
+  'rib cage': 'ribcage',
+};
+
+// Normalise for submission: strip leading articles and trailing punctuation.
+// For Japanese: collapse spaces and convert to hiragana.
+// For English: keep spaces so multi-word meanings are preserved.
+export function normalize(s) {
+  const stripped = s.toLowerCase()
+    .replace(/^(a|an|the)\s+/i, '')
+    .replace(/[.,!?;:]+$/, '');
+  if (isJapanese(stripped)) {
+    return toHiragana(stripped.replaceAll(' ', ''));
   }
-  const data = candidate.data;
-  if (normalize(data) === normalize(prompt)) {
-    return prompt;
-  }
-  return null;
-}
-
-function readingMatches(candidate, readings) {
-  const data = candidate.data;
-  for (const r of readings) {
-    if (r === data || r === homonyms[data.toLowerCase()]) {
-      return r;
-    }
-  }
-  return null;
-}
-
-function normalize(s) {
-  // TODO remove punctuation? currently relying on levenshtein for that
-  const n = s.toLowerCase().replaceAll(' ', '');
-  if (isJapanese(n)) {
-    return toHiragana(n);
-  }
-  return n;
-}
-
-function meaningMatches(candidate, meanings) {
-  const data = candidate.data;
-  for (const m of meanings) {
-    if (normalize(m) === normalize(data)) {
-      return m;
-    }
-    if (levenshtein(normalize(m), normalize(data)) < 2) {
-      return m;
-    }
-  }
-  return null;
-}
-
-function error(message) {
-  return {
-    error: true,
-    message: message
-  };
-}
-
-function incorrect(context, candidates) {
-  return {
-    success: false,
-    error: false,
-    message: "incorrect answer",
-    meanings: context.meanings,
-    readings: context.readings,
-    candidates
-  };
-}
-
-function success(context, candidates, candidate, answer) {
-  return {
-    success: true,
-    message: "correct answer",
-    candidate,
-    answer,
-    meanings: context.meanings,
-    readings: context.readings,
-    candidates
-  };
+  return stripped.trim();
 }
 
 function groupBy(xs, k) {
@@ -142,17 +90,10 @@ function groupBy(xs, k) {
   }, {});
 }
 
-export function checkAnswer(context, transformers, raw) {
-  const { meanings, readings, prompt } = context;
-
-  let candidates = [];
-  candidates.push({type: "raw", data: raw});
-
+function generateCandidates(transformers, raw) {
+  let candidates = [{ type: 'raw', data: raw }];
   const byOrder = groupBy(transformers, 'order');
   const keys = Object.keys(byOrder).map(k => parseInt(k)).sort();
-
-  // generate candidates from transformers, in order
-  // output from transformers at one level are additional inputs for later levels
   for (const key of keys) {
     const ts = byOrder[key];
     const newCandidates = [];
@@ -163,20 +104,86 @@ export function checkAnswer(context, transformers, raw) {
     }
     candidates.push(...newCandidates);
   }
+  return candidates;
+}
 
-  for (const candidate of candidates) {
-    const meaningMatch = meaningMatches(candidate, meanings);
-    const readingMatch = readingMatches(candidate, readings);
-    const literal = literalMatches(candidate, prompt);
+// Prepare the best answer to submit to WaniKani for server-side validation.
+// For reading questions: find the first Japanese candidate (converted to
+// hiragana). The homonym table handles common speech-recognition mishearings
+// (e.g. "b" → "び"). For meaning/name questions: submit normalised English.
+export function checkAnswer(context, transformers, raw) {
+  const { type } = context;
+  const candidates = generateCandidates(transformers, raw);
 
-    if (readingMatch && context.type === 'reading') {
-      return success(context, candidates, candidate, readingMatch);
-    } else if (meaningMatch && (context.type === 'name' || context.type === 'meaning')) {
-      return success(context, candidates, candidate, meaningMatch);
-    } else if (literal && readings.length > 0) {
-      return success(context, candidates, candidate, readings[0]); // TODO indicate literal match?
+  if (type === 'reading') {
+    const acceptedReadings = (context.readings || []);
+
+    function matchesReading(kana) {
+      if (acceptedReadings.length === 0) return false;
+      return acceptedReadings.includes(kana);
     }
+
+    for (const c of candidates) {
+      // isKana is strict: only pure hiragana/katakana passes.
+      // isJapanese would also match kanji, but toHiragana can't convert kanji
+      // to kana — submitting kanji would always be rejected by WaniKani.
+      if (isKana(c.data)) {
+        const answer = toHiragana(c.data);
+        if (matchesReading(answer)) {
+          return {
+            success: true,
+            answer,
+            transcript: { raw, matched: answer !== raw ? answer : undefined },
+          };
+        }
+      }
+      const h = homonyms[c.data.toLowerCase()];
+      const readings = Array.isArray(h) ? h : [h];
+      const matched = readings.find(matchesReading);
+      if (matched) {
+        return { success: true, answer: matched, transcript: { raw, matched } };
+      }
+    }
+    // Fallback: try converting raw (works for romaji like "shita" → "した").
+    const fallback = toHiragana(raw);
+    if (isKana(fallback) && matchesReading(fallback)) {
+      return { success: true, answer: fallback, transcript: { raw } };
+    }
+    return { success: false, error: false, transcript: { raw: '!! speak the reading !!' } };
   }
 
-  return incorrect(context, candidates);
+  if (type === 'meaning' || type === 'name') {
+    const normalizedMeanings = (context.meanings || []).map(normalize);
+
+    function matchesMeaning(norm) {
+      if (normalizedMeanings.length === 0) return false;
+      if (normalizedMeanings.includes(norm)) return true;
+      // Compound words: "rib cage" → "ribcage"
+      const compact = norm.replaceAll(' ', '');
+      if (normalizedMeanings.includes(compact)) return true;
+      return false;
+    }
+
+    for (const c of candidates) {
+      // Apply English SR corrections before normalizing.
+      const corrected = meaningCorrections[c.data.toLowerCase()] ?? c.data;
+      const norm = normalize(corrected);
+      if (matchesMeaning(norm)) {
+        return {
+          success: true,
+          answer: norm,
+          transcript: { raw, matched: norm !== raw ? norm : undefined },
+        };
+      }
+    }
+    // No candidate matched — don't submit.
+    return { success: false, error: false, transcript: { raw } };
+  }
+
+  return {
+    success: false,
+    error: true,
+    message: 'unknown question type',
+    transcript: { raw: '!! unknown type !!' },
+  };
 }

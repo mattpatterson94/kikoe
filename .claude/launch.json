@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "options",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["serve", "extension", "-p", "4242", "--no-clipboard"],
+      "port": 4242
+    }
+  ]
+}

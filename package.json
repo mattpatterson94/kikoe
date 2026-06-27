@@ -10,7 +10,9 @@
     "test:coverage": "vitest run --coverage",
     "pack:chrome": "mkdir -p dist && cd chrome && zip -r ../dist/wanikani-koe-chrome.zip .",
     "pack:firefox": "mkdir -p dist && cd firefox && zip -r ../dist/wanikani-koe-firefox.zip .",
-    "pack": "npm run pack:chrome && npm run pack:firefox"
+    "pack": "npm run pack:chrome && npm run pack:firefox",
+    "dev": "node dev.js",
+    "dev:firefox": "node dev.js --firefox"
   },
   "dependencies": {
     "js-levenshtein": "^1.1.6",
@@ -22,6 +24,7 @@
     "@vitest/coverage-v8": "^2.1.0",
     "esbuild": "^0.21.0",
     "jsdom": "^25.0.0",
-    "vitest": "^2.1.0"
+    "vitest": "^2.1.0",
+    "web-ext": "^10.4.0"
   }
 }

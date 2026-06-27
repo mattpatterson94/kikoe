@@ -20,7 +20,7 @@ describe('defaults', () => {
 
   test('all expected keys are present', () => {
     const keys = ['lightning', 'lightning_delay', 'mistake_delay', 'speed_show_info',
-      'transcript', 'transcript_background', 'transcript_foreground',
+      'transcript', 'transcript_theme',
       'transcript_position', 'transcript_delay', 'transcript_count',
       'transcript_clear'];
     for (const k of keys) expect(defaults).toHaveProperty(k);

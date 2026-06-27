@@ -1,6 +1,7 @@
 // Runs in the ISOLATED content-script world.
-// Manages settings (chrome.storage.sync) and WaniKani API subject fetching,
-// then injects the bridge + app bundle into the page context.
+// Manages settings (chrome.storage.sync), auto-discovers the WaniKani API
+// token from the settings page, fetches + caches subjects, and injects the
+// bridge + app bundle into the page context.
 
 import { defaults } from '../src/settings.js';
 
@@ -10,6 +11,58 @@ export async function getSettings() {
   const keys = Object.keys(defaults);
   const stored = await chrome.storage.sync.get(keys);
   return { ...defaults, ...stored };
+}
+
+export function buildSafeConfig(base, settings, hasApiToken = false) {
+  const { apiToken: _, ...safeSettings } = settings;
+  return { base, settings: safeSettings, hasApiToken };
+}
+
+// Fetch the account settings page and extract the v2 API token.
+// The token is the only UUID-formatted value on that page.
+export async function scrapeApiToken() {
+  try {
+    const resp = await fetch('/settings/account');
+    if (!resp.ok) return null;
+    const html = await resp.text();
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    for (const el of doc.querySelectorAll('input, code, span')) {
+      const val = el.value || el.textContent || '';
+      if (uuidRe.test(val.trim())) return val.trim();
+    }
+    return null;
+  } catch (err) {
+    console.error('[wkvi] failed to scrape API token:', err);
+    return null;
+  }
+}
+
+export async function getApiToken() {
+  // Prefer token entered manually in the options page.
+  const synced = await chrome.storage.sync.get('apiToken');
+  if (synced.apiToken) {
+    console.log('[wkvi] using API token from options');
+    return synced.apiToken;
+  }
+
+  // Fall back to previously auto-scraped token.
+  const cached = await chrome.storage.local.get('wkvi_apiToken');
+  if (cached.wkvi_apiToken) {
+    console.log('[wkvi] using cached auto-scraped API token');
+    return cached.wkvi_apiToken;
+  }
+
+  // Last resort: scrape from the settings page.
+  console.log('[wkvi] attempting to scrape API token from /settings/account');
+  const token = await scrapeApiToken();
+  if (token) {
+    await chrome.storage.local.set({ wkvi_apiToken: token });
+    console.log('[wkvi] auto-discovered API token');
+  } else {
+    console.warn('[wkvi] could not find API token — open extension options and paste your WaniKani v2 API token');
+  }
+  return token || null;
 }
 
 async function fetchSubjectPage(url, apiToken) {
@@ -40,11 +93,6 @@ export async function fetchSubjectsForPrompt(prompt, category, apiToken) {
   }
 }
 
-export function buildSafeConfig(base, settings) {
-  const { apiToken: _, ...safeSettings } = settings;
-  return { base, settings: safeSettings };
-}
-
 function injectScript(src) {
   const s = document.createElement('script');
   s.src = src;
@@ -56,7 +104,9 @@ async function main() {
   const settings = await getSettings();
   const base = chrome.runtime.getURL('');
 
-  const config = buildSafeConfig(base, settings);
+  // Load token first so hasApiToken is accurate when the bundle reads the config.
+  let apiToken = await getApiToken();
+  const config = buildSafeConfig(base, settings, !!apiToken);
   document.documentElement.dataset.wkviConfig = btoa(JSON.stringify(config));
 
   injectScript(base + 'injected.js');
@@ -64,7 +114,7 @@ async function main() {
 
   document.addEventListener('wkvi:subjectRequest', async (e) => {
     const { prompt, category } = e.detail;
-    const apiToken = (await chrome.storage.sync.get('apiToken')).apiToken || '';
+    if (!apiToken) apiToken = await getApiToken();
     const subjects = await fetchSubjectsForPrompt(prompt, category, apiToken);
     document.dispatchEvent(new CustomEvent('wkvi:subjectData', {
       detail: { prompt, category, subjects }

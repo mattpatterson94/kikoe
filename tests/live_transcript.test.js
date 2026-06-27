@@ -2,12 +2,13 @@ import {
   createTranscriptContainer,
   logTranscript,
   clearTranscript,
+  showIdleIndicator,
+  setIdleIndicatorState,
 } from '../src/live_transcript.js';
 
 const defaultSettings = {
   transcript: true,
-  transcript_background: '#ffd700',
-  transcript_foreground: '#000000',
+  transcript_theme: 'system',
   transcript_position: 'top',
   transcript_delay: 5,
   transcript_count: 1,
@@ -35,17 +36,17 @@ describe('createTranscriptContainer', () => {
     expect(el.tagName).toBe('DIV');
   });
 
-  test('applies position:absolute and top:0px for "top" position', () => {
+  test('applies position:fixed and top:16px for "top" position', () => {
     const el = document.getElementById('wanikani-voice-input-transcript-container');
-    expect(el.style.position).toBe('absolute');
-    expect(el.style.top).toBe('0px');
+    expect(el.style.position).toBe('fixed');
+    expect(el.style.top).toBe('16px');
   });
 
-  test('applies bottom:0px for "bottom" position', () => {
+  test('applies bottom:16px for "bottom" position', () => {
     document.body.innerHTML = '';
     createTranscriptContainer(settings({ transcript_position: 'bottom' }));
     const el = document.getElementById('wanikani-voice-input-transcript-container');
-    expect(el.style.bottom).toBe('0px');
+    expect(el.style.bottom).toBe('16px');
   });
 });
 
@@ -58,17 +59,17 @@ describe('logTranscript', () => {
     expect(container.children.length).toBe(0);
   });
 
-  test('adds a paragraph with the raw text prefixed by 🎤', () => {
+  test('adds a chip element with the raw text', () => {
     logTranscript(settings(), { raw: 'した' });
     const container = document.getElementById('wanikani-voice-input-transcript-container');
     expect(container.children.length).toBe(1);
-    expect(container.children[0].textContent).toContain('🎤した');
+    expect(container.children[0].textContent).toContain('した');
   });
 
-  test('includes matched text in parentheses when provided', () => {
+  test('includes matched text with arrow separator when provided', () => {
     logTranscript(settings(), { raw: 'した', matched: '下' });
     const container = document.getElementById('wanikani-voice-input-transcript-container');
-    expect(container.children[0].textContent).toContain('(下)');
+    expect(container.children[0].textContent).toContain('→ 下');
   });
 
   test('deduplicates: same raw without match does not add a second element', () => {
@@ -84,8 +85,8 @@ describe('logTranscript', () => {
     const container = document.getElementById('wanikani-voice-input-transcript-container');
     // The old one is removed; exactly one element remains with the match.
     const texts = Array.from(container.children).map(c => c.textContent);
-    expect(texts.some(t => t.includes('(下)'))).toBe(true);
-    expect(texts.filter(t => t.includes('🎤した')).length).toBe(1);
+    expect(texts.some(t => t.includes('→ 下'))).toBe(true);
+    expect(texts.filter(t => t.includes('した')).length).toBe(1);
   });
 
   test('different raw values both appear when transcript_count allows it', () => {
@@ -142,5 +143,23 @@ describe('clearTranscript', () => {
   test('REGRESSION: does not throw when container is missing', () => {
     document.body.innerHTML = '';
     expect(() => clearTranscript()).not.toThrow();
+  });
+});
+
+// ── idle indicator ────────────────────────────────────────────────────────────
+
+describe('setIdleIndicatorState', () => {
+  test('shows restarting state in the idle chip', () => {
+    showIdleIndicator(settings());
+    setIdleIndicatorState('restarting');
+    const label = document.getElementById('wkvi-idle-label');
+    expect(label.textContent).toBe('Restarting…');
+  });
+
+  test('shows paused state in the idle chip', () => {
+    showIdleIndicator(settings());
+    setIdleIndicatorState('paused');
+    const label = document.getElementById('wkvi-idle-label');
+    expect(label.textContent).toBe('Paused');
   });
 });

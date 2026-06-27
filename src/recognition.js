@@ -6,10 +6,35 @@ export function createRecognition(lang, callback) {
     return null;
   }
 
+  // Accept a function so callers can supply a live language getter; this ensures
+  // every auto-restart picks up the correct language even if setLanguage was
+  // called with a stale value during a DOM transition.
+  const getLang = typeof lang === 'function' ? lang : () => lang;
+
   const recognition = new webkitSpeechRecognition();
   recognition.continuous = true;
   recognition.interimResults = true;
-  recognition.lang = lang;
+  recognition.lang = getLang();
+  let shouldAutoRestart = true;
+  const start = recognition.start.bind(recognition);
+  const stop = recognition.stop.bind(recognition);
+
+  function safeStart() {
+    recognition.lang = getLang();
+    try {
+      start();
+    } catch (err) {
+      if (err.name !== 'InvalidStateError') throw err;
+    }
+  }
+
+  function safeStop() {
+    try {
+      stop();
+    } catch (err) {
+      if (err.name !== 'InvalidStateError') throw err;
+    }
+  }
 
   recognition.onresult = (event) => {
     //console.info('[wanikani-voice-input] onresult', event);
@@ -29,7 +54,31 @@ export function createRecognition(lang, callback) {
   };
 
   recognition.onend = () => {
-    recognition.start();
+    if (shouldAutoRestart) safeStart();
+  };
+
+  recognition.start = () => {
+    shouldAutoRestart = true;
+    safeStart();
+  };
+
+  recognition.pause = () => {
+    shouldAutoRestart = false;
+    safeStop();
+  };
+
+  recognition.resume = () => {
+    shouldAutoRestart = true;
+    safeStart();
+  };
+
+  recognition.restart = () => {
+    shouldAutoRestart = true;
+    safeStop();
+  };
+
+  recognition.isPaused = () => {
+    return !shouldAutoRestart;
   };
 
   return recognition;
@@ -37,7 +86,7 @@ export function createRecognition(lang, callback) {
 
 export function setLanguage(recognition, newLanguage) {
   if (recognition.lang != newLanguage) {
-    recognition.stop();
     recognition.lang = newLanguage;
+    if (!recognition.isPaused?.()) recognition.restart();
   }
 }

@@ -22,3 +22,5 @@ firefox/vendor/
 
 # Packaged zips
 dist/
+
+.claude/worktrees
