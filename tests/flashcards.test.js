@@ -188,6 +188,12 @@ describe('reading questions', () => {
     expect(r.answer).toBe('せりふ');
   });
 
+  test('REGRESSION: resolves ateji with a chōonpu reading (烏龍茶 → うーろんちゃ)', () => {
+    const r = checkAnswer({ type: 'reading', prompt: '烏龍茶', readings: ['うーろんちゃ'] }, makeTransformers(), '烏龍茶');
+    expect(r.success).toBe(true);
+    expect(r.answer).toBe('うーろんちゃ');
+  });
+
   test('uses homonym table for mishearings ("b" → "び")', () => {
     const r = checkAnswer({ type: 'reading', prompt: '美', readings: ['び'] }, makeTransformers(), 'b');
     expect(r.success).toBe(true);

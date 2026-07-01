@@ -60,6 +60,17 @@ const dictionary = {
       { type: 'on', value: 'キ' }, { type: 'on', value: 'ケ' },
     ] },
   ],
+  '人': [
+    { literal: '人', type: 'character', readings: [
+      { type: 'on', value: 'ジン' }, { type: 'on', value: 'ニン' },
+      { type: 'kun', value: 'ひと' },
+    ] },
+  ],
+  '時': [
+    { literal: '時', type: 'character', readings: [
+      { type: 'on', value: 'ジ' }, { type: 'kun', value: 'とき' },
+    ] },
+  ],
 };
 
 const cd = new CompoundDictionary(dictionary);
@@ -126,6 +137,18 @@ describe('CompoundDictionary', () => {
       for (const c of get('国国')) {
         expect(c.endsWith('っ')).toBe(false);
       }
+    });
+  });
+
+  // 々 is neither kana nor kanji to wanakana, so it must be expanded to the
+  // preceding kanji before per-character lookup.
+  describe('iteration mark (々)', () => {
+    test('expands 々 and applies rendaku (人々 → ひとびと)', () => {
+      expect(get('人々')).toContain('ひとびと');
+    });
+
+    test('expands 々 and applies rendaku (時々 → ときどき)', () => {
+      expect(get('時々')).toContain('ときどき');
     });
   });
 });

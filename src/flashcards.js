@@ -70,6 +70,7 @@ const homonyms = {
   '河豚': 'ふぐ',
   '漢': 'おとこ',
   '銀杏': 'いちょう',
+  '烏龍茶': 'うーろんちゃ',
 };
 
 // Common English SR mishearings mapped to the correct WaniKani meaning.

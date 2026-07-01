@@ -26,6 +26,11 @@ const dictionary = {
       { type: 'on', value: 'ダ' }, { type: 'kun', value: 'う.つ' },
     ] },
   ],
+  '弱': [
+    { literal: '弱', type: 'character', readings: [
+      { type: 'on', value: 'ジャク' }, { type: 'kun', value: 'よわ.い' },
+    ] },
+  ],
 };
 
 const sd = new SplitDictionary(dictionary);
@@ -67,6 +72,10 @@ describe('SplitDictionary', () => {
 
     test('kanji run missing from JMdict falls back to per-character readings (耳打ち → みみうち)', () => {
       expect(get('耳打ち')).toContain('みみうち');
+    });
+
+    test('iteration mark in a kanji run (弱々しい → よわよわしい)', () => {
+      expect(get('弱々しい')).toContain('よわよわしい');
     });
 
     test('caps the number of generated combinations', () => {

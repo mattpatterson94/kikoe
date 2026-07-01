@@ -65,6 +65,16 @@ function withSoundChanges(reading, isFirst, isLast) {
   return variants;
 }
 
+// 々 repeats the previous kanji (人々 → 人人) but is neither kana nor kanji
+// to wanakana; expand it so per-character lookup sees a real character.
+function expandIterationMarks(s) {
+  let result = '';
+  for (const char of s) {
+    result += char === '々' ? (result[result.length - 1] ?? char) : char;
+  }
+  return result;
+}
+
 // JMdict omits compositional compounds (何月, 何人, …), so a whole-word
 // lookup can't convert them to kana. Build candidate readings for an
 // all-kanji word by combining each character's individual readings —
@@ -78,11 +88,12 @@ export class CompoundDictionary {
   }
 
   getCandidates(raw) {
-    if (raw.length < 2 || raw.length > 4 || !isKanji(raw)) return [];
+    const expanded = expandIterationMarks(raw);
+    if (expanded.length < 2 || expanded.length > 4 || !isKanji(expanded)) return [];
     // The whole word is known — BasicDictionary already covers it.
     if (lookup(this.dictionary, raw).length > 0) return [];
 
-    const chars = raw.split('');
+    const chars = expanded.split('');
     let combos = [''];
     for (const [i, char] of chars.entries()) {
       const readings = characterReadings(lookup(this.dictionary, char))
