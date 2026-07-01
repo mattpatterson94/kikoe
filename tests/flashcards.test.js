@@ -159,6 +159,15 @@ describe('reading questions', () => {
     expect(r.answer).toBe('び');
   });
 
+  // Bug reproduction: SR misheard 自立 (じりつ) as the real word 事実 (じじつ)
+  // — a one-mora phonetic slip that resolves to a different valid word, so
+  // no dictionary lookup or transformer could recover it on its own.
+  test('REGRESSION: uses homonym table for "事実" misheard for 自立 (じりつ)', () => {
+    const r = checkAnswer({ type: 'reading', prompt: '自立', readings: ['じりつ'] }, makeTransformers(), '事実');
+    expect(r.success).toBe(true);
+    expect(r.answer).toBe('じりつ');
+  });
+
   test('uses homonym table for short "ta" reading', () => {
     const r = checkAnswer({ type: 'reading', prompt: '田', readings: ['た'] }, makeTransformers(), 'ta');
     expect(r.success).toBe(true);

@@ -61,7 +61,8 @@ const homonyms = {
   '胆汁': 'たんじゅう',
   '県名': 'けんめい',
   '長江': 'ちょうこう',
-  '性感': 'せいかん'
+  '性感': 'せいかん',
+  '事実': 'じりつ' // 自立 (じりつ) misheard as 事実 (じじつ) — single mora swap
 };
 
 // Common English SR mishearings mapped to the correct WaniKani meaning.
