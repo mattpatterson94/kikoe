@@ -62,7 +62,14 @@ const homonyms = {
   '県名': 'けんめい',
   '長江': 'ちょうこう',
   '性感': 'せいかん',
-  '事実': 'じりつ' // 自立 (じりつ) misheard as 事実 (じじつ) — single mora swap
+  '事実': 'じりつ', // 自立 (じりつ) misheard as 事実 (じじつ) — single mora swap
+
+  // Ateji/jukujikun whose reading has no derivable relationship to the
+  // individual kanji readings, and which the bundled JMdict can't resolve.
+  '台詞': 'せりふ',
+  '河豚': 'ふぐ',
+  '漢': 'おとこ',
+  '銀杏': 'いちょう',
 };
 
 // Common English SR mishearings mapped to the correct WaniKani meaning.
@@ -124,18 +131,29 @@ export function checkAnswer(context, transformers, raw) {
       return acceptedReadings.includes(kana);
     }
 
+    // toHiragana expands a katakana chōonpu into a doubled vowel by default
+    // (ビール → びいる), but WaniKani's accepted readings keep the ー
+    // (びーる) — compare both forms.
+    function kanaForms(kana) {
+      return new Set([
+        toHiragana(kana, { convertLongVowelMark: false }),
+        toHiragana(kana),
+      ]);
+    }
+
     for (const c of candidates) {
       // isKana is strict: only pure hiragana/katakana passes.
       // isJapanese would also match kanji, but toHiragana can't convert kanji
       // to kana — submitting kanji would always be rejected by WaniKani.
       if (isKana(c.data)) {
-        const answer = toHiragana(c.data);
-        if (matchesReading(answer)) {
-          return {
-            success: true,
-            answer,
-            transcript: { raw, matched: answer !== raw ? answer : undefined },
-          };
+        for (const answer of kanaForms(c.data)) {
+          if (matchesReading(answer)) {
+            return {
+              success: true,
+              answer,
+              transcript: { raw, matched: answer !== raw ? answer : undefined },
+            };
+          }
         }
       }
       const h = homonyms[c.data.toLowerCase()];
@@ -146,9 +164,10 @@ export function checkAnswer(context, transformers, raw) {
       }
     }
     // Fallback: try converting raw (works for romaji like "shita" → "した").
-    const fallback = toHiragana(raw);
-    if (isKana(fallback) && matchesReading(fallback)) {
-      return { success: true, answer: fallback, transcript: { raw } };
+    for (const fallback of kanaForms(raw)) {
+      if (isKana(fallback) && matchesReading(fallback)) {
+        return { success: true, answer: fallback, transcript: { raw } };
+      }
     }
     return { success: false, error: false, transcript: { raw: '!! speak the reading !!' } };
   }

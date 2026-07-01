@@ -11,6 +11,9 @@ const dictionary = {
   'むす': [
     { id: '4', type: 'character', readings: [{ value: 'むす.ぶ' }] },
   ],
+  '玉': [
+    { id: '5', type: 'character', readings: [{ value: 'たま' }, { value: '-だま' }] },
+  ],
 };
 
 const bd = new BasicDictionary(dictionary);
@@ -27,6 +30,10 @@ describe('BasicDictionary', () => {
 
   test('strips okurigana from character reading (dot notation)', () => {
     expect(get('むす')).toStrictEqual(['むす']);
+  });
+
+  test('strips affix hyphens from character readings (-だま → だま)', () => {
+    expect(get('玉')).toStrictEqual(['たま', 'だま']);
   });
 
   test('converts katakana input before lookup', () => {

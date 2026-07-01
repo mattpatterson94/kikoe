@@ -16,10 +16,8 @@ function getReadings(entries) {
     }
     if (entry.type === 'character') {
       return entry.readings.map(r => {
-        let value = r.value;
-        if (value.includes('.')) {
-          value = value.split('.')[0];
-        }
+        // "むす.ぶ" marks okurigana; "-だま" marks affix position.
+        const value = r.value.split('.')[0].replaceAll('-', '');
         return toHiragana(value);
       });
     }
