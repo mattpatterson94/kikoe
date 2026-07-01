@@ -4,6 +4,7 @@ import { BasicDictionary } from '../src/candidates/basic_dictionary.js';
 import { FuzzyVowels } from '../src/candidates/fuzzy_vowels.js';
 import { ConvertWo } from '../src/candidates/convert_wo.js';
 import { CompoundDictionary } from '../src/candidates/compound_dictionary.js';
+import { Numerals } from '../src/candidates/numerals.js';
 
 const dictionary = {
   'せんだい': [
@@ -126,6 +127,19 @@ describe('reading questions', () => {
     const r = checkAnswer(ctx, transformers, '何月');
     expect(r.success).toBe(true);
     expect(r.answer).toBe('なんがつ');
+  });
+
+  // Bug reproduction: speech recognition returns the digit form of
+  // day-of-month counters (6日), which have irregular readings (むいか, not
+  // ろくにち) only derivable via a whole-word dictionary lookup on the
+  // kansuji-converted kanji form.
+  test('REGRESSION: converts a digit-form day counter to its irregular reading (6日 → むいか)', () => {
+    const dict = { '六日': [{ id: '1', type: 'word', kanji: ['六日'], kana: ['むいか'] }] };
+    const transformers = [...makeTransformers(dict), new Numerals(dict)];
+    const ctx = { type: 'reading', prompt: '6日', category: 'vocabulary', readings: ['むいか'] };
+    const r = checkAnswer(ctx, transformers, '6日');
+    expect(r.success).toBe(true);
+    expect(r.answer).toBe('むいか');
   });
 
   test('uses homonym table for mishearings ("b" → "び")', () => {
