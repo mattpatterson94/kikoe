@@ -96,7 +96,7 @@ async function startListener(dictionary) {
     new BasicDictionary(dictionary), new SplitDictionary(dictionary),
     new CompoundDictionary(dictionary),
     new SuruVerbs(dictionary), new RepeatingSubstring(),
-    new MultipleWords(dictionary), new Numerals(),
+    new MultipleWords(dictionary), new Numerals(dictionary),
   ];
 
   const commands = {

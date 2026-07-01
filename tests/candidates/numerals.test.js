@@ -33,3 +33,30 @@ describe('Numerals', () => {
     expect(get('10,000です')).toStrictEqual(['一万です']);
   });
 });
+
+// ── dictionary-aware day-of-month readings ───────────────────────────────────
+
+describe('Numerals with a dictionary', () => {
+  // Day-of-month counters have irregular readings (六日 → むいか, not
+  // ろくにち) that only exist as whole-word JMdict entries keyed by the
+  // kanji spelling — which only exists after kansuji conversion.
+  const dictionary = {
+    '六日': [{ id: '1', type: 'word', kanji: ['六日'], kana: ['むいか'] }],
+    '二十日': [{ id: '2', type: 'word', kanji: ['二十日'], kana: ['はつか', 'にじゅうにち'] }],
+  };
+  const get = (raw) => new Numerals(dictionary).getCandidates(raw).map(c => c.data);
+
+  // Bug reproduction: speech recognition returns the digit form (6日), but
+  // only Numerals' own kansuji output (六日) is ever looked up.
+  test('REGRESSION: surfaces the irregular reading for a digit-form day counter', () => {
+    expect(get('6日')).toEqual(expect.arrayContaining(['六日', 'むいか']));
+  });
+
+  test('REGRESSION: surfaces all readings for a multi-digit day counter', () => {
+    expect(get('20日')).toEqual(expect.arrayContaining(['二十日', 'はつか', 'にじゅうにち']));
+  });
+
+  test('does not add dictionary candidates when the kanji form is unknown', () => {
+    expect(get('7日')).toStrictEqual(['七日']);
+  });
+});
