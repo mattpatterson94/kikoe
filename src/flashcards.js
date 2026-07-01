@@ -155,24 +155,28 @@ export function checkAnswer(context, transformers, raw) {
   if (type === 'meaning' || type === 'name') {
     const normalizedMeanings = (context.meanings || []).map(normalize);
 
-    function matchesMeaning(norm) {
-      if (normalizedMeanings.length === 0) return false;
-      if (normalizedMeanings.includes(norm)) return true;
-      // Compound words: "rib cage" → "ribcage"
+    // Returns the string that should actually be submitted, or null if
+    // nothing matches. Compound words ("rib cage") and spelled-out letters
+    // ("e a r") both match only after removing spaces — submit that
+    // space-free form, not the spaced candidate, or WaniKani rejects it.
+    function matchingAnswer(norm) {
+      if (normalizedMeanings.length === 0) return null;
+      if (normalizedMeanings.includes(norm)) return norm;
       const compact = norm.replaceAll(' ', '');
-      if (normalizedMeanings.includes(compact)) return true;
-      return false;
+      if (normalizedMeanings.includes(compact)) return compact;
+      return null;
     }
 
     for (const c of candidates) {
       // Apply English SR corrections before normalizing.
       const corrected = meaningCorrections[c.data.toLowerCase()] ?? c.data;
       const norm = normalize(corrected);
-      if (matchesMeaning(norm)) {
+      const answer = matchingAnswer(norm);
+      if (answer !== null) {
         return {
           success: true,
-          answer: norm,
-          transcript: { raw, matched: norm !== raw ? norm : undefined },
+          answer,
+          transcript: { raw, matched: answer !== raw ? answer : undefined },
         };
       }
     }

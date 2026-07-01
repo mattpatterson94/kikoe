@@ -86,6 +86,17 @@ describe('meaning questions', () => {
     expect(r.success).toBe(true);
     expect(r.answer).toBe('ribcage');
   });
+
+  // Bug reproduction: spelling out a short word ("e a r") makes speech
+  // recognition return it as separate space-separated letters. The compact
+  // form matched, but the spaced candidate was submitted, which WaniKani
+  // rejects.
+  test('REGRESSION: submits the compact form for spelled-out letters ("e a r" → "ear")', () => {
+    const ctx = { type: 'meaning', prompt: '耳', meanings: ['ear'] };
+    const r = checkAnswer(ctx, makeTransformers(), 'e a r');
+    expect(r.success).toBe(true);
+    expect(r.answer).toBe('ear');
+  });
 });
 
 // ── Reading questions ─────────────────────────────────────────────────────────
