@@ -200,10 +200,13 @@ export function showIdleIndicator(settings) {
 export function setIdleIndicatorState(state) {
   const label = document.getElementById('wkvi-idle-label');
   if (!label) return;
+  document.getElementById('wkvi-idle')?.classList.toggle('wkvi-chip-error', state === 'error');
   if (state === 'loading') label.textContent = 'Loading…';
+  else if (state === 'retrying') label.textContent = 'Retrying…';
   else if (state === 'restarting') label.textContent = 'Restarting…';
   else if (state === 'paused') label.textContent = 'Paused';
   else if (state === 'no-token') label.textContent = '⚠ No API token';
+  else if (state === 'error') label.textContent = '⚠ Subjects failed to load';
   else label.textContent = 'Listening';
 }
 

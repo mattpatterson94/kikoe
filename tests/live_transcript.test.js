@@ -162,4 +162,28 @@ describe('setIdleIndicatorState', () => {
     const label = document.getElementById('wkvi-idle-label');
     expect(label.textContent).toBe('Paused');
   });
+
+  test('shows retrying state in the idle chip', () => {
+    showIdleIndicator(settings());
+    setIdleIndicatorState('retrying');
+    const label = document.getElementById('wkvi-idle-label');
+    expect(label.textContent).toBe('Retrying…');
+  });
+
+  test('shows error state with error styling in the idle chip', () => {
+    showIdleIndicator(settings());
+    setIdleIndicatorState('error');
+    const label = document.getElementById('wkvi-idle-label');
+    expect(label.textContent).toBe('⚠ Subjects failed to load');
+    expect(document.getElementById('wkvi-idle').classList.contains('wkvi-chip-error')).toBe(true);
+  });
+
+  test('clears error styling when leaving the error state', () => {
+    showIdleIndicator(settings());
+    setIdleIndicatorState('error');
+    setIdleIndicatorState('listening');
+    const label = document.getElementById('wkvi-idle-label');
+    expect(label.textContent).toBe('Listening');
+    expect(document.getElementById('wkvi-idle').classList.contains('wkvi-chip-error')).toBe(false);
+  });
 });

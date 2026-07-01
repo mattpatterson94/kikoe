@@ -10,6 +10,7 @@ import { ToHiragana } from './candidates/to_hiragana.js';
 import { ConvertWo } from './candidates/convert_wo.js';
 import { BasicDictionary } from './candidates/basic_dictionary.js';
 import { SplitDictionary } from './candidates/split_dictionary.js';
+import { CompoundDictionary } from './candidates/compound_dictionary.js';
 import { SuruVerbs } from './candidates/suru_verbs.js';
 import { RepeatingSubstring } from './candidates/repeating.js';
 import { FuzzyVowels } from './candidates/fuzzy_vowels.js';
@@ -43,12 +44,13 @@ function deduplicate(raw) {
 }
 
 // Request subject data from the content script (which holds the API token).
+// Resolves { subjects, error } — error is set when the API fetch failed.
 function requestSubjects(prompt, category) {
   return new Promise((resolve) => {
     function handler(e) {
       if (e.detail.prompt === prompt && e.detail.category === category) {
         document.removeEventListener('wkvi:subjectData', handler);
-        resolve(e.detail.subjects);
+        resolve({ subjects: e.detail.subjects, error: e.detail.error ?? null });
       }
     }
     document.addEventListener('wkvi:subjectData', handler);
@@ -62,19 +64,37 @@ async function startListener(dictionary) {
   createTranscriptContainer(getSettings());
 
   let subjects = [];
+  let subjectsLoadFailed = false;
   let context = wk.getContext(subjects);
+
+  function restoreIdleIndicator() {
+    if (subjectsLoadFailed) setIdleIndicatorState('error');
+    else setIdleIndicatorState(_config.hasApiToken ? 'listening' : 'no-token');
+  }
+
+  async function loadSubjects(prompt, category) {
+    setIdleIndicatorState('loading');
+    const { subjects: loaded, error } = await requestSubjects(prompt, category);
+    subjectsLoadFailed = !!error;
+    if (error) console.error('[wkvi] failed to load subjects:', error);
+    return loaded;
+  }
+
+  // The content script retries failed fetches (waiting out rate limits);
+  // reflect that so a longer wait doesn't look like a stuck "Loading…".
+  document.addEventListener('wkvi:subjectRetry', () => setIdleIndicatorState('retrying'));
 
   // Pre-fetch subjects for the initial card.
   if (context?.prompt && context?.category) {
-    setIdleIndicatorState('loading');
-    subjects = await requestSubjects(context.prompt, context.category);
+    subjects = await loadSubjects(context.prompt, context.category);
     context = wk.getContext(subjects);
-    setIdleIndicatorState('listening');
+    restoreIdleIndicator();
   }
 
   const transformers = [
     new ToHiragana(), new ConvertWo(),
     new BasicDictionary(dictionary), new SplitDictionary(dictionary),
+    new CompoundDictionary(dictionary),
     new SuruVerbs(dictionary), new RepeatingSubstring(),
     new MultipleWords(dictionary), new Numerals(),
   ];
@@ -92,10 +112,6 @@ async function startListener(dictionary) {
   let pendingRaw = null;
   let emptyFinals = 0;
   let restartIndicatorTimer;
-
-  function restoreIdleIndicator() {
-    setIdleIndicatorState(_config.hasApiToken ? 'listening' : 'no-token');
-  }
 
   function isPageActive() {
     const hidden = document.hidden || document.visibilityState === 'hidden';
@@ -155,10 +171,9 @@ async function startListener(dictionary) {
       pendingRaw = null;
       context = newContext;
       if (newContext?.prompt && newContext?.category) {
-        setIdleIndicatorState('loading');
-        subjects = await requestSubjects(newContext.prompt, newContext.category);
+        subjects = await loadSubjects(newContext.prompt, newContext.category);
         context = wk.getContext(subjects);
-        setIdleIndicatorState('listening');
+        restoreIdleIndicator();
         // Retry any transcript that arrived while subjects were loading.
         if (pendingRaw && !submitted) {
           const result = checkAnswer(context, transformers, pendingRaw);
