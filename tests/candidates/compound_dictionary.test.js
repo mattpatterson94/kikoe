@@ -22,6 +22,55 @@ const dictionary = {
   '仙台': [
     { id: '3', type: 'word', kanji: ['仙台'], kana: ['せんだい'] },
   ],
+  '南': [
+    { literal: '南', type: 'character', readings: [
+      { type: 'on', value: 'ナン' }, { type: 'kun', value: 'みなみ' },
+    ] },
+  ],
+  '国': [
+    { literal: '国', type: 'character', readings: [
+      { type: 'on', value: 'コク' }, { type: 'kun', value: 'くに' },
+    ] },
+  ],
+  '穴': [
+    { literal: '穴', type: 'character', readings: [
+      { type: 'on', value: 'ケツ' }, { type: 'kun', value: 'あな' },
+    ] },
+  ],
+  '子': [
+    { literal: '子', type: 'character', readings: [
+      { type: 'on', value: 'シ' }, { type: 'kun', value: 'こ' },
+    ] },
+  ],
+  '一': [
+    { literal: '一', type: 'character', readings: [
+      { type: 'on', value: 'イチ' }, { type: 'kun', value: 'ひと' },
+    ] },
+  ],
+  '斤': [
+    { literal: '斤', type: 'character', readings: [{ type: 'on', value: 'キン' }] },
+  ],
+  '本': [
+    { literal: '本', type: 'character', readings: [
+      { type: 'on', value: 'ホン' }, { type: 'kun', value: 'もと' },
+    ] },
+  ],
+  '気': [
+    { literal: '気', type: 'character', readings: [
+      { type: 'on', value: 'キ' }, { type: 'on', value: 'ケ' },
+    ] },
+  ],
+  '人': [
+    { literal: '人', type: 'character', readings: [
+      { type: 'on', value: 'ジン' }, { type: 'on', value: 'ニン' },
+      { type: 'kun', value: 'ひと' },
+    ] },
+  ],
+  '時': [
+    { literal: '時', type: 'character', readings: [
+      { type: 'on', value: 'ジ' }, { type: 'kun', value: 'とき' },
+    ] },
+  ],
 };
 
 const cd = new CompoundDictionary(dictionary);
@@ -57,5 +106,49 @@ describe('CompoundDictionary', () => {
 
   test('caps the number of generated combinations', () => {
     expect(get('何何何何').length).toBeLessThanOrEqual(50);
+  });
+
+  // Sound-euphony variants: JMdict omits these compounds and the accepted
+  // reading differs from the plain concatenation of per-character readings.
+  describe('sound changes', () => {
+    test('rendaku: voices the first mora of a non-initial component (南国 → なんごく)', () => {
+      expect(get('南国')).toContain('なんごく');
+    });
+
+    test('rendaku: applies to single-kana components (穴子 → あなご)', () => {
+      expect(get('穴子')).toContain('あなご');
+    });
+
+    test('sokuon: geminates the final mora of a non-final component (一斤 → いっきん)', () => {
+      expect(get('一斤')).toContain('いっきん');
+    });
+
+    test('handaku + sokuon + rendaku combine (一本気 → いっぽんぎ)', () => {
+      expect(get('一本気')).toContain('いっぽんぎ');
+    });
+
+    test('does not voice the first component', () => {
+      for (const c of get('国国')) {
+        expect(c.startsWith('ご') || c.startsWith('ぐ')).toBe(false);
+      }
+    });
+
+    test('does not geminate the final component', () => {
+      for (const c of get('国国')) {
+        expect(c.endsWith('っ')).toBe(false);
+      }
+    });
+  });
+
+  // 々 is neither kana nor kanji to wanakana, so it must be expanded to the
+  // preceding kanji before per-character lookup.
+  describe('iteration mark (々)', () => {
+    test('expands 々 and applies rendaku (人々 → ひとびと)', () => {
+      expect(get('人々')).toContain('ひとびと');
+    });
+
+    test('expands 々 and applies rendaku (時々 → ときどき)', () => {
+      expect(get('時々')).toContain('ときどき');
+    });
   });
 });

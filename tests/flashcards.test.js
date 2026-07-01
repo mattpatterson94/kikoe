@@ -4,6 +4,7 @@ import { BasicDictionary } from '../src/candidates/basic_dictionary.js';
 import { FuzzyVowels } from '../src/candidates/fuzzy_vowels.js';
 import { ConvertWo } from '../src/candidates/convert_wo.js';
 import { CompoundDictionary } from '../src/candidates/compound_dictionary.js';
+import { SplitDictionary } from '../src/candidates/split_dictionary.js';
 import { Numerals } from '../src/candidates/numerals.js';
 
 const dictionary = {
@@ -151,6 +152,46 @@ describe('reading questions', () => {
     const r = checkAnswer(ctx, transformers, '6日');
     expect(r.success).toBe(true);
     expect(r.answer).toBe('むいか');
+  });
+
+  // Bug reproduction: wanakana's toHiragana expands a katakana chōonpu into a
+  // doubled vowel (ビール → びいる), but WaniKani's accepted reading keeps
+  // the ー (びーる), so the candidate could never match.
+  test('REGRESSION: keeps the chōonpu when comparing katakana readings (ビール → びーる)', () => {
+    const ctx = { type: 'reading', prompt: 'ビール', category: 'vocabulary', readings: ['びーる'] };
+    const r = checkAnswer(ctx, makeTransformers(), 'ビール');
+    expect(r.success).toBe(true);
+    expect(r.answer).toBe('びーる');
+  });
+
+  test('REGRESSION: chōonpu preserved through a kanji+katakana split (生ビール → なまびーる)', () => {
+    const dict = {
+      '生': [
+        { literal: '生', type: 'character', readings: [
+          { type: 'on', value: 'セイ' }, { type: 'kun', value: 'なま' },
+        ] },
+      ],
+    };
+    const transformers = [...makeTransformers(dict), new SplitDictionary(dict)];
+    const ctx = { type: 'reading', prompt: '生ビール', category: 'vocabulary', readings: ['なまびーる'] };
+    const r = checkAnswer(ctx, transformers, '生ビール');
+    expect(r.success).toBe(true);
+    expect(r.answer).toBe('なまびーる');
+  });
+
+  // Bug reproduction: ateji/jukujikun readings (台詞 → せりふ) have no
+  // relationship to the individual kanji readings, so no dictionary
+  // combination can derive them — they live in the hardcoded homonym table.
+  test('REGRESSION: resolves ateji from the homonym table (台詞 → せりふ)', () => {
+    const r = checkAnswer({ type: 'reading', prompt: '台詞', readings: ['せりふ'] }, makeTransformers(), '台詞');
+    expect(r.success).toBe(true);
+    expect(r.answer).toBe('せりふ');
+  });
+
+  test('REGRESSION: resolves ateji with a chōonpu reading (烏龍茶 → うーろんちゃ)', () => {
+    const r = checkAnswer({ type: 'reading', prompt: '烏龍茶', readings: ['うーろんちゃ'] }, makeTransformers(), '烏龍茶');
+    expect(r.success).toBe(true);
+    expect(r.answer).toBe('うーろんちゃ');
   });
 
   test('uses homonym table for mishearings ("b" → "び")', () => {
