@@ -109,7 +109,7 @@ async function startListener(dictionary) {
   };
 
   let submitted = false;
-  let pendingRaw = null;
+  let pendingRaws = null;
   let emptyFinals = 0;
   let restartIndicatorTimer;
 
@@ -119,9 +119,23 @@ async function startListener(dictionary) {
     return !hidden && !blurred;
   }
 
-  const recognition = createRecognition(() => wk.getLanguage(), function(rawInput, final) {
-    const raw = deduplicate(rawInput);
-    if (!raw.trim()) {
+  // Try every alternative transcript the recognizer offered (ranked by its
+  // own confidence) and use the first one that produces a match. Short
+  // utterances and common on'yomi are often autocorrected to an unrelated
+  // real word in the top slot, but the correct reading is frequently still
+  // present further down the list.
+  function checkAlternatives(ctx, raws) {
+    let result;
+    for (const raw of raws) {
+      result = checkAnswer(ctx, transformers, raw);
+      if (result.success && result.answer) return result;
+    }
+    return result;
+  }
+
+  const recognition = createRecognition(() => wk.getLanguage(), function(rawInputs, final) {
+    const raws = rawInputs.map(deduplicate).filter(r => r.trim());
+    if (raws.length === 0) {
       if (final && ++emptyFinals >= EMPTY_FINAL_RESTART_THRESHOLD) {
         emptyFinals = 0;
         clearTimeout(restartIndicatorTimer);
@@ -132,6 +146,7 @@ async function startListener(dictionary) {
       return;
     }
     emptyFinals = 0;
+    const raw = raws[0];
     logTranscript(getSettings(), { raw });
 
     // Only process on final results — interim results are shown for feedback only.
@@ -149,17 +164,17 @@ async function startListener(dictionary) {
     const ctx = wk.getContext(subjects);
     if (!ctx) { console.log('[wkvi] skipped — no context'); return; }
 
-    const result = checkAnswer(ctx, transformers, raw);
+    const result = checkAlternatives(ctx, raws);
     logTranscript(getSettings(), result.transcript);
-    console.log('[wkvi] checkAnswer', { raw, type: ctx.type, readings: ctx.readings, meanings: ctx.meanings, result });
+    console.log('[wkvi] checkAnswer', { raws, type: ctx.type, readings: ctx.readings, meanings: ctx.meanings, result });
 
     if (result.success && result.answer) {
       submitted = true;
       wk.submitAnswer(result.answer);
     } else if (!ctx.readings?.length && !ctx.meanings?.length) {
       // Subjects not loaded yet — store transcript and retry once they arrive.
-      pendingRaw = raw;
-      console.log('[wkvi] subjects not loaded, stored pending transcript:', raw);
+      pendingRaws = raws;
+      console.log('[wkvi] subjects not loaded, stored pending transcript:', raws);
     }
   });
 
@@ -168,21 +183,21 @@ async function startListener(dictionary) {
     const newContext = wk.getContext(subjects);
     if (wk.didContextChange(context, newContext)) {
       submitted = false;
-      pendingRaw = null;
+      pendingRaws = null;
       context = newContext;
       if (newContext?.prompt && newContext?.category) {
         subjects = await loadSubjects(newContext.prompt, newContext.category);
         context = wk.getContext(subjects);
         restoreIdleIndicator();
         // Retry any transcript that arrived while subjects were loading.
-        if (pendingRaw && !submitted) {
-          const result = checkAnswer(context, transformers, pendingRaw);
-          console.log('[wkvi] retrying pending transcript', { pendingRaw, result });
+        if (pendingRaws && !submitted) {
+          const result = checkAlternatives(context, pendingRaws);
+          console.log('[wkvi] retrying pending transcript', { pendingRaws, result });
           if (result.success && result.answer) {
             submitted = true;
             wk.submitAnswer(result.answer);
           }
-          pendingRaw = null;
+          pendingRaws = null;
         }
       }
       setLanguage(recognition, wk.getLanguage());

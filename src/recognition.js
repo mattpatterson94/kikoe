@@ -1,5 +1,13 @@
 const MIN_INDICATE = 100;
 
+// Short utterances and common on'yomi (かい, けい, どう, ...) are frequently
+// autocorrected by the recognizer into an unrelated real word, since its
+// language model favors known vocabulary over an isolated mora. The correct
+// reading is often still present among the engine's lower-ranked guesses, so
+// ask for several and let the caller check all of them instead of only the
+// top pick.
+const MAX_ALTERNATIVES = 5;
+
 export function createRecognition(lang, callback) {
   if (!('webkitSpeechRecognition' in window)) {
     console.error('[wanikani-voice-input] web speech not supported by this browser!');
@@ -14,6 +22,7 @@ export function createRecognition(lang, callback) {
   const recognition = new webkitSpeechRecognition();
   recognition.continuous = true;
   recognition.interimResults = true;
+  recognition.maxAlternatives = MAX_ALTERNATIVES;
   recognition.lang = getLang();
   let shouldAutoRestart = true;
   const start = recognition.start.bind(recognition);
@@ -40,9 +49,11 @@ export function createRecognition(lang, callback) {
     //console.info('[wanikani-voice-input] onresult', event);
 
     for (let i = event.resultIndex; i < event.results.length; ++i) {
-      const transcript = event.results[i][0].transcript.trim();
-      const final = event.results[i].isFinal;
-      callback(transcript, final);
+      const result = event.results[i];
+      // Interim results are only ever given one alternative by the engine;
+      // final results may carry up to maxAlternatives, ranked by confidence.
+      const transcripts = Array.from(result, alt => alt.transcript.trim());
+      callback(transcripts, result.isFinal);
     }
   };
 
