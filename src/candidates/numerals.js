@@ -12,23 +12,26 @@ export class Numerals {
   }
 
   getCandidates(raw) {
-    const match = raw.match(/\d+/);
+    // Include comma grouping (e.g. "10,000") so large numbers aren't cut
+    // off at the first comma and misconverted.
+    const match = raw.match(/[\d,]*\d/);
     if (!match) {
       return [];
     }
     const candidates = [];
     const type = 'numeral';
     const part = match[0];
+    const digits = part.replace(/,/g, '');
 
     if (!anyJapanese(raw)) {
       const toWords = new ToWords();
-      let converted = toWords.convert(part);
+      let converted = toWords.convert(digits);
       let data = raw.replace(part, converted);
       candidates.push({data, type});
     }
 
     if (raw === part || anyJapanese(raw)) {
-      let converted = kansuji(part);
+      let converted = kansuji(digits);
       let data = raw.replace(part, converted);
       candidates.push({data, type});
     }

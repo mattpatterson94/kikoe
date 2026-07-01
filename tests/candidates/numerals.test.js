@@ -20,4 +20,16 @@ describe('Numerals', () => {
     expect(get('abc')).toStrictEqual([]);
     expect(get('あいう')).toStrictEqual([]);
   });
+
+  // Bug reproduction: comma-grouped numbers were cut off at the first comma
+  // ("10,000" → "10" → "Ten,000") instead of converting the whole number.
+  // Bare numeral input is ambiguous (could be an English or Japanese
+  // reading), so both word forms are offered as candidates.
+  test('REGRESSION: converts comma-grouped number to words', () => {
+    expect(get('10,000')).toStrictEqual(['Ten Thousand', '一万']);
+  });
+
+  test('REGRESSION: converts comma-grouped number to kansuji in a Japanese phrase', () => {
+    expect(get('10,000です')).toStrictEqual(['一万です']);
+  });
 });
