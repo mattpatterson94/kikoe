@@ -3,6 +3,7 @@ import { ToHiragana } from '../src/candidates/to_hiragana.js';
 import { BasicDictionary } from '../src/candidates/basic_dictionary.js';
 import { FuzzyVowels } from '../src/candidates/fuzzy_vowels.js';
 import { ConvertWo } from '../src/candidates/convert_wo.js';
+import { CompoundDictionary } from '../src/candidates/compound_dictionary.js';
 
 const dictionary = {
   'せんだい': [
@@ -102,6 +103,29 @@ describe('reading questions', () => {
     const r = checkAnswer(ctx, makeTransformers(dictionary), 'センダイ');
     expect(r.success).toBe(true);
     expect(r.answer).toBe('せんだい');
+  });
+
+  // Bug reproduction: SR returns kanji (何月) for a compound JMdict doesn't
+  // list, so no whole-word lookup can produce the kana reading.
+  test('REGRESSION: converts kanji compounds missing from JMdict (何月 → なんがつ)', () => {
+    const dict = {
+      '何': [
+        { id: '1577100', type: 'word', kanji: ['何'], kana: ['なに', 'ナニ'] },
+        { literal: '何', type: 'character', readings: [
+          { type: 'on', value: 'カ' }, { type: 'kun', value: 'なに' }, { type: 'kun', value: 'なん-' },
+        ] },
+      ],
+      '月': [
+        { literal: '月', type: 'character', readings: [
+          { type: 'on', value: 'ゲツ' }, { type: 'on', value: 'ガツ' }, { type: 'kun', value: 'つき' },
+        ] },
+      ],
+    };
+    const transformers = [...makeTransformers(dict), new CompoundDictionary(dict)];
+    const ctx = { type: 'reading', prompt: '何月', category: 'vocabulary', readings: ['なんがつ'] };
+    const r = checkAnswer(ctx, transformers, '何月');
+    expect(r.success).toBe(true);
+    expect(r.answer).toBe('なんがつ');
   });
 
   test('uses homonym table for mishearings ("b" → "び")', () => {

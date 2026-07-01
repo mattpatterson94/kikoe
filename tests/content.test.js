@@ -1,4 +1,4 @@
-import { getSettings, buildSafeConfig, scrapeApiToken, fetchSubjectsForPrompt, CACHE_PREFIX } from '../extension/content.js';
+import { getSettings, buildSafeConfig, scrapeApiToken, fetchSubjectsForPrompt, CACHE_PREFIX, RADICALS_CACHE_KEY } from '../extension/content.js';
 import { defaults } from '../src/settings.js';
 
 // ── Chrome API mock ───────────────────────────────────────────────────────────
@@ -153,8 +153,9 @@ describe('fetchSubjectsForPrompt', () => {
   const TOKEN = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
   const mockSubject = { id: 1, object: 'kanji', data: { slug: '下', characters: '下', meanings: [] } };
 
-  test('returns [] when no apiToken provided', async () => {
-    expect(await fetchSubjectsForPrompt('下', 'kanji', null)).toEqual([]);
+  test('returns no subjects and no error when no apiToken provided', async () => {
+    expect(await fetchSubjectsForPrompt('下', 'kanji', null))
+      .toEqual({ subjects: [], error: null });
   });
 
   test('fetches from API and caches result', async () => {
@@ -163,7 +164,7 @@ describe('fetchSubjectsForPrompt', () => {
       json: async () => ({ data: [mockSubject] }),
     })));
     const result = await fetchSubjectsForPrompt('下', 'kanji', TOKEN);
-    expect(result).toEqual([mockSubject]);
+    expect(result).toEqual({ subjects: [mockSubject], error: null });
     expect(fetch).toHaveBeenCalledTimes(1);
   });
 
@@ -173,7 +174,161 @@ describe('fetchSubjectsForPrompt', () => {
     const fetchSpy = vi.fn();
     vi.stubGlobal('fetch', fetchSpy);
     const result = await fetchSubjectsForPrompt('下', 'kanji', TOKEN);
-    expect(result).toEqual([mockSubject]);
+    expect(result).toEqual({ subjects: [mockSubject], error: null });
     expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  test('reports an error when the API responds with a failure status', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: false, status: 500 })));
+    const result = await fetchSubjectsForPrompt('下', 'kanji', TOKEN, { retries: 0 });
+    expect(result.subjects).toEqual([]);
+    expect(result.error).toMatch(/500/);
+  });
+
+  test('reports an error when the fetch throws', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => { throw new TypeError('Failed to fetch'); }));
+    const result = await fetchSubjectsForPrompt('下', 'kanji', TOKEN, { retries: 0 });
+    expect(result.subjects).toEqual([]);
+    expect(result.error).toBe('Failed to fetch');
+  });
+
+  test('does not cache a failed fetch', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: false, status: 500 })));
+    await fetchSubjectsForPrompt('下', 'kanji', TOKEN, { retries: 0 });
+    expect(localStore[CACHE_PREFIX + 'kanji_下']).toBeUndefined();
+  });
+
+  test('retries a transient failure and succeeds, reporting each retry', async () => {
+    const onRetry = vi.fn();
+    let calls = 0;
+    vi.stubGlobal('fetch', vi.fn(async () => {
+      if (++calls === 1) return { ok: false, status: 503 };
+      return { ok: true, json: async () => ({ data: [mockSubject] }) };
+    }));
+    const result = await fetchSubjectsForPrompt('下', 'kanji', TOKEN, { backoffMs: 1, onRetry });
+    expect(result).toEqual({ subjects: [mockSubject], error: null });
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(onRetry).toHaveBeenCalledTimes(1);
+  });
+
+  test('waits out the RateLimit-Reset before retrying a 429', async () => {
+    let calls = 0;
+    // Reset one epoch-second in the past → retry proceeds immediately.
+    const headers = { get: (name) => name === 'RateLimit-Reset' ? String(Math.floor(Date.now() / 1000) - 1) : null };
+    vi.stubGlobal('fetch', vi.fn(async () => {
+      if (++calls === 1) return { ok: false, status: 429, headers };
+      return { ok: true, json: async () => ({ data: [mockSubject] }) };
+    }));
+    const result = await fetchSubjectsForPrompt('下', 'kanji', TOKEN, { backoffMs: 1 });
+    expect(result).toEqual({ subjects: [mockSubject], error: null });
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
+
+  test('does not retry auth errors', async () => {
+    const onRetry = vi.fn();
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: false, status: 401 })));
+    const result = await fetchSubjectsForPrompt('下', 'kanji', TOKEN, { backoffMs: 1, onRetry });
+    expect(result.error).toMatch(/401/);
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(onRetry).not.toHaveBeenCalled();
+  });
+
+  test('gives up after exhausting retries', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: false, status: 500 })));
+    const result = await fetchSubjectsForPrompt('下', 'kanji', TOKEN, { retries: 2, backoffMs: 1 });
+    expect(result.error).toMatch(/500/);
+    expect(fetch).toHaveBeenCalledTimes(3);
+  });
+
+  test('treats a cached empty result as a miss and refetches', async () => {
+    localStore[CACHE_PREFIX + 'kanji_下'] = [];
+    vi.stubGlobal('fetch', vi.fn(async () => ({
+      ok: true,
+      json: async () => ({ data: [mockSubject] }),
+    })));
+    const result = await fetchSubjectsForPrompt('下', 'kanji', TOKEN);
+    expect(result.subjects).toEqual([mockSubject]);
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  test('does not cache an empty API result', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => ({
+      ok: true,
+      json: async () => ({ data: [] }),
+    })));
+    await fetchSubjectsForPrompt('下', 'kanji', TOKEN);
+    expect(localStore[CACHE_PREFIX + 'kanji_下']).toBeUndefined();
+  });
+});
+
+// ── radical lookup ────────────────────────────────────────────────────────────
+
+describe('fetchSubjectsForPrompt for radicals', () => {
+  const TOKEN = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
+  const ground = {
+    id: 1, object: 'radical', url: 'https://api.wanikani.com/v2/subjects/1',
+    data: {
+      slug: 'ground', characters: '一',
+      meanings: [{ meaning: 'Ground', accepted_answer: true }],
+      created_at: '2012-02-27', level: 1, document_url: 'x', hidden_at: null,
+    },
+  };
+  const coatRack = {
+    id: 2, object: 'radical', url: 'https://api.wanikani.com/v2/subjects/2',
+    data: {
+      slug: 'coat-rack', characters: null,
+      meanings: [{ meaning: 'Coat Rack', accepted_answer: true }],
+      created_at: '2012-02-27', level: 2, document_url: 'x', hidden_at: null,
+    },
+  };
+
+  function stubRadicalApi() {
+    const page2 = { data: [coatRack], pages: { next_url: null } };
+    const page1 = {
+      data: [ground],
+      pages: { next_url: 'https://api.wanikani.com/v2/subjects?types=radical&page_after_id=1' },
+    };
+    vi.stubGlobal('fetch', vi.fn(async (url) =>
+      ({ ok: true, json: async () => (url.includes('page_after_id') ? page2 : page1) })));
+  }
+
+  test('fetches the full radical set and matches by character, not slug', async () => {
+    stubRadicalApi();
+    const result = await fetchSubjectsForPrompt('一', 'radical', TOKEN);
+    expect(result.error).toBeNull();
+    expect(result.subjects).toHaveLength(1);
+    expect(result.subjects[0].data.slug).toBe('ground');
+    // Follows pagination and never uses the (broken for radicals) slugs= filter.
+    expect(fetch).toHaveBeenCalledTimes(2);
+    for (const [url] of fetch.mock.calls) expect(url).not.toContain('slugs=');
+  });
+
+  test('matches image-only radicals by their aria-label name', async () => {
+    stubRadicalApi();
+    const result = await fetchSubjectsForPrompt('coat rack', 'radical', TOKEN);
+    expect(result.subjects).toHaveLength(1);
+    expect(result.subjects[0].id).toBe(2);
+  });
+
+  test('caches the pruned radical set and reuses it for later radicals', async () => {
+    stubRadicalApi();
+    await fetchSubjectsForPrompt('一', 'radical', TOKEN);
+    // Stored set is pruned — no bulky fields, both pages present.
+    expect(localStore[RADICALS_CACHE_KEY]).toHaveLength(2);
+    expect(localStore[RADICALS_CACHE_KEY][0].data.document_url).toBeUndefined();
+
+    const fetchSpy = vi.fn();
+    vi.stubGlobal('fetch', fetchSpy);
+    const result = await fetchSubjectsForPrompt('coat rack', 'radical', TOKEN);
+    expect(result.subjects).toHaveLength(1);
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  test('reports an error when the radical fetch fails', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: false, status: 500 })));
+    const result = await fetchSubjectsForPrompt('一', 'radical', TOKEN, { retries: 0 });
+    expect(result.subjects).toEqual([]);
+    expect(result.error).toMatch(/500/);
+    expect(localStore[RADICALS_CACHE_KEY]).toBeUndefined();
   });
 });
