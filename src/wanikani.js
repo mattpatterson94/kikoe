@@ -185,7 +185,7 @@ export function createCardWatcher(onChange) {
 
 export function didAnswerCorrectly(e) {
   if (typeof e.detail?.results?.action !== 'string') {
-    console.error('[wkvi] didAnswerCorrectly: unexpected event shape', e);
+    console.error('[kikoe] didAnswerCorrectly: unexpected event shape', e);
     return false;
   }
   return e.detail.results.action === 'pass';

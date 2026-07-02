@@ -32,13 +32,13 @@ const startSpeedEnhancer = SITE === 'bunpro' ? startBunproSpeedEnhancer : startW
 const usesSubjects = SITE !== 'bunpro';
 
 // Read config stamped by content.js, then remove the attribute immediately.
-const _encoded = document.documentElement.dataset.wkviConfig;
-document.documentElement.removeAttribute('data-wkvi-config');
+const _encoded = document.documentElement.dataset.kikoeConfig;
+document.documentElement.removeAttribute('data-kikoe-config');
 const _config = JSON.parse(atob(_encoded));
 
 initSettings(_config.settings);
 
-document.addEventListener('wkvi:settingsChanged', (e) => {
+document.addEventListener('kikoe:settingsChanged', (e) => {
   updateSettings(e.detail);
 });
 
@@ -60,12 +60,12 @@ function requestSubjects(prompt, category) {
   return new Promise((resolve) => {
     function handler(e) {
       if (e.detail.prompt === prompt && e.detail.category === category) {
-        document.removeEventListener('wkvi:subjectData', handler);
+        document.removeEventListener('kikoe:subjectData', handler);
         resolve({ subjects: e.detail.subjects, error: e.detail.error ?? null });
       }
     }
-    document.addEventListener('wkvi:subjectData', handler);
-    document.dispatchEvent(new CustomEvent('wkvi:subjectRequest', {
+    document.addEventListener('kikoe:subjectData', handler);
+    document.dispatchEvent(new CustomEvent('kikoe:subjectRequest', {
       detail: { prompt, category }
     }));
   });
@@ -88,13 +88,13 @@ async function startListener(dictionary) {
     setIdleIndicatorState('loading');
     const { subjects: loaded, error } = await requestSubjects(prompt, category);
     subjectsLoadFailed = !!error;
-    if (error) console.error('[wkvi] failed to load subjects:', error);
+    if (error) console.error('[kikoe] failed to load subjects:', error);
     return loaded;
   }
 
   // The content script retries failed fetches (waiting out rate limits);
   // reflect that so a longer wait doesn't look like a stuck "Loading…".
-  document.addEventListener('wkvi:subjectRetry', () => setIdleIndicatorState('retrying'));
+  document.addEventListener('kikoe:subjectRetry', () => setIdleIndicatorState('retrying'));
 
   // Pre-fetch subjects for the initial card.
   if (usesSubjects && context?.prompt && context?.category) {
@@ -171,15 +171,15 @@ async function startListener(dictionary) {
     }
 
     // Ignore further speech after the answer has been submitted — wait for card change.
-    if (submitted) { console.log('[wkvi] skipped — already submitted'); return; }
+    if (submitted) { console.log('[kikoe] skipped — already submitted'); return; }
 
     const ctx = site.getContext(subjects);
-    if (!ctx) { console.log('[wkvi] skipped — no context'); return; }
-    if (ctx.mode === 'unsupported') { console.log('[wkvi] skipped — unsupported card type'); return; }
+    if (!ctx) { console.log('[kikoe] skipped — no context'); return; }
+    if (ctx.mode === 'unsupported') { console.log('[kikoe] skipped — unsupported card type'); return; }
 
     const result = checkAlternatives(ctx, raws);
     logTranscript(getSettings(), result.transcript);
-    console.log('[wkvi] checkAnswer', { raws, type: ctx.type, readings: ctx.readings, meanings: ctx.meanings, result });
+    console.log('[kikoe] checkAnswer', { raws, type: ctx.type, readings: ctx.readings, meanings: ctx.meanings, result });
 
     if (result.success && result.answer) {
       submitted = true;
@@ -187,7 +187,7 @@ async function startListener(dictionary) {
     } else if (!ctx.readings?.length && !ctx.meanings?.length) {
       // Subjects not loaded yet — store transcript and retry once they arrive.
       pendingRaws = raws;
-      console.log('[wkvi] subjects not loaded, stored pending transcript:', raws);
+      console.log('[kikoe] subjects not loaded, stored pending transcript:', raws);
     }
   });
 
@@ -205,7 +205,7 @@ async function startListener(dictionary) {
         // Retry any transcript that arrived while subjects were loading.
         if (pendingRaws && !submitted) {
           const result = checkAlternatives(context, pendingRaws);
-          console.log('[wkvi] retrying pending transcript', { pendingRaws, result });
+          console.log('[kikoe] retrying pending transcript', { pendingRaws, result });
           if (result.success && result.answer) {
             submitted = true;
             site.submitAnswer(result.answer);
@@ -271,4 +271,4 @@ async function init() {
   startObserver.observe(document.documentElement, { childList: true, subtree: true });
 }
 
-init().catch(err => console.error('[wkvi] init error:', err));
+init().catch(err => console.error('[kikoe] init error:', err));

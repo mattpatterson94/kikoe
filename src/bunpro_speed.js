@@ -60,7 +60,7 @@ export function startSpeedEnhancer(getSettingsFn) {
     if (meta === currentMeta) return;
     currentMeta = meta;
     attrObserver?.disconnect();
-    console.log('[wkvi] bunpro speed enhancer attached');
+    console.log('[kikoe] bunpro speed enhancer attached');
 
     attrObserver = new MutationObserver(() => onResult(meta));
     attrObserver.observe(meta, {

@@ -1,8 +1,8 @@
 {
   "manifest_version": 2,
-  "name": "WaniKani Voice Input",
+  "name": "Kikoe — Voice Answers for WaniKani & BunPro",
   "version": "0.6.0",
-  "description": "Enables doing WaniKani and BunPro reviews and lessons via voice input using Web Speech API",
+  "description": "Answer WaniKani and BunPro reviews and lessons with your voice, powered by the Web Speech API",
   "options_ui": {
     "page": "options.html",
     "open_in_tab": true
@@ -33,7 +33,7 @@
   ],
   "browser_specific_settings": {
     "gecko": {
-      "id": "wanikani-voice-input@wkvi",
+      "id": "kikoe@mattpatterson94.github.io",
       "strict_min_version": "109.0"
     }
   }

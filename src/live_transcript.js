@@ -1,20 +1,20 @@
-const STYLE_ID = 'wkvi-transcript-styles';
+const STYLE_ID = 'kikoe-transcript-styles';
 
 function injectStyles() {
   if (document.getElementById(STYLE_ID)) return;
   const style = document.createElement('style');
   style.id = STYLE_ID;
   style.textContent = `
-    @keyframes wkvi-in {
+    @keyframes kikoe-in {
       from { opacity: 0; transform: translateY(10px) scale(0.94); }
       to   { opacity: 1; transform: translateY(0)    scale(1); }
     }
-    @keyframes wkvi-pulse {
+    @keyframes kikoe-pulse {
       0%, 100% { opacity: 0.35; transform: scale(1); }
       50%       { opacity: 0.85; transform: scale(1.25); }
     }
 
-    .wkvi-chip {
+    .kikoe-chip {
       display: inline-flex;
       align-items: center;
       gap: 10px;
@@ -25,14 +25,14 @@ function injectStyles() {
       font-weight: 600;
       letter-spacing: 0.015em;
       line-height: 1.15;
-      animation: wkvi-in 0.22s cubic-bezier(0.34, 1.4, 0.64, 1) both;
+      animation: kikoe-in 0.22s cubic-bezier(0.34, 1.4, 0.64, 1) both;
       transition: opacity 0.38s ease, transform 0.38s ease;
       pointer-events: auto;
       user-select: none;
       max-width: 90vw;
     }
 
-    .wkvi-theme-dark {
+    .kikoe-theme-dark {
       background: rgba(18, 18, 26, 0.52);
       backdrop-filter: blur(28px) saturate(1.8);
       -webkit-backdrop-filter: blur(28px) saturate(1.8);
@@ -44,7 +44,7 @@ function injectStyles() {
       color: rgba(255, 255, 255, 0.92);
     }
 
-    .wkvi-theme-light {
+    .kikoe-theme-light {
       background: rgba(255, 255, 255, 0.65);
       backdrop-filter: blur(28px) saturate(1.8);
       -webkit-backdrop-filter: blur(28px) saturate(1.8);
@@ -57,7 +57,7 @@ function injectStyles() {
     }
 
     @media (prefers-color-scheme: dark) {
-      .wkvi-theme-system {
+      .kikoe-theme-system {
         background: rgba(18, 18, 26, 0.52);
         backdrop-filter: blur(28px) saturate(1.8);
         -webkit-backdrop-filter: blur(28px) saturate(1.8);
@@ -70,7 +70,7 @@ function injectStyles() {
       }
     }
     @media (prefers-color-scheme: light) {
-      .wkvi-theme-system {
+      .kikoe-theme-system {
         background: rgba(255, 255, 255, 0.65);
         backdrop-filter: blur(28px) saturate(1.8);
         -webkit-backdrop-filter: blur(28px) saturate(1.8);
@@ -84,7 +84,7 @@ function injectStyles() {
     }
 
     /* Error chips override theme colours — double-class for specificity */
-    .wkvi-chip.wkvi-chip-error {
+    .kikoe-chip.kikoe-chip-error {
       background: rgba(195, 42, 36, 0.62);
       border: 0.5px solid rgba(255, 120, 110, 0.2);
       box-shadow:
@@ -94,32 +94,32 @@ function injectStyles() {
       color: rgba(255, 255, 255, 0.95);
     }
 
-    .wkvi-chip-dot {
+    .kikoe-chip-dot {
       width: 8px;
       height: 8px;
       border-radius: 50%;
       background: currentColor;
       flex-shrink: 0;
-      animation: wkvi-pulse 1.4s ease-in-out infinite;
+      animation: kikoe-pulse 1.4s ease-in-out infinite;
     }
-    .wkvi-chip.wkvi-chip-error .wkvi-chip-dot {
+    .kikoe-chip.kikoe-chip-error .kikoe-chip-dot {
       animation: none;
       opacity: 0.7;
     }
 
-    .wkvi-chip-matched {
+    .kikoe-chip-matched {
       opacity: 0.5;
       font-weight: 400;
       font-size: 0.82em;
     }
 
-    .wkvi-idle {
+    .kikoe-idle {
       animation: none;
       font-size: clamp(10px, 1.6vh, 14px);
       padding: 6px 12px 6px 9px;
       font-weight: 500;
     }
-    .wkvi-idle .wkvi-chip-dot {
+    .kikoe-idle .kikoe-chip-dot {
       width: 6px;
       height: 6px;
     }
@@ -142,14 +142,14 @@ function getContainerStyle(settings) {
 
 function themeClass(settings) {
   const t = settings.transcript_theme;
-  if (t === 'dark' || t === 'light') return `wkvi-theme-${t}`;
-  return 'wkvi-theme-system';
+  if (t === 'dark' || t === 'light') return `kikoe-theme-${t}`;
+  return 'kikoe-theme-system';
 }
 
 export function createTranscriptContainer(settings) {
   injectStyles();
   const container = document.createElement('div');
-  container.id = 'wanikani-voice-input-transcript-container';
+  container.id = 'kikoe-transcript-container';
   container.style.cssText = getContainerStyle(settings);
   document.body.appendChild(container);
 }
@@ -157,7 +157,7 @@ export function createTranscriptContainer(settings) {
 let COUNTER = 1;
 
 export function clearTranscript() {
-  const container = document.querySelector('div#wanikani-voice-input-transcript-container');
+  const container = document.querySelector('div#kikoe-transcript-container');
   if (!container) return;
   container.textContent = '';
 }
@@ -177,20 +177,20 @@ function scheduleRemoval(el) {
 
 export function showIdleIndicator(settings) {
   if (!settings.transcript) return;
-  if (document.getElementById('wkvi-idle')) return;
+  if (document.getElementById('kikoe-idle')) return;
 
   const el = document.createElement('div');
-  el.id = 'wkvi-idle';
-  el.className = `wkvi-chip ${themeClass(settings)} wkvi-idle`;
+  el.id = 'kikoe-idle';
+  el.className = `kikoe-chip ${themeClass(settings)} kikoe-idle`;
   el.style.cssText = 'position: fixed; bottom: 16px; right: 16px; z-index: 2147483647;';
 
   const dot = document.createElement('span');
-  dot.className = 'wkvi-chip-dot';
+  dot.className = 'kikoe-chip-dot';
   dot.setAttribute('aria-hidden', 'true');
   el.appendChild(dot);
 
   const label = document.createElement('span');
-  label.id = 'wkvi-idle-label';
+  label.id = 'kikoe-idle-label';
   label.textContent = 'Listening';
   el.appendChild(label);
 
@@ -198,9 +198,9 @@ export function showIdleIndicator(settings) {
 }
 
 export function setIdleIndicatorState(state) {
-  const label = document.getElementById('wkvi-idle-label');
+  const label = document.getElementById('kikoe-idle-label');
   if (!label) return;
-  document.getElementById('wkvi-idle')?.classList.toggle('wkvi-chip-error', state === 'error');
+  document.getElementById('kikoe-idle')?.classList.toggle('kikoe-chip-error', state === 'error');
   if (state === 'loading') label.textContent = 'Loading…';
   else if (state === 'retrying') label.textContent = 'Retrying…';
   else if (state === 'restarting') label.textContent = 'Restarting…';
@@ -213,7 +213,7 @@ export function setIdleIndicatorState(state) {
 
 export function logTranscript(settings, transcript) {
   if (!settings.transcript) return;
-  const container = document.querySelector('div#wanikani-voice-input-transcript-container');
+  const container = document.querySelector('div#kikoe-transcript-container');
   if (!container) return;
 
   if (typeof transcript !== 'object' || transcript === null) {
@@ -238,10 +238,10 @@ export function logTranscript(settings, transcript) {
   const el = document.createElement('div');
   el.raw = transcript.raw;
   el.id = id;
-  el.className = `wkvi-chip ${themeClass(settings)}${isError ? ' wkvi-chip-error' : ''}`;
+  el.className = `kikoe-chip ${themeClass(settings)}${isError ? ' kikoe-chip-error' : ''}`;
 
   const dot = document.createElement('span');
-  dot.className = 'wkvi-chip-dot';
+  dot.className = 'kikoe-chip-dot';
   dot.setAttribute('aria-hidden', 'true');
   el.appendChild(dot);
 
@@ -251,7 +251,7 @@ export function logTranscript(settings, transcript) {
 
   if (transcript.matched) {
     const matched = document.createElement('span');
-    matched.className = 'wkvi-chip-matched';
+    matched.className = 'kikoe-chip-matched';
     matched.textContent = '→ ' + transcript.matched;
     el.appendChild(matched);
   }

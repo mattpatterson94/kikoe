@@ -6,7 +6,7 @@
 import { defaults } from '../src/settings.js';
 import { detectSite } from '../src/site.js';
 
-export const CACHE_PREFIX = 'wkvi_subj_';
+export const CACHE_PREFIX = 'kikoe_subj_';
 
 export async function getSettings() {
   const keys = Object.keys(defaults);
@@ -34,7 +34,7 @@ export async function scrapeApiToken() {
     }
     return null;
   } catch (err) {
-    console.error('[wkvi] failed to scrape API token:', err);
+    console.error('[kikoe] failed to scrape API token:', err);
     return null;
   }
 }
@@ -43,25 +43,25 @@ export async function getApiToken() {
   // Prefer token entered manually in the options page.
   const synced = await chrome.storage.sync.get('apiToken');
   if (synced.apiToken) {
-    console.log('[wkvi] using API token from options');
+    console.log('[kikoe] using API token from options');
     return synced.apiToken;
   }
 
   // Fall back to previously auto-scraped token.
-  const cached = await chrome.storage.local.get('wkvi_apiToken');
-  if (cached.wkvi_apiToken) {
-    console.log('[wkvi] using cached auto-scraped API token');
-    return cached.wkvi_apiToken;
+  const cached = await chrome.storage.local.get('kikoe_apiToken');
+  if (cached.kikoe_apiToken) {
+    console.log('[kikoe] using cached auto-scraped API token');
+    return cached.kikoe_apiToken;
   }
 
   // Last resort: scrape from the settings page.
-  console.log('[wkvi] attempting to scrape API token from /settings/account');
+  console.log('[kikoe] attempting to scrape API token from /settings/account');
   const token = await scrapeApiToken();
   if (token) {
-    await chrome.storage.local.set({ wkvi_apiToken: token });
-    console.log('[wkvi] auto-discovered API token');
+    await chrome.storage.local.set({ kikoe_apiToken: token });
+    console.log('[kikoe] auto-discovered API token');
   } else {
-    console.warn('[wkvi] could not find API token — open extension options and paste your WaniKani v2 API token');
+    console.warn('[kikoe] could not find API token — open extension options and paste your WaniKani v2 API token');
   }
   return token || null;
 }
@@ -91,7 +91,7 @@ const MAX_RETRY_WAIT_MS = 60_000;
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-export const RADICALS_CACHE_KEY = 'wkvi_radicals';
+export const RADICALS_CACHE_KEY = 'kikoe_radicals';
 
 // Keep only the fields the matcher needs — full subjects carry image data
 // and mnemonics that would bloat chrome.storage.local.
@@ -165,7 +165,7 @@ export async function fetchSubjectsForPrompt(prompt, category, apiToken,
       return { subjects, error: null };
     } catch (err) {
       lastErr = err;
-      console.error(`[wkvi] subject fetch error (attempt ${attempt + 1}/${retries + 1}):`, err);
+      console.error(`[kikoe] subject fetch error (attempt ${attempt + 1}/${retries + 1}):`, err);
       if (NO_RETRY_STATUSES.has(err.status) || attempt === retries) break;
       onRetry?.(attempt + 1);
       // 429: wait out the rate-limit reset; otherwise exponential backoff.
@@ -195,19 +195,19 @@ async function main() {
   let apiToken = site === 'wanikani' ? await getApiToken() : null;
   const hasApiToken = site === 'wanikani' ? !!apiToken : true;
   const config = buildSafeConfig(base, settings, hasApiToken);
-  document.documentElement.dataset.wkviConfig = btoa(JSON.stringify(config));
+  document.documentElement.dataset.kikoeConfig = btoa(JSON.stringify(config));
 
   injectScript(base + 'injected.js');
   injectScript(base + 'bundle.js');
 
   if (site === 'wanikani') {
-    document.addEventListener('wkvi:subjectRequest', async (e) => {
+    document.addEventListener('kikoe:subjectRequest', async (e) => {
       const { prompt, category } = e.detail;
       if (!apiToken) apiToken = await getApiToken();
       const { subjects, error } = await fetchSubjectsForPrompt(prompt, category, apiToken, {
-        onRetry: () => document.dispatchEvent(new CustomEvent('wkvi:subjectRetry')),
+        onRetry: () => document.dispatchEvent(new CustomEvent('kikoe:subjectRetry')),
       });
-      document.dispatchEvent(new CustomEvent('wkvi:subjectData', {
+      document.dispatchEvent(new CustomEvent('kikoe:subjectData', {
         detail: { prompt, category, subjects, error }
       }));
     });
@@ -222,7 +222,7 @@ async function main() {
     }
     currentSettings = updated;
     const { apiToken: _, ...safeSettings } = updated;
-    document.dispatchEvent(new CustomEvent('wkvi:settingsChanged', {
+    document.dispatchEvent(new CustomEvent('kikoe:settingsChanged', {
       detail: safeSettings
     }));
   });
@@ -230,5 +230,5 @@ async function main() {
 
 // Auto-start only when loaded as a real content script, not during testing.
 if (typeof chrome !== 'undefined' && typeof chrome.runtime?.getURL === 'function') {
-  main().catch(err => console.error('[wkvi] content script error:', err));
+  main().catch(err => console.error('[kikoe] content script error:', err));
 }

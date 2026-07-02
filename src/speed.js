@@ -42,7 +42,7 @@ export function startSpeedEnhancer(getSettingsFn) {
     if (container === currentContainer) return;
     currentContainer = container;
     attrObserver?.disconnect();
-    console.log('[wkvi] speed enhancer attached to', container.className || container.tagName);
+    console.log('[kikoe] speed enhancer attached to', container.className || container.tagName);
 
     attrObserver = new MutationObserver((mutations) => {
       for (const m of mutations) {
