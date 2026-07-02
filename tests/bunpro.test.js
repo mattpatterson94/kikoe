@@ -1,6 +1,7 @@
 import {
   getLanguage, getContext, didContextChange,
   inputAnswer, submitAnswer, markWrong, clickNext, clickInfo,
+  reveal, gradeGood, gradeBad,
   createCardWatcher,
 } from '../src/bunpro.js';
 
@@ -29,6 +30,15 @@ function addMetadata(overrides = {}) {
   }
   document.body.appendChild(el);
   return el;
+}
+
+function addButton(text, title = '') {
+  const button = document.createElement('button');
+  button.textContent = text;
+  if (title) button.title = title;
+  button.addEventListener('click', () => { button.clicked = true; });
+  document.body.appendChild(button);
+  return button;
 }
 
 function addInput() {
@@ -111,12 +121,35 @@ describe('getContext', () => {
     expect(getContext().page).toBe('quiz');
   });
 
-  test('non-manual input mode (Reveal & Grade) → unsupported', () => {
+  test('non-manual input mode (Reveal & Grade) → reveal mode, answer hidden', () => {
     addMetadata({ 'data-meta-input-mode': 'flashcard' });
     const ctx = getContext();
-    expect(ctx.mode).toBe('unsupported');
+    expect(ctx.mode).toBe('reveal');
+    expect(ctx.revealed).toBe(false);
     expect(ctx.page).toBe('review');
+    expect(ctx.prompt).toBe('806:0');
     expect(ctx.type).toBeUndefined();
+  });
+
+  test('reveal card is revealed once data-meta-is-post-attempt flips', () => {
+    addMetadata({
+      'data-meta-input-mode': 'flashcard',
+      'data-meta-is-post-attempt': 'true',
+    });
+    expect(getContext().revealed).toBe(true);
+  });
+
+  test('reveal card falls back to grade-button detection when the flag has not flipped', () => {
+    addMetadata({ 'data-meta-input-mode': 'flashcard' });
+    addButton('Good');
+    addButton('Bad');
+    expect(getContext().revealed).toBe(true);
+  });
+
+  test('a lone grade-like button does not count as revealed', () => {
+    addMetadata({ 'data-meta-input-mode': 'flashcard' });
+    addButton('Good');
+    expect(getContext().revealed).toBe(false);
   });
 
   test('unknown question mode passes through as the type', () => {
@@ -217,6 +250,51 @@ describe('clickNext', () => {
 
   test('returns false when no such button exists', () => {
     expect(clickNext()).toBe(false);
+  });
+});
+
+// ── reveal / gradeGood / gradeBad ─────────────────────────────────────────────
+
+describe('reveal', () => {
+  test('clicks a button whose text says Show Answer', () => {
+    const button = addButton('Show Answer');
+    expect(reveal()).toBe(true);
+    expect(button.clicked).toBe(true);
+  });
+
+  test('matches by title as well as text', () => {
+    const button = addButton('', 'Reveal answer (Space)');
+    expect(reveal()).toBe(true);
+    expect(button.clicked).toBe(true);
+  });
+
+  test('returns false when no reveal button exists', () => {
+    addButton('Good');
+    expect(reveal()).toBe(false);
+  });
+});
+
+describe('gradeGood / gradeBad', () => {
+  test('each clicks its own button and not the other', () => {
+    const good = addButton('Good');
+    const bad = addButton('Bad');
+
+    expect(gradeGood()).toBe(true);
+    expect(good.clicked).toBe(true);
+    expect(bad.clicked).toBeUndefined();
+
+    expect(gradeBad()).toBe(true);
+    expect(bad.clicked).toBe(true);
+  });
+
+  test('matches whole words only — "Goodbye" is not a Good button', () => {
+    addButton('Goodbye');
+    expect(gradeGood()).toBe(false);
+  });
+
+  test('return false when the buttons are absent', () => {
+    expect(gradeGood()).toBe(false);
+    expect(gradeBad()).toBe(false);
   });
 });
 

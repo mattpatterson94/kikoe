@@ -159,6 +159,25 @@ async function startListener(dictionary) {
     'ストップ': () => setMuted(true),
   };
 
+  // Reveal & Grade cards (BunPro, context mode 'reveal') take no typed
+  // answer — recognition routes to these command-only tables instead of the
+  // checkAnswer path. Both recognizer languages are registered since
+  // getLanguage() may pick either; only bunpro.js produces mode 'reveal',
+  // so site.reveal/gradeGood/gradeBad are always defined when these run.
+  const revealCommands = {
+    'reveal': () => site.reveal(), 'show': () => site.reveal(),
+    'show answer': () => site.reveal(), 'answer': () => site.reveal(),
+    '見せて': () => site.reveal(), 'みせて': () => site.reveal(),
+    '答え': () => site.reveal(), 'こたえ': () => site.reveal(),
+  };
+  const gradeCommands = {
+    'good': () => site.gradeGood(), 'known': () => site.gradeGood(),
+    'correct': () => site.gradeGood(),
+    'わかった': () => site.gradeGood(), '分かった': () => site.gradeGood(),
+    'bad': () => site.gradeBad(), 'again': () => site.gradeBad(),
+    'わからない': () => site.gradeBad(), '分からない': () => site.gradeBad(),
+  };
+
   // Recognizer finals routinely arrive capitalized/punctuated ("Next.") even
   // though the command table only has lowercase keys — normalize before
   // lookup instead of growing the table with every casing variant.
@@ -169,9 +188,9 @@ async function startListener(dictionary) {
   // Mirrors checkAlternatives below: try every alternative the recognizer
   // offered, not just the top one, since a garbled top slot can still have
   // the intended command further down the list.
-  function matchCommand(raws) {
+  function matchCommand(raws, table = commands) {
     for (const raw of raws) {
-      const command = commands[normalizeCommand(raw)];
+      const command = table[normalizeCommand(raw)];
       if (command) return command;
     }
     return null;
@@ -253,6 +272,20 @@ async function startListener(dictionary) {
     // Only process on final results — interim results are shown for feedback only.
     if (!final) return;
 
+    // Reveal & Grade cards are command-only: match the state-appropriate
+    // table first (reveal while the answer is hidden, good/bad once shown),
+    // then fall back to the shared commands ('next', 'pause', …). The whole
+    // checkAnswer path below is skipped.
+    const ctx = site.getContext(subjects);
+    if (ctx?.mode === 'reveal') {
+      const action = matchCommand(raws, ctx.revealed ? gradeCommands : revealCommands)
+        ?? matchCommand(raws);
+      if (action) { action(); return; }
+      logTranscript(getSettings(), { raw, reason: ctx.revealed ? 'say-grade' : 'say-reveal' });
+      debugLog('reveal card — no command matched:', raws);
+      return;
+    }
+
     // Voice commands take priority over answer submission.
     const command = matchCommand(raws);
     if (command) {
@@ -263,7 +296,6 @@ async function startListener(dictionary) {
     // Ignore further speech after the answer has been submitted — wait for card change.
     if (submitted) { debugLog('skipped — already submitted'); return; }
 
-    const ctx = site.getContext(subjects);
     if (!ctx) { debugLog('skipped — no context'); return; }
     if (ctx.mode === 'unsupported') { debugLog('skipped — unsupported card type'); return; }
 
