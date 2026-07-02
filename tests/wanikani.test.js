@@ -1,7 +1,7 @@
 import {
   getPrompt, getLanguage, getContext,
   didContextChange, didAnswerCorrectly,
-  getUserSynonyms, inputAnswer,
+  getUserSynonyms, inputAnswer, createCardWatcher,
 } from '../src/wanikani.js';
 
 
@@ -203,6 +203,68 @@ describe('inputAnswer', () => {
 });
 
 // ── getUserSynonyms ───────────────────────────────────────────────────────────
+
+describe('createCardWatcher', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  function setCard(prompt, type) {
+    setDOM(`
+      <div class="character-header__characters">${prompt}</div>
+      <span class="quiz-input__question-type">${type}</span>
+    `);
+  }
+
+  async function flushObserver() {
+    await Promise.resolve();
+    vi.advanceTimersByTime(60);
+  }
+
+  test('fires onChange when the prompt settles on a new value', async () => {
+    setCard('下', 'Reading');
+    const onChange = vi.fn();
+    createCardWatcher(onChange);
+
+    setCard('上', 'Reading');
+    await flushObserver();
+    expect(onChange).toHaveBeenCalledTimes(1);
+  });
+
+  test('fires onChange when only the type changes', async () => {
+    setCard('下', 'Reading');
+    const onChange = vi.fn();
+    createCardWatcher(onChange);
+
+    setCard('下', 'Meaning');
+    await flushObserver();
+    expect(onChange).toHaveBeenCalledTimes(1);
+  });
+
+  test('ignores mutations that leave prompt and type unchanged', async () => {
+    setCard('下', 'Reading');
+    const onChange = vi.fn();
+    createCardWatcher(onChange);
+
+    document.body.appendChild(document.createElement('div'));
+    await flushObserver();
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  test('ignores transitional states where prompt or type is missing', async () => {
+    setCard('下', 'Reading');
+    const onChange = vi.fn();
+    createCardWatcher(onChange);
+
+    setDOM('');
+    await flushObserver();
+    expect(onChange).not.toHaveBeenCalled();
+  });
+});
 
 describe('getUserSynonyms', () => {
   // The selector is '#quiz-user-synonyms script' — a <script> child of that element.

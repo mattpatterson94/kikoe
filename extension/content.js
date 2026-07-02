@@ -4,6 +4,7 @@
 // bridge + app bundle into the page context.
 
 import { defaults } from '../src/settings.js';
+import { detectSite } from '../src/site.js';
 
 export const CACHE_PREFIX = 'wkvi_subj_';
 
@@ -182,27 +183,35 @@ function injectScript(src) {
 }
 
 async function main() {
+  const site = detectSite(window.location.hostname);
+  if (!site) return;
+
   const settings = await getSettings();
   const base = chrome.runtime.getURL('');
 
-  // Load token first so hasApiToken is accurate when the bundle reads the config.
-  let apiToken = await getApiToken();
-  const config = buildSafeConfig(base, settings, !!apiToken);
+  // The API token (and subject fetching) is WaniKani-only — BunPro's accepted
+  // answers live in the page DOM, so it never needs a token.
+  // Load the token first so hasApiToken is accurate when the bundle reads the config.
+  let apiToken = site === 'wanikani' ? await getApiToken() : null;
+  const hasApiToken = site === 'wanikani' ? !!apiToken : true;
+  const config = buildSafeConfig(base, settings, hasApiToken);
   document.documentElement.dataset.wkviConfig = btoa(JSON.stringify(config));
 
   injectScript(base + 'injected.js');
   injectScript(base + 'bundle.js');
 
-  document.addEventListener('wkvi:subjectRequest', async (e) => {
-    const { prompt, category } = e.detail;
-    if (!apiToken) apiToken = await getApiToken();
-    const { subjects, error } = await fetchSubjectsForPrompt(prompt, category, apiToken, {
-      onRetry: () => document.dispatchEvent(new CustomEvent('wkvi:subjectRetry')),
+  if (site === 'wanikani') {
+    document.addEventListener('wkvi:subjectRequest', async (e) => {
+      const { prompt, category } = e.detail;
+      if (!apiToken) apiToken = await getApiToken();
+      const { subjects, error } = await fetchSubjectsForPrompt(prompt, category, apiToken, {
+        onRetry: () => document.dispatchEvent(new CustomEvent('wkvi:subjectRetry')),
+      });
+      document.dispatchEvent(new CustomEvent('wkvi:subjectData', {
+        detail: { prompt, category, subjects, error }
+      }));
     });
-    document.dispatchEvent(new CustomEvent('wkvi:subjectData', {
-      detail: { prompt, category, subjects, error }
-    }));
-  });
+  }
 
   let currentSettings = settings;
   chrome.storage.onChanged.addListener((changes, area) => {

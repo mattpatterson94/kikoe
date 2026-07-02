@@ -206,6 +206,7 @@ export function setIdleIndicatorState(state) {
   else if (state === 'restarting') label.textContent = 'Restarting…';
   else if (state === 'paused') label.textContent = 'Paused';
   else if (state === 'no-token') label.textContent = '⚠ No API token';
+  else if (state === 'unsupported') label.textContent = '⚠ Unsupported card type';
   else if (state === 'error') label.textContent = '⚠ Subjects failed to load';
   else label.textContent = 'Listening';
 }

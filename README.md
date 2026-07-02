@@ -1,10 +1,11 @@
 # WaniKani Voice Input
 
-A browser extension that lets you answer [WaniKani](https://www.wanikani.com) reviews and lessons using your voice instead of typing. Speak your answer and the extension submits it automatically — no hands required.
+A browser extension that lets you answer [WaniKani](https://www.wanikani.com) and [BunPro](https://bunpro.jp) reviews and lessons using your voice instead of typing. Speak your answer and the extension submits it automatically — no hands required.
 
 ## Features
 
 - **Voice-driven reviews** — speak reading and meaning answers during WaniKani reviews, lessons, and quizzes
+- **BunPro support** — the same voice-driven flow on BunPro reviews (Fill In and Translate questions with manual input; no API token needed)
 - **Smart speech matching** — handles common speech-to-text quirks: romaji-to-hiragana conversion, fuzzy vowel matching, numeral recognition (kanji/English), suru verb normalization, and more
 - **Lightning mode** — auto-advances to the next card on a correct answer (configurable delay)
 - **Live transcript** — optional overlay showing what the extension heard in real time
@@ -13,8 +14,8 @@ A browser extension that lets you answer [WaniKani](https://www.wanikani.com) re
 
 ## Requirements
 
-- A [WaniKani](https://www.wanikani.com) account
-- A WaniKani API token (read-only is sufficient)
+- A [WaniKani](https://www.wanikani.com) account and/or a [BunPro](https://bunpro.jp) account
+- For WaniKani: an API token (read-only is sufficient). BunPro needs no token — the accepted answers are already on the review page.
 - Chrome/Chromium (Manifest V3) or Firefox 109+ (Manifest V2)
 - Node.js and npm (to build from source)
 - Microphone access granted to the browser
@@ -62,12 +63,13 @@ npm run pack:firefox # firefox only → dist/wanikani-koe-firefox.zip
 1. Click the extension icon in your browser toolbar (or open the options page from the extensions menu).
 2. Paste your WaniKani **API Token** into the API Token field.
    - Get one from [WaniKani → Settings → Personal Access Tokens](https://www.wanikani.com/settings/personal_access_tokens). A read-only token is sufficient.
+   - Skip this step if you only use BunPro — no token is needed there.
 3. Click **Save settings**.
 4. When prompted, allow the browser to access your microphone.
 
 ## Using the Extension
 
-Once installed and configured, the extension activates automatically on any WaniKani review, lesson, or quiz page.
+Once installed and configured, the extension activates automatically on any WaniKani review, lesson, or quiz page, and on BunPro review sessions.
 
 **Speaking an answer:**
 
@@ -95,6 +97,12 @@ The extension applies several candidate transformations to improve recognition a
 - Suru verb normalization
 - Numeral recognition (kansuji, English words → digits)
 - Repeating substring handling
+
+**BunPro notes:**
+
+- Fill In (cloze) questions expect a Japanese answer; Translate questions expect English. The recognition language switches automatically.
+- Only cards with **Manual** answer input are supported. Cards from decks set to **Reveal & Grade** have no text input — the idle indicator shows "⚠ Unsupported card type" while one is on screen.
+- BunPro's own native Lightning Mode setting is detected at runtime, so enabling the extension's lightning mode won't double-advance.
 
 ## Settings
 
@@ -143,7 +151,10 @@ Tests use [Vitest](https://vitest.dev/) with jsdom.
 src/
   app.js              # main entry point, orchestrates recognition and submission
   recognition.js      # Web Speech API wrapper
+  site.js             # hostname → site detection (wanikani / bunpro)
   wanikani.js         # WaniKani page interaction (DOM selectors, answer submission)
+  bunpro.js           # BunPro page interaction (quiz metadata element, answer submission)
+  bunpro_speed.js     # BunPro lightning mode / speed enhancements
   flashcards.js       # answer checking logic
   dict.js             # dictionary loading (JMdict / KANJIDIC2)
   settings.js         # settings management

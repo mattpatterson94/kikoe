@@ -160,6 +160,29 @@ export function clickInfo() {
   }
 }
 
+// Fires onChange (debounced) only when the prompt+type DOM elements settle on
+// new values. This ignores unrelated mutations (animations, the `correct`
+// attribute, progress bars) that would otherwise reset a naive debounce and
+// prevent onChange from ever firing.
+export function createCardWatcher(onChange) {
+  let lastSeenPrompt = document.querySelector(Selectors.Prompt)?.textContent?.trim();
+  let lastSeenType = document.querySelector(Selectors.Type)?.textContent?.trim().toLowerCase();
+  let timer;
+
+  const observer = new MutationObserver(() => {
+    const prompt = document.querySelector(Selectors.Prompt)?.textContent?.trim();
+    const type = document.querySelector(Selectors.Type)?.textContent?.trim().toLowerCase();
+    if (!prompt || !type) return;
+    if (prompt === lastSeenPrompt && type === lastSeenType) return;
+    lastSeenPrompt = prompt;
+    lastSeenType = type;
+    clearTimeout(timer);
+    timer = setTimeout(onChange, 50);
+  });
+  observer.observe(document.body, { childList: true, subtree: true });
+  return observer;
+}
+
 export function didAnswerCorrectly(e) {
   if (typeof e.detail?.results?.action !== 'string') {
     console.error('[wkvi] didAnswerCorrectly: unexpected event shape', e);
