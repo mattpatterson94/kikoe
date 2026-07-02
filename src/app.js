@@ -40,6 +40,11 @@ const SITE = detectSite(window.location.hostname);
 const site = SITE === 'bunpro' ? bunpro : wanikani;
 const startSpeedEnhancer = SITE === 'bunpro' ? startBunproSpeedEnhancer : startWanikaniSpeedEnhancer;
 const usesSubjects = SITE !== 'bunpro';
+// WaniKani's own server-side check tolerates small typos (edit-distance
+// based); mirror that locally so a near-miss answer WaniKani would accept
+// still submits. BunPro's Translate questions aren't confirmed to have the
+// same tolerance, so keep this WaniKani-only until verified.
+const FUZZY_MEANING_MATCHING = SITE === 'wanikani';
 
 // Read config stamped by content.js, then remove the attribute immediately.
 const _encoded = document.documentElement.dataset.kikoeConfig;
@@ -180,7 +185,7 @@ async function startListener(dictionary) {
   function checkAlternatives(ctx, raws) {
     let result;
     for (const raw of raws) {
-      result = checkAnswer(ctx, transformers, raw);
+      result = checkAnswer(ctx, transformers, raw, { fuzzyMeaning: FUZZY_MEANING_MATCHING });
       if (result.success && result.answer) return result;
     }
     return result;

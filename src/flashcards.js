@@ -92,6 +92,55 @@ export function normalize(s) {
   return stripped.trim();
 }
 
+// Standard edit-distance DP. Used to mirror WaniKani's own fuzzy meaning
+// matching (see fuzzyThreshold) so a near-miss answer WaniKani would accept
+// isn't rejected locally before it ever reaches the server-side check.
+function levenshtein(a, b) {
+  const m = a.length;
+  const n = b.length;
+  if (m === 0) return n;
+  if (n === 0) return m;
+  let prevRow = Array.from({ length: n + 1 }, (_, j) => j);
+  for (let i = 1; i <= m; i++) {
+    const currRow = [i];
+    for (let j = 1; j <= n; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      currRow.push(Math.min(
+        prevRow[j] + 1,      // deletion
+        currRow[j - 1] + 1,  // insertion
+        prevRow[j - 1] + cost, // substitution
+      ));
+    }
+    prevRow = currRow;
+  }
+  return prevRow[n];
+}
+
+// WaniKani's documented fuzzy-matching tolerance, scaled by answer length
+// (used by userscripts like Double-Check). Verify against current WK
+// behavior before changing.
+function fuzzyThreshold(length) {
+  if (length <= 3) return 0;
+  if (length <= 5) return 1;
+  if (length <= 8) return 2;
+  return 3;
+}
+
+// Returns the closest accepted meaning within WaniKani's edit-distance
+// tolerance for its length, or null if none qualifies.
+function closestFuzzyMatch(candidate, meanings) {
+  let best = null;
+  let bestDistance = Infinity;
+  for (const meaning of meanings) {
+    const distance = levenshtein(candidate, meaning);
+    if (distance <= fuzzyThreshold(meaning.length) && distance < bestDistance) {
+      best = meaning;
+      bestDistance = distance;
+    }
+  }
+  return best;
+}
+
 function groupBy(xs, k) {
   return xs.reduce(function(rv, x) {
     (rv[x[k]] = rv[x[k]] || []).push(x);
@@ -120,8 +169,9 @@ function generateCandidates(transformers, raw) {
 // For reading questions: find the first Japanese candidate (converted to
 // hiragana). The homonym table handles common speech-recognition mishearings
 // (e.g. "b" → "び"). For meaning/name questions: submit normalised English.
-export function checkAnswer(context, transformers, raw) {
+export function checkAnswer(context, transformers, raw, opts = {}) {
   const { type } = context;
+  const { fuzzyMeaning = false } = opts;
   const candidates = generateCandidates(transformers, raw);
 
   if (type === 'reading') {
@@ -180,11 +230,19 @@ export function checkAnswer(context, transformers, raw) {
     // nothing matches. Compound words ("rib cage") and spelled-out letters
     // ("e a r") both match only after removing spaces — submit that
     // space-free form, not the spaced candidate, or WaniKani rejects it.
+    // Exact match is always tried first; fuzzy matching (when enabled) only
+    // kicks in as a fallback, and submits the canonical accepted meaning
+    // rather than the misheard candidate — the server-side check is what
+    // actually grades, so submitting anything else it might reject is unsafe.
     function matchingAnswer(norm) {
       if (normalizedMeanings.length === 0) return null;
       if (normalizedMeanings.includes(norm)) return norm;
       const compact = norm.replaceAll(' ', '');
       if (normalizedMeanings.includes(compact)) return compact;
+      if (fuzzyMeaning) {
+        const fuzzy = closestFuzzyMatch(norm, normalizedMeanings) ?? closestFuzzyMatch(compact, normalizedMeanings);
+        if (fuzzy) return fuzzy;
+      }
       return null;
     }
 
