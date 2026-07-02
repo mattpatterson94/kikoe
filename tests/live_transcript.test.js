@@ -186,4 +186,36 @@ describe('setIdleIndicatorState', () => {
     expect(label.textContent).toBe('Listening');
     expect(document.getElementById('kikoe-idle').classList.contains('kikoe-chip-error')).toBe(false);
   });
+
+  test('shows unsupported-browser state with error styling', () => {
+    showIdleIndicator(settings());
+    setIdleIndicatorState('unsupported-browser');
+    const label = document.getElementById('kikoe-idle-label');
+    expect(label.textContent).toMatch(/not supported/i);
+    expect(document.getElementById('kikoe-idle').classList.contains('kikoe-chip-error')).toBe(true);
+  });
+
+  test('shows mic-denied state with error styling', () => {
+    showIdleIndicator(settings());
+    setIdleIndicatorState('mic-denied');
+    const label = document.getElementById('kikoe-idle-label');
+    expect(label.textContent).toMatch(/microphone access denied/i);
+    expect(document.getElementById('kikoe-idle').classList.contains('kikoe-chip-error')).toBe(true);
+  });
+
+  test('shows no-mic state with error styling', () => {
+    showIdleIndicator(settings());
+    setIdleIndicatorState('no-mic');
+    const label = document.getElementById('kikoe-idle-label');
+    expect(label.textContent).toMatch(/no microphone found/i);
+    expect(document.getElementById('kikoe-idle').classList.contains('kikoe-chip-error')).toBe(true);
+  });
+
+  test('shows reconnecting state without error styling (transient)', () => {
+    showIdleIndicator(settings());
+    setIdleIndicatorState('reconnecting');
+    const label = document.getElementById('kikoe-idle-label');
+    expect(label.textContent).toBe('Reconnecting…');
+    expect(document.getElementById('kikoe-idle').classList.contains('kikoe-chip-error')).toBe(false);
+  });
 });

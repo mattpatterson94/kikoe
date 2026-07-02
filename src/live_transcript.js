@@ -197,16 +197,22 @@ export function showIdleIndicator(settings) {
   document.body.appendChild(el);
 }
 
+const ERROR_STYLED_STATES = new Set(['error', 'mic-denied', 'no-mic', 'unsupported-browser']);
+
 export function setIdleIndicatorState(state) {
   const label = document.getElementById('kikoe-idle-label');
   if (!label) return;
-  document.getElementById('kikoe-idle')?.classList.toggle('kikoe-chip-error', state === 'error');
+  document.getElementById('kikoe-idle')?.classList.toggle('kikoe-chip-error', ERROR_STYLED_STATES.has(state));
   if (state === 'loading') label.textContent = 'Loading…';
   else if (state === 'retrying') label.textContent = 'Retrying…';
   else if (state === 'restarting') label.textContent = 'Restarting…';
+  else if (state === 'reconnecting') label.textContent = 'Reconnecting…';
   else if (state === 'paused') label.textContent = 'Paused';
   else if (state === 'no-token') label.textContent = '⚠ No API token';
   else if (state === 'unsupported') label.textContent = '⚠ Unsupported card type';
+  else if (state === 'unsupported-browser') label.textContent = '⚠ Voice recognition not supported by this browser';
+  else if (state === 'mic-denied') label.textContent = '⚠ Microphone access denied';
+  else if (state === 'no-mic') label.textContent = '⚠ No microphone found';
   else if (state === 'error') label.textContent = '⚠ Subjects failed to load';
   else label.textContent = 'Listening';
 }

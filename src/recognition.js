@@ -8,7 +8,16 @@ const MIN_INDICATE = 100;
 // top pick.
 const MAX_ALTERNATIVES = 5;
 
-export function createRecognition(lang, callback) {
+// Errors after which retrying without backoff would just hot-loop against a
+// permission dialog or a missing device — the auto-restart in onend must stop.
+const FATAL_ERRORS = new Set(['not-allowed', 'service-not-allowed', 'audio-capture']);
+
+// Transient 'network' errors back off geometrically instead of restarting
+// immediately, so a flaky connection doesn't spin the recognizer in a loop.
+const NETWORK_BACKOFF_MS = 1000;
+const MAX_NETWORK_BACKOFF_MS = 8000;
+
+export function createRecognition(lang, callback, onError) {
   if (!('webkitSpeechRecognition' in window)) {
     console.error('[kikoe] web speech not supported by this browser!');
     return null;
@@ -25,6 +34,7 @@ export function createRecognition(lang, callback) {
   recognition.maxAlternatives = MAX_ALTERNATIVES;
   recognition.lang = getLang();
   let shouldAutoRestart = true;
+  let networkErrorStreak = 0;
   const start = recognition.start.bind(recognition);
   const stop = recognition.stop.bind(recognition);
 
@@ -47,6 +57,7 @@ export function createRecognition(lang, callback) {
 
   recognition.onresult = (event) => {
     //console.info('[kikoe] onresult', event);
+    networkErrorStreak = 0;
 
     for (let i = event.resultIndex; i < event.results.length; ++i) {
       const result = event.results[i];
@@ -62,10 +73,24 @@ export function createRecognition(lang, callback) {
       return;
     }
     console.error('[kikoe] error occurred in recognition:', event.error);
+
+    if (FATAL_ERRORS.has(event.error)) {
+      shouldAutoRestart = false;
+    } else if (event.error === 'network') {
+      networkErrorStreak++;
+    }
+
+    onError?.(event.error);
   };
 
   recognition.onend = () => {
-    if (shouldAutoRestart) safeStart();
+    if (!shouldAutoRestart) return;
+    if (networkErrorStreak > 0) {
+      const delay = Math.min(networkErrorStreak * NETWORK_BACKOFF_MS, MAX_NETWORK_BACKOFF_MS);
+      setTimeout(() => { if (shouldAutoRestart) safeStart(); }, delay);
+    } else {
+      safeStart();
+    }
   };
 
   recognition.start = () => {
