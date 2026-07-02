@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- User-editable custom corrections: a new options-page card maps recurring
+  speech-recognition mishearings ("heard") to the intended answer, for both
+  reading and meaning questions. User entries take precedence over the
+  built-in homonym/meaning tables and apply on the next utterance without
+  reloading the review page.
+  ([#21](https://github.com/mattpatterson94/kikoe/issues/21))
 - BunPro support via per-site adapters — voice-driven answering on BunPro
   reviews alongside WaniKani, selected at runtime by hostname. Cloze cards map
   to reading/ja-JP, Translate cards to meaning/en-US; no API token is needed

@@ -2,6 +2,7 @@ import { setDebugLogging } from './logger.js';
 
 export const defaults = {
   debug: false,
+  customCorrections: [],
   lightning: false,
   lightning_delay: 0.1,
   mistake_delay: 0.1,

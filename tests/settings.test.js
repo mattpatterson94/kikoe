@@ -22,8 +22,12 @@ describe('defaults', () => {
     expect(defaults.debug).toBe(false);
   });
 
+  test('customCorrections is an empty list by default', () => {
+    expect(defaults.customCorrections).toEqual([]);
+  });
+
   test('all expected keys are present', () => {
-    const keys = ['debug', 'lightning', 'lightning_delay', 'mistake_delay', 'speed_show_info',
+    const keys = ['debug', 'customCorrections', 'lightning', 'lightning_delay', 'mistake_delay', 'speed_show_info',
       'transcript', 'transcript_theme',
       'transcript_position', 'transcript_delay', 'transcript_count',
       'transcript_clear'];

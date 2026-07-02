@@ -148,6 +148,16 @@ Open the extension options page (via the toolbar icon or extensions menu) to con
 | Max visible transcripts | 1 | How many transcript lines to show at once |
 | Clear transcript between cards | Off | Clears the transcript when moving to a new card |
 
+### Custom Corrections
+
+When speech recognition keeps mishearing an answer (everyone's mic and accent
+produce different recurring misrecognitions), add your own corrections mapping
+what was heard to what you meant — e.g. `ec2` → `いしつ` or `web cage` →
+`ribcage`. Corrections apply to both reading and meaning questions, take
+precedence over the built-in correction tables, and take effect on your next
+answer without reloading the review page. The intended value for a reading can
+be entered in kana or romaji.
+
 ### Advanced
 
 | Setting | Default | Description |

@@ -222,8 +222,11 @@ async function startListener(dictionary) {
   // present further down the list.
   function checkAlternatives(ctx, raws) {
     let best;
+    // Read corrections at call time so entries saved in the options page
+    // apply on the next utterance via the settings-changed event.
+    const corrections = getSettings().customCorrections;
     for (const raw of raws) {
-      const result = checkAnswer(ctx, transformers, raw, { fuzzyMeaning: FUZZY_MEANING_MATCHING });
+      const result = checkAnswer(ctx, transformers, raw, { fuzzyMeaning: FUZZY_MEANING_MATCHING, corrections });
       if (result.success && result.answer) return result;
       const priority = REASON_PRIORITY[result.transcript?.reason] ?? 0;
       if (!best || priority > (REASON_PRIORITY[best.transcript?.reason] ?? 0)) best = result;
