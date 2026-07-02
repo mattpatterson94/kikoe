@@ -59,14 +59,20 @@ function getPromptFromEntry() {
   return prompt === '' ? null : prompt;
 }
 
+// Image-only radicals (e.g. "Rib Cage") render no text — their name only
+// exists in a descendant's aria-label, so a raw textContent read comes back
+// empty (or whitespace-only) for them.
+function readPromptText(el) {
+  const prompt = el.textContent.trim();
+  if (prompt !== '') return prompt;
+  const label = el.querySelector('[aria-label]')?.getAttribute('aria-label')?.trim();
+  return label ? label.toLowerCase() : null;
+}
+
 export function getPrompt() {
   const el = document.querySelector(Selectors.Prompt);
   if (!el) return getPromptFromEntry();
-  let prompt = el.textContent;
-  if (prompt === '' && el.childNodes.length > 0 && el.childNodes[0].getAttribute('aria-label')) {
-    prompt = el.childNodes[0].getAttribute('aria-label').toLowerCase();
-  }
-  return prompt === '' ? null : prompt;
+  return readPromptText(el);
 }
 
 export function getUserSynonyms(id) {
@@ -78,10 +84,14 @@ export function getUserSynonyms(id) {
   return [];
 }
 
+// Image-only radicals display a space-separated name ("rib cage") while the
+// API slug is hyphenated ("rib-cage") — same bridge as matchRadical in the
+// content script's fetch path.
 function getItems(subjects, category, slug) {
+  const hyphenated = slug?.replace(/\s+/g, '-');
   return subjects.filter(s =>
     s.object === category &&
-    (s.data.slug === slug || s.data.characters === slug)
+    (s.data.slug === slug || s.data.characters === slug || s.data.slug === hyphenated)
   );
 }
 
@@ -231,12 +241,20 @@ export function clickInfo() {
 // attribute, progress bars) that would otherwise reset a naive debounce and
 // prevent onChange from ever firing.
 export function createCardWatcher(onChange) {
-  let lastSeenPrompt = document.querySelector(Selectors.Prompt)?.textContent?.trim();
+  // Same aria-label-aware read as getPrompt — a raw textContent read is empty
+  // for image-only radicals, which made the watcher treat every mutation as a
+  // transitional state and never fire onChange for those cards.
+  function watchedPrompt() {
+    const el = document.querySelector(Selectors.Prompt);
+    return el ? readPromptText(el) : null;
+  }
+
+  let lastSeenPrompt = watchedPrompt();
   let lastSeenType = document.querySelector(Selectors.Type)?.textContent?.trim().toLowerCase();
   let timer;
 
   const observer = new MutationObserver(() => {
-    const prompt = document.querySelector(Selectors.Prompt)?.textContent?.trim();
+    const prompt = watchedPrompt();
     const type = document.querySelector(Selectors.Type)?.textContent?.trim().toLowerCase();
     if (!prompt || !type) return;
     if (prompt === lastSeenPrompt && type === lastSeenType) return;

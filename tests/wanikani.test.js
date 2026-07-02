@@ -131,6 +131,48 @@ describe('getContext', () => {
     expect(ctx.meanings).not.toContain('Beneath');
   });
 
+  // The aria-label fallback must survive formatting whitespace around the
+  // image element — a raw `textContent === ''` check breaks the moment
+  // WaniKani renders the child indented on its own line.
+  test('image-only radical prompt survives surrounding whitespace', () => {
+    setURL('https://www.wanikani.com/subjects/review');
+    setDOM(`
+      <div class="character-header__characters">
+        <wk-character-image aria-label="Rib Cage"></wk-character-image>
+      </div>
+      <span class="quiz-input__question-category">Radical</span>
+      <span class="quiz-input__question-type">Name</span>
+    `);
+    expect(getPrompt()).toBe('rib cage');
+  });
+
+  // Image-only radicals show their space-separated name via aria-label
+  // ("rib cage"), but the API subject's slug is hyphenated ("rib-cage") and
+  // characters is null — the matcher must bridge that gap.
+  test('matches an image-only radical whose slug is hyphenated', () => {
+    setURL('https://www.wanikani.com/subjects/review');
+    setDOM(`
+      <div class="character-header__characters"><wk-character-image aria-label="Rib Cage"></wk-character-image></div>
+      <span class="quiz-input__question-category">Radical</span>
+      <span class="quiz-input__question-type">Name</span>
+    `);
+    const subjects = [{
+      id: 9452, object: 'radical',
+      data: {
+        slug: 'rib-cage', characters: null,
+        meanings: [{ meaning: 'Rib Cage', accepted_answer: true }],
+        auxiliary_meanings: [
+          { meaning: 'Ribcage', accepted_answer: true },
+          { meaning: 'Ribs', accepted_answer: true },
+        ],
+      }
+    }];
+    const ctx = getContext(subjects);
+    expect(ctx.prompt).toBe('rib cage');
+    expect(ctx.meanings).toContain('Rib Cage');
+    expect(ctx.meanings).toContain('Ribcage');
+  });
+
   test('lesson URL → page = "lesson"', () => {
     setURL('https://www.wanikani.com/subjects/6259/lesson');
     expect(getContext().page).toBe('lesson');
@@ -312,6 +354,45 @@ describe('createCardWatcher', () => {
     createCardWatcher(onChange);
 
     setDOM('');
+    await flushObserver();
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  // Image-only radicals (e.g. "Rib Cage") have an empty textContent — the
+  // name only exists in the child's aria-label, same fallback getPrompt uses.
+  function setImageRadicalCard(name, type) {
+    setDOM(`
+      <div class="character-header__characters"><wk-character-image aria-label="${name}"></wk-character-image></div>
+      <span class="quiz-input__question-type">${type}</span>
+    `);
+  }
+
+  test('fires onChange when the card changes to an image-only radical', async () => {
+    setCard('下', 'Reading');
+    const onChange = vi.fn();
+    createCardWatcher(onChange);
+
+    setImageRadicalCard('Rib Cage', 'Name');
+    await flushObserver();
+    expect(onChange).toHaveBeenCalledTimes(1);
+  });
+
+  test('fires onChange when the card changes away from an image-only radical', async () => {
+    setImageRadicalCard('Rib Cage', 'Name');
+    const onChange = vi.fn();
+    createCardWatcher(onChange);
+
+    setCard('下', 'Reading');
+    await flushObserver();
+    expect(onChange).toHaveBeenCalledTimes(1);
+  });
+
+  test('ignores mutations that leave an image-only radical card unchanged', async () => {
+    setImageRadicalCard('Rib Cage', 'Name');
+    const onChange = vi.fn();
+    createCardWatcher(onChange);
+
+    document.body.appendChild(document.createElement('div'));
     await flushObserver();
     expect(onChange).not.toHaveBeenCalled();
   });

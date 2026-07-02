@@ -86,6 +86,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   substring matches against the full URL, so lookalike paths and query
   params no longer false-positive.
   ([#30](https://github.com/mattpatterson94/kikoe/pull/30))
+- Image-only radicals (e.g. "Rib Cage") no longer strand the card on
+  "loading answers…": the card watcher now reads the prompt from the
+  aria-label like `getPrompt` does (so card changes are detected and
+  subjects are fetched), and the subject matcher bridges the on-screen
+  space-separated name to the API's hyphenated slug (so the fetched
+  radical is no longer filtered out of the context).
+  ([#46](https://github.com/mattpatterson94/kikoe/pull/46))
 
 ## [0.6.0] - 2026-07-02
 
