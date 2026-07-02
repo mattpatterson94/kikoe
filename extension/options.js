@@ -111,9 +111,10 @@ get('save').addEventListener('click', async () => {
   await chrome.storage.sync.set(values);
   // Reflect what was actually stored (e.g. half-filled rows are dropped).
   renderCorrections(values.customCorrections);
-  const status = get('status');
-  status.textContent = 'Saved.';
-  setTimeout(() => { status.textContent = ''; }, 2000);
+  const save = get('save');
+  save.textContent = 'Saved.';
+  save.disabled = true;
+  setTimeout(() => { save.textContent = 'Save settings'; save.disabled = false; }, 2000);
 });
 
 load();
