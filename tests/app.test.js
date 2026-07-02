@@ -475,6 +475,182 @@ describe('startListener mute/pause control', () => {
   });
 });
 
+describe('startListener BunPro Reveal & Grade cards', () => {
+  // Same MockSpeechRecognition shape as above — kept local to this describe
+  // block so its instance list doesn't leak between describes.
+  class MockSpeechRecognition {
+    constructor() {
+      this.continuous = false;
+      this.interimResults = false;
+      this.maxAlternatives = 1;
+      this.lang = '';
+      this.nativeStart = vi.fn();
+      this.nativeStop = vi.fn();
+      this.start = this.nativeStart;
+      this.stop = this.nativeStop;
+      MockSpeechRecognition.instances.push(this);
+    }
+  }
+  MockSpeechRecognition.instances = [];
+
+  beforeEach(() => {
+    MockSpeechRecognition.instances = [];
+    vi.stubGlobal('webkitSpeechRecognition', MockSpeechRecognition);
+    vi.stubGlobal('location', {
+      hostname: 'bunpro.jp',
+      href: 'https://bunpro.jp/study',
+      pathname: '/study',
+      hash: '',
+    });
+  });
+
+  function addMetadata(overrides = {}) {
+    const el = document.createElement('div');
+    el.id = 'quiz-metadata-element';
+    const attrs = {
+      'data-meta-loc': 'review',
+      'data-meta-is-correct': 'false',
+      'data-meta-is-post-attempt': 'false',
+      'data-meta-info': JSON.stringify({ id: 806, type: 'grammar' }),
+      'data-meta-input-mode': 'flashcard',
+      'data-meta-question-mode': 'flashcard',
+      ...overrides,
+    };
+    for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v);
+    document.body.appendChild(el);
+    return el;
+  }
+
+  function addButton(text) {
+    const button = document.createElement('button');
+    button.textContent = text;
+    document.body.appendChild(button);
+    return button;
+  }
+
+  function finalResult(...transcripts) {
+    const alternatives = transcripts.map(t => ({ transcript: t }));
+    alternatives.isFinal = true;
+    return alternatives;
+  }
+
+  test('a reveal card shows the Listening indicator, not unsupported', async () => {
+    addMetadata();
+    addButton('Show Answer');
+    stampConfig({ hasApiToken: true });
+    await importApp();
+
+    const label = document.getElementById('kikoe-idle-label');
+    expect(label.textContent).toBe('Listening');
+  });
+
+  test.each([
+    ['Reveal.'],
+    ['show answer'],
+    ['見せて。'],
+  ])('saying "%s" while the answer is hidden clicks the reveal button', async (transcript) => {
+    addMetadata();
+    const revealButton = addButton('Show Answer');
+    const clickSpy = vi.spyOn(revealButton, 'click');
+    stampConfig({ hasApiToken: true });
+    await importApp();
+
+    const native = MockSpeechRecognition.instances[0];
+    native.onresult({ resultIndex: 0, results: [finalResult(transcript)] });
+
+    expect(clickSpy).toHaveBeenCalled();
+  });
+
+  test.each([
+    ['Good.', 'good'],
+    ['known', 'good'],
+    ['わかった。', 'good'],
+    ['Bad.', 'bad'],
+    ['again', 'bad'],
+    ['わからない', 'bad'],
+  ])('saying "%s" once revealed grades %s', async (transcript, grade) => {
+    addMetadata({ 'data-meta-is-post-attempt': 'true' });
+    const goodButton = addButton('Good');
+    const badButton = addButton('Bad');
+    const goodSpy = vi.spyOn(goodButton, 'click');
+    const badSpy = vi.spyOn(badButton, 'click');
+    stampConfig({ hasApiToken: true });
+    await importApp();
+
+    const native = MockSpeechRecognition.instances[0];
+    native.onresult({ resultIndex: 0, results: [finalResult(transcript)] });
+
+    expect((grade === 'good' ? goodSpy : badSpy)).toHaveBeenCalled();
+    expect((grade === 'good' ? badSpy : goodSpy)).not.toHaveBeenCalled();
+  });
+
+  test('grade words are ignored while the answer is still hidden', async () => {
+    addMetadata();
+    const revealButton = addButton('Show Answer');
+    const clickSpy = vi.spyOn(revealButton, 'click');
+    stampConfig({ hasApiToken: true });
+    await importApp();
+
+    const native = MockSpeechRecognition.instances[0];
+    native.onresult({ resultIndex: 0, results: [finalResult('good')] });
+
+    expect(clickSpy).not.toHaveBeenCalled();
+    const container = document.getElementById('kikoe-transcript-container');
+    expect(container.textContent).toContain('say "reveal"');
+  });
+
+  test('an unmatched word once revealed hints at the grade commands', async () => {
+    addMetadata({ 'data-meta-is-post-attempt': 'true' });
+    addButton('Good');
+    addButton('Bad');
+    stampConfig({ hasApiToken: true });
+    await importApp();
+
+    const native = MockSpeechRecognition.instances[0];
+    native.onresult({ resultIndex: 0, results: [finalResult('banana')] });
+
+    const container = document.getElementById('kikoe-transcript-container');
+    expect(container.textContent).toContain('say "good" or "bad"');
+  });
+
+  test('shared commands like "pause" still work on reveal cards', async () => {
+    addMetadata();
+    addButton('Show Answer');
+    stampConfig({ hasApiToken: true });
+    vi.spyOn(document, 'hasFocus').mockReturnValue(true);
+    await importApp();
+
+    const native = MockSpeechRecognition.instances[0];
+    native.onresult({ resultIndex: 0, results: [finalResult('pause')] });
+
+    const label = document.getElementById('kikoe-idle-label');
+    expect(label.textContent).toBe('Muted');
+  });
+
+  test('manual-input cards still go through the checkAnswer path', async () => {
+    addMetadata({
+      'data-meta-input-mode': 'manual',
+      'data-meta-question-mode': 'cloze',
+      'data-meta-answers-array': JSON.stringify(['おとこ']),
+    });
+    const input = document.createElement('input');
+    input.id = 'js-manual-input';
+    document.body.appendChild(input);
+    const submit = document.createElement('button');
+    submit.className = 'InputManual__button';
+    document.body.appendChild(submit);
+    const submitSpy = vi.spyOn(submit, 'click');
+    stampConfig({ hasApiToken: true });
+    await importApp();
+
+    const native = MockSpeechRecognition.instances[0];
+    native.onresult({ resultIndex: 0, results: [finalResult('おとこ')] });
+
+    expect(input.value).toBe('おとこ');
+    expect(submitSpy).toHaveBeenCalled();
+  });
+});
+
 describe('startListener fuzzy meaning matching (WaniKani)', () => {
   // Same MockSpeechRecognition shape as above — kept local to this describe
   // block so its instance list doesn't leak between describes.

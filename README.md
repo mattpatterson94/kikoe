@@ -108,7 +108,13 @@ The extension applies several candidate transformations to improve recognition a
 **BunPro notes:**
 
 - Fill In (cloze) questions expect a Japanese answer; Translate questions expect English. The recognition language switches automatically.
-- Only cards with **Manual** answer input are supported. Cards from decks set to **Reveal & Grade** have no text input — the idle indicator shows "⚠ Unsupported card type" while one is on screen.
+- Cards from decks set to **Reveal & Grade** have no text input and are driven entirely by voice commands instead:
+
+  | Say | When | Action |
+  |-----|------|--------|
+  | `reveal` / `show` / `show answer` / `answer` / `見せて` / `答え` | Answer hidden | Show the answer |
+  | `good` / `known` / `correct` / `わかった` | Answer shown | Grade as known |
+  | `bad` / `again` / `わからない` | Answer shown | Grade as not known |
 - BunPro's own native Lightning Mode setting is detected at runtime, so enabling the extension's lightning mode won't double-advance.
 
 ## Settings

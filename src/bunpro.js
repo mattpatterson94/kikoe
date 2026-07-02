@@ -33,6 +33,40 @@ export function getLanguage() {
   return 'en-US';
 }
 
+// Reveal & Grade cards have no text input — a reveal button before the
+// answer is shown, then Good/Bad grade buttons after. Matched against both
+// the title and visible text (whole words) the same way clickNext matches by
+// title, since BunPro's class names churn but the labels are stable.
+const RevealLabels = {
+  reveal: ['show answer', 'reveal answer', 'reveal'],
+  good: ['good'],
+  bad: ['bad'],
+};
+
+function findLabeledButton(labels) {
+  for (const button of document.querySelectorAll('button')) {
+    const haystack = `${button.title} ${button.textContent}`.toLowerCase();
+    if (labels.some((label) => new RegExp(`\\b${label}\\b`).test(haystack))) return button;
+  }
+  return null;
+}
+
+function clickLabeledButton(labels) {
+  const button = findLabeledButton(labels);
+  if (!button) return false;
+  button.click();
+  return true;
+}
+
+// Revealing is the "attempt" on a Reveal & Grade card, so
+// data-meta-is-post-attempt flips once the answer is shown (the same flag
+// bunpro_speed.js keys results off). Fall back to the grade buttons'
+// presence in case the flag is missing.
+function isRevealed(meta) {
+  if (meta.dataset.metaIsPostAttempt === 'true') return true;
+  return !!(findLabeledButton(RevealLabels.good) && findLabeledButton(RevealLabels.bad));
+}
+
 function getPage(meta) {
   const loc = meta.dataset.metaLoc;
   if (loc === 'review') return 'review';
@@ -57,10 +91,11 @@ export function getContext() {
   const page = getPage(meta);
   const prompt = getCardKey(meta);
 
-  // v1 only supports manual (text input) cards; Reveal & Grade decks have no
-  // input to type into. Report a distinct mode so the UI can surface it.
+  // Reveal & Grade decks have no input to type into — expose them as a
+  // command-only mode (reveal / grade good / grade bad, see app.js) instead
+  // of the checkAnswer path, carrying whether the answer is currently shown.
   if (meta.dataset.metaInputMode !== 'manual') {
-    return { page, prompt, mode: 'unsupported' };
+    return { page, prompt, mode: 'reveal', revealed: isRevealed(meta) };
   }
 
   const questionMode = meta.dataset.metaQuestionMode;
@@ -117,6 +152,20 @@ export function clickNext() {
     }
   }
   return false;
+}
+
+// Reveal & Grade actions — only meaningful when getContext() reported
+// mode 'reveal'; each returns whether a matching button was found.
+export function reveal() {
+  return clickLabeledButton(RevealLabels.reveal);
+}
+
+export function gradeGood() {
+  return clickLabeledButton(RevealLabels.good);
+}
+
+export function gradeBad() {
+  return clickLabeledButton(RevealLabels.bad);
 }
 
 export function clickInfo() {

@@ -260,6 +260,9 @@ function reasonHint(transcript) {
       : "that's the reading — say the meaning";
   }
   if (transcript.reason === 'no-match') return 'no match';
+  // Reveal & Grade cards (see app.js's reveal-mode routing).
+  if (transcript.reason === 'say-reveal') return 'say "reveal" to show the answer';
+  if (transcript.reason === 'say-grade') return 'say "good" or "bad" to grade';
   return null;
 }
 
