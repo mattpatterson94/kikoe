@@ -21,7 +21,7 @@ function parseJson(raw) {
   try {
     return JSON.parse(raw);
   } catch (err) {
-    console.error('[wkvi] bunpro: failed to parse metadata JSON:', raw, err);
+    console.error('[kikoe] bunpro: failed to parse metadata JSON:', raw, err);
     return null;
   }
 }

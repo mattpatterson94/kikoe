@@ -6,7 +6,7 @@
   var base = chrome.runtime.getURL('');
 
   // Pass the base URL to injected.js via a temporary data attribute.
-  document.documentElement.setAttribute('data-wkvi-ext', base);
+  document.documentElement.setAttribute('data-kikoe-ext', base);
 
   var s = document.createElement('script');
   s.src = base + 'injected.js';

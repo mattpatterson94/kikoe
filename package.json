@@ -1,5 +1,5 @@
 {
-  "name": "wanikani-koe",
+  "name": "kikoe",
   "version": "0.6.0",
   "private": true,
   "type": "module",
@@ -8,8 +8,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "pack:chrome": "mkdir -p dist && cd chrome && zip -r ../dist/wanikani-koe-chrome.zip .",
-    "pack:firefox": "mkdir -p dist && cd firefox && zip -r ../dist/wanikani-koe-firefox.zip .",
+    "pack:chrome": "mkdir -p dist && cd chrome && zip -r ../dist/kikoe-chrome.zip .",
+    "pack:firefox": "mkdir -p dist && cd firefox && zip -r ../dist/kikoe-firefox.zip .",
     "pack": "npm run pack:chrome && npm run pack:firefox",
     "dev": "node dev.js",
     "dev:firefox": "node dev.js --firefox"

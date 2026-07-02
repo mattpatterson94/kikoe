@@ -1,6 +1,10 @@
-# WaniKani Voice Input
+<p align="center">
+  <img src="extension/logo.svg" alt="Kikoe（聞こえ）" width="420">
+</p>
 
-A browser extension that lets you answer [WaniKani](https://www.wanikani.com) and [BunPro](https://bunpro.jp) reviews and lessons using your voice instead of typing. Speak your answer and the extension submits it automatically — no hands required.
+# Kikoe（聞こえ）
+
+**Kikoe** — from 聞こえる, "to be heard" — is a browser extension that lets you answer [WaniKani](https://www.wanikani.com) and [BunPro](https://bunpro.jp) reviews and lessons using your voice instead of typing. Speak your answer and the extension submits it automatically — no hands required.
 
 ## Features
 
@@ -23,8 +27,8 @@ A browser extension that lets you answer [WaniKani](https://www.wanikani.com) an
 ## Building from Source
 
 ```bash
-git clone https://github.com/okonomichiyaki/wanikani-voice-input.git
-cd wanikani-voice-input
+git clone https://github.com/mattpatterson94/wanikani-koe.git
+cd wanikani-koe
 npm run build
 ```
 
@@ -34,8 +38,8 @@ To also produce distributable zip files:
 
 ```bash
 npm run pack        # builds both
-npm run pack:chrome # chrome only → dist/wanikani-koe-chrome.zip
-npm run pack:firefox # firefox only → dist/wanikani-koe-firefox.zip
+npm run pack:chrome # chrome only → dist/kikoe-chrome.zip
+npm run pack:firefox # firefox only → dist/kikoe-firefox.zip
 ```
 
 ## Installation
@@ -185,13 +189,13 @@ firefox/              # assembled Firefox extension (output of build)
 
 **The extension does nothing on WaniKani pages.**
 - Check that the extension is enabled and the API token is saved in settings.
-- Open the browser console on a WaniKani review page and look for `[wkvi]` log messages.
+- Open the browser console on a WaniKani review page and look for `[kikoe]` log messages.
 - Make sure you granted microphone permission to the browser.
 
 **Speech recognition isn't working.**
 - Chrome has the best support for the Web Speech API. Firefox support may be limited.
 - Ensure your microphone is not muted and the browser has permission to use it.
-- Check the browser console for `[wanikani-voice-input]` errors.
+- Check the browser console for `[kikoe]` errors.
 
 **Answers aren't being matched.**
 - Enable the live transcript to see what the extension is hearing.

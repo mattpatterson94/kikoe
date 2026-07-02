@@ -3,11 +3,11 @@
 // after the dictionary data is ready.
 
 (function () {
-  var base = document.documentElement.getAttribute('data-wkvi-ext');
-  document.documentElement.removeAttribute('data-wkvi-ext');
+  var base = document.documentElement.getAttribute('data-kikoe-ext');
+  document.documentElement.removeAttribute('data-kikoe-ext');
 
   if (!base) {
-    console.error('[wkvi] Extension base URL not found.');
+    console.error('[kikoe] Extension base URL not found.');
     return;
   }
 
@@ -32,6 +32,6 @@
     s.src = base + 'vendor/app.js';
     document.documentElement.appendChild(s);
   }).catch(function (err) {
-    console.error('[wkvi] Failed to load resources:', err);
+    console.error('[kikoe] Failed to load resources:', err);
   });
 }());

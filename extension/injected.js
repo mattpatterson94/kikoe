@@ -3,6 +3,6 @@
 // and the bundled app (also injected into the page) can both hear them.
 (function () {
   window.addEventListener('didAnswerQuestion', function (e) {
-    document.dispatchEvent(new CustomEvent('wkvi:didAnswerQuestion', { detail: e.detail }));
+    document.dispatchEvent(new CustomEvent('kikoe:didAnswerQuestion', { detail: e.detail }));
   });
 }());

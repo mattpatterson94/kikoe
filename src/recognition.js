@@ -10,7 +10,7 @@ const MAX_ALTERNATIVES = 5;
 
 export function createRecognition(lang, callback) {
   if (!('webkitSpeechRecognition' in window)) {
-    console.error('[wanikani-voice-input] web speech not supported by this browser!');
+    console.error('[kikoe] web speech not supported by this browser!');
     return null;
   }
 
@@ -46,7 +46,7 @@ export function createRecognition(lang, callback) {
   }
 
   recognition.onresult = (event) => {
-    //console.info('[wanikani-voice-input] onresult', event);
+    //console.info('[kikoe] onresult', event);
 
     for (let i = event.resultIndex; i < event.results.length; ++i) {
       const result = event.results[i];
@@ -61,7 +61,7 @@ export function createRecognition(lang, callback) {
     if (event.error === 'no-speech') {
       return;
     }
-    console.error('[wanikani-voice-input] error occurred in recognition:', event.error);
+    console.error('[kikoe] error occurred in recognition:', event.error);
   };
 
   recognition.onend = () => {

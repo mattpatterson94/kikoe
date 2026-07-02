@@ -31,13 +31,13 @@ beforeEach(() => {
 
 describe('createTranscriptContainer', () => {
   test('appends a div with the expected id to document.body', () => {
-    const el = document.getElementById('wanikani-voice-input-transcript-container');
+    const el = document.getElementById('kikoe-transcript-container');
     expect(el).not.toBeNull();
     expect(el.tagName).toBe('DIV');
   });
 
   test('applies position:fixed and top:16px for "top" position', () => {
-    const el = document.getElementById('wanikani-voice-input-transcript-container');
+    const el = document.getElementById('kikoe-transcript-container');
     expect(el.style.position).toBe('fixed');
     expect(el.style.top).toBe('16px');
   });
@@ -45,7 +45,7 @@ describe('createTranscriptContainer', () => {
   test('applies bottom:16px for "bottom" position', () => {
     document.body.innerHTML = '';
     createTranscriptContainer(settings({ transcript_position: 'bottom' }));
-    const el = document.getElementById('wanikani-voice-input-transcript-container');
+    const el = document.getElementById('kikoe-transcript-container');
     expect(el.style.bottom).toBe('16px');
   });
 });
@@ -55,34 +55,34 @@ describe('createTranscriptContainer', () => {
 describe('logTranscript', () => {
   test('does nothing when settings.transcript is false', () => {
     logTranscript(settings({ transcript: false }), { raw: 'した' });
-    const container = document.getElementById('wanikani-voice-input-transcript-container');
+    const container = document.getElementById('kikoe-transcript-container');
     expect(container.children.length).toBe(0);
   });
 
   test('adds a chip element with the raw text', () => {
     logTranscript(settings(), { raw: 'した' });
-    const container = document.getElementById('wanikani-voice-input-transcript-container');
+    const container = document.getElementById('kikoe-transcript-container');
     expect(container.children.length).toBe(1);
     expect(container.children[0].textContent).toContain('した');
   });
 
   test('includes matched text with arrow separator when provided', () => {
     logTranscript(settings(), { raw: 'した', matched: '下' });
-    const container = document.getElementById('wanikani-voice-input-transcript-container');
+    const container = document.getElementById('kikoe-transcript-container');
     expect(container.children[0].textContent).toContain('→ 下');
   });
 
   test('deduplicates: same raw without match does not add a second element', () => {
     logTranscript(settings(), { raw: 'した' });
     logTranscript(settings(), { raw: 'した' });
-    const container = document.getElementById('wanikani-voice-input-transcript-container');
+    const container = document.getElementById('kikoe-transcript-container');
     expect(container.children.length).toBe(1);
   });
 
   test('replaces previous same-raw element when a match is found', () => {
     logTranscript(settings(), { raw: 'した' });
     logTranscript(settings(), { raw: 'した', matched: '下' });
-    const container = document.getElementById('wanikani-voice-input-transcript-container');
+    const container = document.getElementById('kikoe-transcript-container');
     // The old one is removed; exactly one element remains with the match.
     const texts = Array.from(container.children).map(c => c.textContent);
     expect(texts.some(t => t.includes('→ 下'))).toBe(true);
@@ -93,7 +93,7 @@ describe('logTranscript', () => {
     const s = settings({ transcript_count: 2 });
     logTranscript(s, { raw: 'した' });
     logTranscript(s, { raw: 'うえ' });
-    const container = document.getElementById('wanikani-voice-input-transcript-container');
+    const container = document.getElementById('kikoe-transcript-container');
     const texts = Array.from(container.children).map(c => c.textContent);
     expect(texts.some(t => t.includes('した'))).toBe(true);
     expect(texts.some(t => t.includes('うえ'))).toBe(true);
@@ -102,7 +102,7 @@ describe('logTranscript', () => {
   test('only the latest transcript is shown when transcript_count is 1 (default)', () => {
     logTranscript(settings(), { raw: 'した' });
     logTranscript(settings(), { raw: 'うえ' });
-    const container = document.getElementById('wanikani-voice-input-transcript-container');
+    const container = document.getElementById('kikoe-transcript-container');
     const texts = Array.from(container.children).map(c => c.textContent);
     expect(texts.some(t => t.includes('うえ'))).toBe(true);
     expect(texts.some(t => t.includes('した'))).toBe(false);
@@ -122,7 +122,7 @@ describe('logTranscript', () => {
   // a bare string instead of { raw } — verify it renders something readable).
   test('REGRESSION: handles string transcript gracefully (does not display "undefined")', () => {
     logTranscript(settings(), '!! no context !!');
-    const container = document.getElementById('wanikani-voice-input-transcript-container');
+    const container = document.getElementById('kikoe-transcript-container');
     const text = container.children[0]?.textContent ?? '';
     expect(text).not.toContain('undefined');
   });
@@ -134,7 +134,7 @@ describe('clearTranscript', () => {
   test('empties the container', () => {
     logTranscript(settings(), { raw: 'した' });
     clearTranscript();
-    const container = document.getElementById('wanikani-voice-input-transcript-container');
+    const container = document.getElementById('kikoe-transcript-container');
     expect(container.children.length).toBe(0);
   });
 
@@ -152,38 +152,38 @@ describe('setIdleIndicatorState', () => {
   test('shows restarting state in the idle chip', () => {
     showIdleIndicator(settings());
     setIdleIndicatorState('restarting');
-    const label = document.getElementById('wkvi-idle-label');
+    const label = document.getElementById('kikoe-idle-label');
     expect(label.textContent).toBe('Restarting…');
   });
 
   test('shows paused state in the idle chip', () => {
     showIdleIndicator(settings());
     setIdleIndicatorState('paused');
-    const label = document.getElementById('wkvi-idle-label');
+    const label = document.getElementById('kikoe-idle-label');
     expect(label.textContent).toBe('Paused');
   });
 
   test('shows retrying state in the idle chip', () => {
     showIdleIndicator(settings());
     setIdleIndicatorState('retrying');
-    const label = document.getElementById('wkvi-idle-label');
+    const label = document.getElementById('kikoe-idle-label');
     expect(label.textContent).toBe('Retrying…');
   });
 
   test('shows error state with error styling in the idle chip', () => {
     showIdleIndicator(settings());
     setIdleIndicatorState('error');
-    const label = document.getElementById('wkvi-idle-label');
+    const label = document.getElementById('kikoe-idle-label');
     expect(label.textContent).toBe('⚠ Subjects failed to load');
-    expect(document.getElementById('wkvi-idle').classList.contains('wkvi-chip-error')).toBe(true);
+    expect(document.getElementById('kikoe-idle').classList.contains('kikoe-chip-error')).toBe(true);
   });
 
   test('clears error styling when leaving the error state', () => {
     showIdleIndicator(settings());
     setIdleIndicatorState('error');
     setIdleIndicatorState('listening');
-    const label = document.getElementById('wkvi-idle-label');
+    const label = document.getElementById('kikoe-idle-label');
     expect(label.textContent).toBe('Listening');
-    expect(document.getElementById('wkvi-idle').classList.contains('wkvi-chip-error')).toBe(false);
+    expect(document.getElementById('kikoe-idle').classList.contains('kikoe-chip-error')).toBe(false);
   });
 });
