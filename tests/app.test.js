@@ -854,3 +854,163 @@ describe('startListener transcript failure reason hints', () => {
     expect(container.textContent).toContain('gibberish nonsense');
   });
 });
+
+describe('startListener ippatsu mode (one-shot auto-submit on a miss)', () => {
+  // Same MockSpeechRecognition shape as above — kept local to this describe
+  // block so its instance list doesn't leak between describes.
+  class MockSpeechRecognition {
+    constructor() {
+      this.continuous = false;
+      this.interimResults = false;
+      this.maxAlternatives = 5;
+      this.lang = '';
+      this.nativeStart = vi.fn();
+      this.nativeStop = vi.fn();
+      this.start = this.nativeStart;
+      this.stop = this.nativeStop;
+      MockSpeechRecognition.instances.push(this);
+    }
+  }
+  MockSpeechRecognition.instances = [];
+
+  beforeEach(() => {
+    MockSpeechRecognition.instances = [];
+    vi.stubGlobal('webkitSpeechRecognition', MockSpeechRecognition);
+  });
+
+  function setCardDOM(type) {
+    document.body.innerHTML += `
+      <div class="character-header__characters">寒い</div>
+      <span class="quiz-input__question-category">Vocabulary</span>
+      <span class="quiz-input__question-type">${type}</span>
+      <input id="user-response" type="text" />
+      <button class="quiz-input__submit-button">Next</button>
+    `;
+  }
+
+  function finalResult(...transcripts) {
+    const alternatives = transcripts.map(t => ({ transcript: t }));
+    alternatives.isFinal = true;
+    return alternatives;
+  }
+
+  function interceptSubjectRequest() {
+    let respond;
+    const ready = new Promise((resolve) => {
+      document.addEventListener('kikoe:subjectRequest', function handler(e) {
+        document.removeEventListener('kikoe:subjectRequest', handler);
+        const { prompt, category } = e.detail;
+        respond = (subjects) => document.dispatchEvent(new CustomEvent('kikoe:subjectData', {
+          detail: { prompt, category, subjects, error: null },
+        }));
+        resolve();
+      });
+    });
+    return { ready, respond: (subjects) => respond(subjects) };
+  }
+
+  const subject = {
+    id: 1, object: 'vocabulary',
+    data: {
+      slug: '寒い', characters: '寒い',
+      readings: [{ reading: 'さむい', accepted_answer: true }],
+      meanings: [{ meaning: 'Cold Hearted', accepted_answer: true }],
+      auxiliary_meanings: [],
+    },
+  };
+
+  // Starts the listener on a card of the given question type with the given
+  // settings and waits until the subject data has been loaded, so utterances
+  // fired afterwards hit the normal (non-pending) check path.
+  async function loadCard(type, settings) {
+    setCardDOM(type);
+    stampConfig({ hasApiToken: true, settings });
+    const subjectRequest = interceptSubjectRequest();
+    await importApp();
+    await subjectRequest.ready;
+    subjectRequest.respond([subject]);
+    await vi.waitFor(() => {
+      if (document.getElementById('kikoe-idle-label')?.textContent !== 'Listening') {
+        throw new Error('subjects not loaded yet');
+      }
+    });
+    return MockSpeechRecognition.instances[0];
+  }
+
+  test('a genuine miss on a reading question auto-submits as wrong', async () => {
+    const native = await loadCard('Reading', { ippatsu_reading: true });
+    native.onresult({ resultIndex: 0, results: [finalResult('gibberish')] });
+
+    // markWrong submits the guaranteed-wrong Japanese placeholder.
+    expect(document.getElementById('user-response').value).toBe('あああ');
+  });
+
+  test('a genuine miss on a meaning question auto-submits as wrong', async () => {
+    const native = await loadCard('Meaning', { ippatsu_meaning: true });
+    native.onresult({ resultIndex: 0, results: [finalResult('warm hearted')] });
+
+    expect(document.getElementById('user-response').value).toBe('aaa');
+  });
+
+  test('a miss is ignored as before when ippatsu is off', async () => {
+    const native = await loadCard('Reading', {});
+    native.onresult({ resultIndex: 0, results: [finalResult('gibberish')] });
+
+    expect(document.getElementById('user-response').value).toBe('');
+  });
+
+  test('the meaning toggle does not affect reading questions', async () => {
+    const native = await loadCard('Reading', { ippatsu_meaning: true });
+    native.onresult({ resultIndex: 0, results: [finalResult('gibberish')] });
+
+    expect(document.getElementById('user-response').value).toBe('');
+  });
+
+  test('a wrong-type utterance (recognizer glitch) does not burn the shot', async () => {
+    const native = await loadCard('Reading', { ippatsu_reading: true });
+    // The meaning spoken on a reading question — a hint, not a miss.
+    native.onresult({ resultIndex: 0, results: [finalResult('Cold Hearted')] });
+    expect(document.getElementById('user-response').value).toBe('');
+
+    // The retry can still succeed.
+    native.onresult({ resultIndex: 0, results: [finalResult('さむい')] });
+    expect(document.getElementById('user-response').value).toBe('さむい');
+  });
+
+  test('a correct answer still submits normally with ippatsu on', async () => {
+    const native = await loadCard('Reading', { ippatsu_reading: true });
+    native.onresult({ resultIndex: 0, results: [finalResult('さむい')] });
+
+    expect(document.getElementById('user-response').value).toBe('さむい');
+  });
+
+  test('speech after an auto-submitted miss is ignored until the card changes', async () => {
+    const native = await loadCard('Reading', { ippatsu_reading: true });
+    native.onresult({ resultIndex: 0, results: [finalResult('gibberish')] });
+    expect(document.getElementById('user-response').value).toBe('あああ');
+
+    // Even the correct reading must not overwrite the submitted miss.
+    native.onresult({ resultIndex: 0, results: [finalResult('さむい')] });
+    expect(document.getElementById('user-response').value).toBe('あああ');
+  });
+
+  test('a miss spoken before subjects arrive auto-submits once they load', async () => {
+    setCardDOM('Reading');
+    stampConfig({ hasApiToken: true, settings: { ippatsu_reading: true } });
+    const subjectRequest = interceptSubjectRequest();
+    await importApp();
+    await subjectRequest.ready;
+
+    const native = MockSpeechRecognition.instances[0];
+    native.onresult({ resultIndex: 0, results: [finalResult('gibberish')] });
+    // Subjects haven't arrived — the shot isn't burned yet.
+    expect(document.getElementById('user-response').value).toBe('');
+
+    subjectRequest.respond([subject]);
+    await vi.waitFor(() => {
+      if (document.getElementById('user-response').value !== 'あああ') {
+        throw new Error('miss not auto-submitted yet');
+      }
+    });
+  });
+});
