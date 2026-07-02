@@ -186,18 +186,32 @@ async function startListener(dictionary) {
     return !hidden && !blurred;
   }
 
+  // Ranks failure reasons by how actionable they are, so that when several
+  // alternatives all fail, the most informative one wins instead of
+  // whichever happened to be checked last. 'wrong-type' beats 'no-match'
+  // because it tells the user exactly what to do differently; 'not-loaded'
+  // is uniform across every alternative (it depends on context, not the
+  // candidate), so it never competes with the other two.
+  const REASON_PRIORITY = { 'wrong-type': 2, 'no-match': 1 };
+
   // Try every alternative transcript the recognizer offered (ranked by its
   // own confidence) and use the first one that produces a match. Short
   // utterances and common on'yomi are often autocorrected to an unrelated
   // real word in the top slot, but the correct reading is frequently still
   // present further down the list.
   function checkAlternatives(ctx, raws) {
-    let result;
+    let best;
     for (const raw of raws) {
-      result = checkAnswer(ctx, transformers, raw, { fuzzyMeaning: FUZZY_MEANING_MATCHING });
+      const result = checkAnswer(ctx, transformers, raw, { fuzzyMeaning: FUZZY_MEANING_MATCHING });
       if (result.success && result.answer) return result;
+      const priority = REASON_PRIORITY[result.transcript?.reason] ?? 0;
+      if (!best || priority > (REASON_PRIORITY[best.transcript?.reason] ?? 0)) best = result;
     }
-    return result;
+    // Always display the top alternative's raw text — the reason may have
+    // come from a lower-ranked alternative, but the heard text shown to the
+    // user should match what was already logged as interim feedback.
+    if (best) best.transcript = { ...best.transcript, raw: raws[0] };
+    return best;
   }
 
   // Re-check a transcript that arrived while subjects were still loading

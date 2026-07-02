@@ -561,3 +561,120 @@ describe('startListener fuzzy meaning matching (WaniKani)', () => {
     expect(userResponse.value).toBe('below');
   });
 });
+
+describe('startListener transcript failure reason hints', () => {
+  // Same MockSpeechRecognition shape as above — kept local to this describe
+  // block so its instance list doesn't leak between describes.
+  class MockSpeechRecognition {
+    constructor() {
+      this.continuous = false;
+      this.interimResults = false;
+      this.maxAlternatives = 5;
+      this.lang = '';
+      this.nativeStart = vi.fn();
+      this.nativeStop = vi.fn();
+      this.start = this.nativeStart;
+      this.stop = this.nativeStop;
+      MockSpeechRecognition.instances.push(this);
+    }
+  }
+  MockSpeechRecognition.instances = [];
+
+  beforeEach(() => {
+    MockSpeechRecognition.instances = [];
+    vi.stubGlobal('webkitSpeechRecognition', MockSpeechRecognition);
+  });
+
+  function setReadingCardDOM() {
+    document.body.innerHTML += `
+      <div class="character-header__characters">寒い</div>
+      <span class="quiz-input__question-category">Vocabulary</span>
+      <span class="quiz-input__question-type">Reading</span>
+      <input id="user-response" type="text" />
+      <button class="quiz-input__submit-button">Next</button>
+    `;
+  }
+
+  function finalResult(...transcripts) {
+    const alternatives = transcripts.map(t => ({ transcript: t }));
+    alternatives.isFinal = true;
+    return alternatives;
+  }
+
+  function interceptSubjectRequest() {
+    let respond;
+    const ready = new Promise((resolve) => {
+      document.addEventListener('kikoe:subjectRequest', function handler(e) {
+        document.removeEventListener('kikoe:subjectRequest', handler);
+        const { prompt, category } = e.detail;
+        respond = (subjects) => document.dispatchEvent(new CustomEvent('kikoe:subjectData', {
+          detail: { prompt, category, subjects, error: null },
+        }));
+        resolve();
+      });
+    });
+    return { ready, respond: (subjects) => respond(subjects) };
+  }
+
+  async function loadReadingSubjects() {
+    setReadingCardDOM();
+    stampConfig({ hasApiToken: true });
+    const subjectRequest = interceptSubjectRequest();
+    await importApp();
+    await subjectRequest.ready;
+    subjectRequest.respond([{
+      id: 1, object: 'vocabulary',
+      data: {
+        slug: '寒い', characters: '寒い',
+        readings: [{ reading: 'さむい', accepted_answer: true }],
+        meanings: [{ meaning: 'Cold Hearted', accepted_answer: true }],
+        auxiliary_meanings: [],
+      },
+    }]);
+    await vi.waitFor(() => {
+      if (document.getElementById('kikoe-idle-label')?.textContent !== 'Listening') {
+        throw new Error('subjects not loaded yet');
+      }
+    });
+    return MockSpeechRecognition.instances[0];
+  }
+
+  test('speaking the meaning on a reading question shows a wrong-type hint', async () => {
+    const native = await loadReadingSubjects();
+    native.onresult({ resultIndex: 0, results: [finalResult('Cold Hearted')] });
+
+    const container = document.getElementById('kikoe-transcript-container');
+    await vi.waitFor(() => {
+      if (!container.textContent.includes('reading')) throw new Error('hint not shown yet');
+    });
+    expect(container.textContent).toContain("that's the meaning — say the reading");
+  });
+
+  test('an unrecognisable answer shows a plain no-match hint', async () => {
+    const native = await loadReadingSubjects();
+    native.onresult({ resultIndex: 0, results: [finalResult('gibberish')] });
+
+    const container = document.getElementById('kikoe-transcript-container');
+    await vi.waitFor(() => {
+      if (!container.textContent.includes('no match')) throw new Error('hint not shown yet');
+    });
+    expect(container.textContent).toContain('no match');
+  });
+
+  test('the most informative reason wins across alternatives (wrong-type over no-match)', async () => {
+    const native = await loadReadingSubjects();
+    // First alternative is unrecognisable gibberish (no-match); the second
+    // is the meaning, not the reading (wrong-type) — the more actionable
+    // hint should surface even though it came from a lower-ranked alternative.
+    native.onresult({ resultIndex: 0, results: [finalResult('gibberish nonsense', 'Cold Hearted')] });
+
+    const container = document.getElementById('kikoe-transcript-container');
+    await vi.waitFor(() => {
+      if (!container.textContent.includes('reading')) throw new Error('hint not shown yet');
+    });
+    expect(container.textContent).toContain("that's the meaning — say the reading");
+    // The heard text shown should still be the top alternative, not the one
+    // that supplied the reason.
+    expect(container.textContent).toContain('gibberish nonsense');
+  });
+});

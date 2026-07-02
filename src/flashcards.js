@@ -141,6 +141,69 @@ function closestFuzzyMatch(candidate, meanings) {
   return best;
 }
 
+// toHiragana expands a katakana chōonpu into a doubled vowel by default
+// (ビール → びいる), but WaniKani's accepted readings keep the ー
+// (びーる) — compare both forms. Shared by the reading matcher and the
+// wrong-type check below.
+function kanaForms(kana) {
+  return new Set([
+    toHiragana(kana, { convertLongVowelMark: false }),
+    toHiragana(kana),
+  ]);
+}
+
+// Whether any candidate resolves to one of the accepted readings — used to
+// detect a meaning-question answer that was actually the reading (or vice
+// versa), so the failure can be reported as "wrong type" instead of a bare
+// non-match.
+function matchesAnyReading(candidates, acceptedReadings) {
+  if (!acceptedReadings.length) return false;
+  for (const c of candidates) {
+    if (isKana(c.data)) {
+      for (const answer of kanaForms(c.data)) {
+        if (acceptedReadings.includes(answer)) return true;
+      }
+    }
+    const h = homonyms[c.data.toLowerCase()];
+    const hReadings = Array.isArray(h) ? h : (h ? [h] : []);
+    if (hReadings.some(r => acceptedReadings.includes(r))) return true;
+  }
+  return false;
+}
+
+// Whether any candidate resolves to one of the accepted meanings — the
+// meaning-side counterpart of matchesAnyReading, used for the same wrong-type
+// detection on reading questions.
+function matchesAnyMeaning(candidates, normalizedMeanings) {
+  if (!normalizedMeanings.length) return false;
+  for (const c of candidates) {
+    const corrected = meaningCorrections[c.data.toLowerCase()] ?? c.data;
+    const norm = normalize(corrected);
+    if (normalizedMeanings.includes(norm)) return true;
+    if (normalizedMeanings.includes(norm.replaceAll(' ', ''))) return true;
+  }
+  return false;
+}
+
+// Classifies why a failed match happened, so the UI can show something more
+// useful than a bare rejection:
+// - 'not-loaded': subjects haven't arrived yet (both answer sets are empty).
+// - 'wrong-type': the candidate matches the *other* answer set (e.g. spoke
+//   the meaning on a reading question) — the most actionable case.
+// - 'no-match': heard something, but nothing matched either answer set.
+function failureReason(candidates, context) {
+  const readings = context.readings || [];
+  const meanings = context.meanings || [];
+  if (readings.length === 0 && meanings.length === 0) return 'not-loaded';
+  if (context.type === 'reading' && matchesAnyMeaning(candidates, meanings.map(normalize))) {
+    return 'wrong-type';
+  }
+  if ((context.type === 'meaning' || context.type === 'name') && matchesAnyReading(candidates, readings)) {
+    return 'wrong-type';
+  }
+  return 'no-match';
+}
+
 function groupBy(xs, k) {
   return xs.reduce(function(rv, x) {
     (rv[x[k]] = rv[x[k]] || []).push(x);
@@ -182,16 +245,6 @@ export function checkAnswer(context, transformers, raw, opts = {}) {
       return acceptedReadings.includes(kana);
     }
 
-    // toHiragana expands a katakana chōonpu into a doubled vowel by default
-    // (ビール → びいる), but WaniKani's accepted readings keep the ー
-    // (びーる) — compare both forms.
-    function kanaForms(kana) {
-      return new Set([
-        toHiragana(kana, { convertLongVowelMark: false }),
-        toHiragana(kana),
-      ]);
-    }
-
     for (const c of candidates) {
       // isKana is strict: only pure hiragana/katakana passes.
       // isJapanese would also match kanji, but toHiragana can't convert kanji
@@ -220,7 +273,11 @@ export function checkAnswer(context, transformers, raw, opts = {}) {
         return { success: true, answer: fallback, transcript: { raw } };
       }
     }
-    return { success: false, error: false, transcript: { raw: '!! speak the reading !!' } };
+    return {
+      success: false,
+      error: false,
+      transcript: { raw, reason: failureReason(candidates, context), type: 'reading' },
+    };
   }
 
   if (type === 'meaning' || type === 'name') {
@@ -260,7 +317,11 @@ export function checkAnswer(context, transformers, raw, opts = {}) {
       }
     }
     // No candidate matched — don't submit.
-    return { success: false, error: false, transcript: { raw } };
+    return {
+      success: false,
+      error: false,
+      transcript: { raw, reason: failureReason(candidates, context), type },
+    };
   }
 
   return {
