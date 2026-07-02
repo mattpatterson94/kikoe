@@ -45,4 +45,4 @@ If the extension's data handling ever changes, this document will be updated and
 ## Contact
 
 Questions or concerns? Open an issue at
-https://github.com/mattpatterson94/wanikani-koe/issues
+https://github.com/mattpatterson94/kikoe/issues
