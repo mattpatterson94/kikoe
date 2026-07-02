@@ -119,3 +119,121 @@ describe('startListener recognition error handling', () => {
     expect(label.textContent).toMatch(/reconnecting/i);
   });
 });
+
+describe('startListener pending transcript retry on the initial card', () => {
+  // Same MockSpeechRecognition shape as above — kept local to this describe
+  // block so its instance list doesn't leak between describes.
+  class MockSpeechRecognition {
+    constructor() {
+      this.continuous = false;
+      this.interimResults = false;
+      this.maxAlternatives = 1;
+      this.lang = '';
+      this.nativeStart = vi.fn();
+      this.nativeStop = vi.fn();
+      this.start = this.nativeStart;
+      this.stop = this.nativeStop;
+      MockSpeechRecognition.instances.push(this);
+    }
+  }
+  MockSpeechRecognition.instances = [];
+
+  beforeEach(() => {
+    MockSpeechRecognition.instances = [];
+    vi.stubGlobal('webkitSpeechRecognition', MockSpeechRecognition);
+  });
+
+  function setReviewCardDOM() {
+    document.body.innerHTML += `
+      <div class="character-header__characters">下</div>
+      <span class="quiz-input__question-category">Kanji</span>
+      <span class="quiz-input__question-type">Meaning</span>
+      <input id="user-response" type="text" />
+      <button class="quiz-input__submit-button">Next</button>
+    `;
+  }
+
+  // Mimics the shape recognition.js expects from a native SpeechRecognition
+  // result: an array-like of alternatives with an isFinal flag.
+  function finalResult(...transcripts) {
+    const alternatives = transcripts.map(t => ({ transcript: t }));
+    alternatives.isFinal = true;
+    return alternatives;
+  }
+
+  // Intercepts the content-script subject request so the test controls
+  // exactly when (and whether) it resolves, instead of racing a real fetch.
+  function interceptSubjectRequest() {
+    let respond;
+    const ready = new Promise((resolve) => {
+      document.addEventListener('kikoe:subjectRequest', function handler(e) {
+        document.removeEventListener('kikoe:subjectRequest', handler);
+        const { prompt, category } = e.detail;
+        respond = (subjects) => document.dispatchEvent(new CustomEvent('kikoe:subjectData', {
+          detail: { prompt, category, subjects, error: null },
+        }));
+        resolve();
+      });
+    });
+    return { ready, respond: (subjects) => respond(subjects) };
+  }
+
+  test('an answer spoken before the initial subjects arrive is submitted once they do', async () => {
+    setReviewCardDOM();
+    stampConfig({ hasApiToken: true });
+    const subjectRequest = interceptSubjectRequest();
+
+    await importApp();
+    await subjectRequest.ready;
+
+    const native = MockSpeechRecognition.instances[0];
+    native.onresult({ resultIndex: 0, results: [finalResult('below')] });
+
+    const userResponse = document.getElementById('user-response');
+    // Subjects haven't arrived yet — nothing should be submitted.
+    expect(userResponse.value).toBe('');
+
+    subjectRequest.respond([{
+      id: 1, object: 'kanji',
+      data: {
+        slug: '下', characters: '下',
+        meanings: [{ meaning: 'Below', accepted_answer: true }],
+        auxiliary_meanings: [],
+      },
+    }]);
+
+    await vi.waitFor(() => {
+      if (userResponse.value !== 'below') throw new Error('not submitted yet');
+    });
+    expect(userResponse.value).toBe('below');
+  });
+
+  test('does not double-submit if the user speaks again after the retry succeeds', async () => {
+    setReviewCardDOM();
+    stampConfig({ hasApiToken: true });
+    const subjectRequest = interceptSubjectRequest();
+
+    await importApp();
+    await subjectRequest.ready;
+
+    const native = MockSpeechRecognition.instances[0];
+    native.onresult({ resultIndex: 0, results: [finalResult('below')] });
+
+    subjectRequest.respond([{
+      id: 1, object: 'kanji',
+      data: {
+        slug: '下', characters: '下',
+        meanings: [{ meaning: 'Below', accepted_answer: true }],
+        auxiliary_meanings: [],
+      },
+    }]);
+
+    const userResponse = document.getElementById('user-response');
+    await vi.waitFor(() => {
+      if (userResponse.value !== 'below') throw new Error('not submitted yet');
+    });
+
+    native.onresult({ resultIndex: 0, results: [finalResult('under')] });
+    expect(userResponse.value).toBe('below');
+  });
+});
