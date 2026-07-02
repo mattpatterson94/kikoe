@@ -22,7 +22,7 @@ You can remove the token at any time from the options page, or by uninstalling t
 
 ### Settings
 
-Your preferences (such as lightning mode, auto-advance delay, and transcript overlay visibility) are stored locally in your browser's extension storage. They never leave your device.
+Your preferences (such as turbo mode and transcript overlay visibility) are stored locally in your browser's extension storage. They never leave your device.
 
 ### Microphone audio and speech
 

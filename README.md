@@ -11,7 +11,7 @@
 - **Voice-driven reviews** — speak reading and meaning answers during WaniKani reviews, lessons, and quizzes
 - **BunPro support** — the same voice-driven flow on BunPro reviews (Fill In and Translate questions with manual input; no API token needed)
 - **Smart speech matching** — handles common speech-to-text quirks: romaji-to-hiragana conversion, fuzzy vowel matching, numeral recognition (kanji/English), suru verb normalization, and more
-- **Lightning mode** — auto-advances to the next card on a correct answer (configurable delay)
+- **Turbo mode** — auto-advances to the next card on a correct answer
 - **Live transcript** — optional overlay showing what the extension heard in real time
 - **Voice commands** — say "next" (or 次) to advance, "wrong" / 間違い to mark an answer incorrect
 - **Automatic language switching** — uses Japanese recognition for reading questions and English for meaning questions
@@ -115,7 +115,7 @@ The extension applies several candidate transformations to improve recognition a
   | `reveal` / `show` / `show answer` / `answer` / `見せて` / `答え` | Answer hidden | Show the answer |
   | `good` / `known` / `correct` / `わかった` | Answer shown | Grade as known |
   | `bad` / `again` / `わからない` | Answer shown | Grade as not known |
-- BunPro's own native Lightning Mode setting is detected at runtime, so enabling the extension's lightning mode won't double-advance.
+- BunPro's own native Lightning Mode setting is detected at runtime, so enabling the extension's turbo mode won't double-advance.
 
 ## Settings
 
@@ -127,13 +127,11 @@ Open the extension options page (via the toolbar icon or extensions menu) to con
 |---------|-------------|
 | API Token | Your WaniKani read-only API token |
 
-### Lightning Mode
+### Turbo Mode
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| Lightning mode | Off | Auto-advances to the next card after a correct answer |
-| Lightning delay | 0.1 s | How long to wait before advancing |
-| Mistake delay | 0.1 s | Delay before showing item info on a wrong answer |
+| Turbo mode | On | Auto-advances to the next card after a correct answer |
 | Show item info on wrong answer | On | Opens the item info panel automatically when you answer incorrectly |
 
 ### Live Transcript
@@ -141,12 +139,8 @@ Open the extension options page (via the toolbar icon or extensions menu) to con
 | Setting | Default | Description |
 |---------|---------|-------------|
 | Show live transcript | On | Displays an overlay of what the extension heard |
-| Background color | Gold (#ffd700) | Transcript overlay background color |
-| Text color | Black (#000000) | Transcript overlay text color |
+| Theme | System | Overlay color theme (system, light, or dark) |
 | Position | Top | Where the transcript appears (top or bottom of the page) |
-| Fade delay | 5 s | How long a transcript line stays visible before fading |
-| Max visible transcripts | 1 | How many transcript lines to show at once |
-| Clear transcript between cards | Off | Clears the transcript when moving to a new card |
 
 ### Custom Corrections
 
@@ -183,11 +177,11 @@ src/
   site.js             # hostname → site detection (wanikani / bunpro)
   wanikani.js         # WaniKani page interaction (DOM selectors, answer submission)
   bunpro.js           # BunPro page interaction (quiz metadata element, answer submission)
-  bunpro_speed.js     # BunPro lightning mode / speed enhancements
+  bunpro_speed.js     # BunPro turbo mode / speed enhancements
   flashcards.js       # answer checking logic
   dict.js             # dictionary loading (JMdict / KANJIDIC2)
   settings.js         # settings management
-  speed.js            # lightning mode / speed enhancements
+  speed.js            # turbo mode / speed enhancements
   live_transcript.js  # transcript overlay UI
   util.js             # shared utilities
   candidates/         # speech-to-answer transformation pipeline

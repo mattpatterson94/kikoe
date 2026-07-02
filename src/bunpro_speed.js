@@ -1,4 +1,4 @@
-// BunPro lightning mode / speed enhancements — mirrors speed.js.
+// BunPro turbo mode / speed enhancements — mirrors speed.js.
 //
 // Watches #quiz-metadata-element's data-meta-is-correct / data-meta-is-post-attempt
 // attributes. Unlike WaniKani, data-meta-is-correct exists (as "false") before
@@ -11,13 +11,13 @@
 // click avoids double-advancing into the wrong card.
 //
 // Configurable via settings (same keys as WaniKani):
-//   lightning       (bool)   – auto-advance to next card on correct answer
-//   lightning_delay (number) – seconds to wait before advancing (default 0.1)
+//   turbo           (bool)   – auto-advance to next card on correct answer
 //   speed_show_info (bool)   – auto-open the hint on wrong answer
-//   mistake_delay   (number) – seconds to wait before opening info (default 0.1)
 
 import { clickNext, clickInfo } from './bunpro.js';
 import { debugLog } from './logger.js';
+
+const RESULT_DELAY_MS = 100;
 
 export function startSpeedEnhancer(getSettingsFn) {
   let currentMeta = null;
@@ -45,15 +45,15 @@ export function startSpeedEnhancer(getSettingsFn) {
 
     const s = getSettingsFn();
 
-    if (result === 'true' && s.lightning) {
+    if (result === 'true' && s.turbo) {
       setTimeout(() => {
         // BunPro's native Lightning Mode may have already advanced.
         if (getCardId(meta) !== cardId) return;
         clickNext();
-      }, s.lightning_delay * 1000);
+      }, RESULT_DELAY_MS);
     }
     if (result === 'false' && s.speed_show_info) {
-      setTimeout(clickInfo, s.mistake_delay * 1000);
+      setTimeout(clickInfo, RESULT_DELAY_MS);
     }
   }
 

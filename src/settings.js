@@ -3,16 +3,11 @@ import { setDebugLogging } from './logger.js';
 export const defaults = {
   debug: false,
   customCorrections: [],
-  lightning: false,
-  lightning_delay: 0.1,
-  mistake_delay: 0.1,
+  turbo: true,
   speed_show_info: true,
   transcript: true,
   transcript_theme: 'system',
   transcript_position: 'top',
-  transcript_delay: 5,
-  transcript_count: 1,
-  transcript_clear: false,
 };
 
 // In the page-context bundle, settings are pushed in from the content script
@@ -33,6 +28,6 @@ export function getSettings() {
   return _settings;
 }
 
-export function isLightningOn() {
-  return _settings.lightning;
+export function isTurboOn() {
+  return _settings.turbo;
 }

@@ -30,10 +30,8 @@ function addContainer(attrs = {}) {
 
 function makeSettings(overrides = {}) {
   return {
-    lightning: false,
-    lightning_delay: 0.1,
+    turbo: false,
     speed_show_info: true,
-    mistake_delay: 0.1,
     ...overrides,
   };
 }
@@ -51,32 +49,32 @@ describe('startSpeedEnhancer', () => {
     expect(_getContainer()).toBe(el);
   });
 
-  test('does not call clickNext when lightning is off (correct answer)', async () => {
+  test('does not call clickNext when turbo is off (correct answer)', async () => {
     const el = addContainer();
-    startSpeedEnhancer(() => makeSettings({ lightning: false }));
+    startSpeedEnhancer(() => makeSettings({ turbo: false }));
     el.setAttribute('correct', 'true');
     await Promise.resolve();
     vi.runAllTimers();
     expect(clickNext).not.toHaveBeenCalled();
   });
 
-  test('calls clickNext after lightning_delay when lightning is on and answer is correct', async () => {
+  test('calls clickNext after the result delay when turbo is on and answer is correct', async () => {
     const el = addContainer();
-    startSpeedEnhancer(() => makeSettings({ lightning: true, lightning_delay: 0.5 }));
+    startSpeedEnhancer(() => makeSettings({ turbo: true }));
     el.setAttribute('correct', 'true');
     await Promise.resolve();
     expect(clickNext).not.toHaveBeenCalled();
-    vi.advanceTimersByTime(500);
+    vi.advanceTimersByTime(100);
     expect(clickNext).toHaveBeenCalledTimes(1);
   });
 
-  test('calls clickInfo after mistake_delay when speed_show_info is on and answer is wrong', async () => {
+  test('calls clickInfo after the result delay when speed_show_info is on and answer is wrong', async () => {
     const el = addContainer();
-    startSpeedEnhancer(() => makeSettings({ speed_show_info: true, mistake_delay: 0.2 }));
+    startSpeedEnhancer(() => makeSettings({ speed_show_info: true }));
     el.setAttribute('correct', 'false');
     await Promise.resolve();
     expect(clickInfo).not.toHaveBeenCalled();
-    vi.advanceTimersByTime(200);
+    vi.advanceTimersByTime(100);
     expect(clickInfo).toHaveBeenCalledTimes(1);
   });
 
@@ -89,9 +87,9 @@ describe('startSpeedEnhancer', () => {
     expect(clickInfo).not.toHaveBeenCalled();
   });
 
-  test('does not call clickNext on wrong answer even when lightning is on', async () => {
+  test('does not call clickNext on wrong answer even when turbo is on', async () => {
     const el = addContainer();
-    startSpeedEnhancer(() => makeSettings({ lightning: true, speed_show_info: false }));
+    startSpeedEnhancer(() => makeSettings({ turbo: true, speed_show_info: false }));
     el.setAttribute('correct', 'false');
     await Promise.resolve();
     vi.runAllTimers();
@@ -111,7 +109,7 @@ describe('startSpeedEnhancer', () => {
   test('reads settings lazily — clickInfo respects updated setting at fire time', async () => {
     const el = addContainer();
     let showInfo = false;
-    startSpeedEnhancer(() => makeSettings({ speed_show_info: showInfo, mistake_delay: 0.1 }));
+    startSpeedEnhancer(() => makeSettings({ speed_show_info: showInfo }));
     showInfo = true; // flip after init, before the attribute fires
     el.setAttribute('correct', 'false');
     await Promise.resolve();

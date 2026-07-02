@@ -1,4 +1,4 @@
-import { defaults, initSettings, updateSettings, getSettings, isLightningOn } from '../src/settings.js';
+import { defaults, initSettings, updateSettings, getSettings, isTurboOn } from '../src/settings.js';
 
 // Reset module state between tests by re-calling initSettings with defaults.
 beforeEach(() => {
@@ -6,8 +6,8 @@ beforeEach(() => {
 });
 
 describe('defaults', () => {
-  test('lightning is off by default', () => {
-    expect(defaults.lightning).toBe(false);
+  test('turbo is on by default', () => {
+    expect(defaults.turbo).toBe(true);
   });
 
   test('transcript is on by default', () => {
@@ -27,55 +27,50 @@ describe('defaults', () => {
   });
 
   test('all expected keys are present', () => {
-    const keys = ['debug', 'customCorrections', 'lightning', 'lightning_delay', 'mistake_delay', 'speed_show_info',
-      'transcript', 'transcript_theme',
-      'transcript_position', 'transcript_delay', 'transcript_count',
-      'transcript_clear'];
+    const keys = ['debug', 'customCorrections', 'turbo', 'speed_show_info',
+      'transcript', 'transcript_theme', 'transcript_position'];
     for (const k of keys) expect(defaults).toHaveProperty(k);
   });
 });
 
 describe('initSettings', () => {
   test('applies provided values', () => {
-    initSettings({ lightning: true, transcript_delay: 10 });
-    expect(getSettings().lightning).toBe(true);
-    expect(getSettings().transcript_delay).toBe(10);
+    initSettings({ turbo: true });
+    expect(getSettings().turbo).toBe(true);
   });
 
   test('fills missing keys with defaults', () => {
-    initSettings({ lightning: true });
+    initSettings({ turbo: true });
     expect(getSettings().transcript).toBe(defaults.transcript);
-    expect(getSettings().transcript_delay).toBe(defaults.transcript_delay);
   });
 
   test('overrides all defaults when full object provided', () => {
-    initSettings({ ...defaults, lightning: true });
-    expect(getSettings().lightning).toBe(true);
+    initSettings({ ...defaults, turbo: true });
+    expect(getSettings().turbo).toBe(true);
   });
 });
 
 describe('updateSettings', () => {
   test('replaces current settings', () => {
-    initSettings({ lightning: false });
-    updateSettings({ ...defaults, lightning: true, transcript_delay: 99 });
-    expect(getSettings().lightning).toBe(true);
-    expect(getSettings().transcript_delay).toBe(99);
+    initSettings({ turbo: false });
+    updateSettings({ ...defaults, turbo: true });
+    expect(getSettings().turbo).toBe(true);
   });
 
   test('fills missing keys with defaults on update', () => {
-    updateSettings({ lightning: true });
+    updateSettings({ turbo: true });
     expect(getSettings().transcript).toBe(defaults.transcript);
   });
 });
 
-describe('isLightningOn', () => {
-  test('returns false when lightning is off', () => {
-    initSettings({ lightning: false });
-    expect(isLightningOn()).toBe(false);
+describe('isTurboOn', () => {
+  test('returns false when turbo is off', () => {
+    initSettings({ turbo: false });
+    expect(isTurboOn()).toBe(false);
   });
 
-  test('returns true when lightning is on', () => {
-    initSettings({ lightning: true });
-    expect(isLightningOn()).toBe(true);
+  test('returns true when turbo is on', () => {
+    initSettings({ turbo: true });
+    expect(isTurboOn()).toBe(true);
   });
 });
