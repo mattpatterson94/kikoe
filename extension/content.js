@@ -91,6 +91,37 @@ const MAX_RETRY_WAIT_MS = 60_000;
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+// Shared retry loop for WaniKani API calls: exponential backoff, except a
+// 429 waits out the exact RateLimit-Reset instead of guessing.
+async function withRetry(fn, { retries = 2, backoffMs = 1000, onRetry } = {}) {
+  let lastErr;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastErr = err;
+      console.error(`[kikoe] fetch error (attempt ${attempt + 1}/${retries + 1}):`, err);
+      if (NO_RETRY_STATUSES.has(err.status) || attempt === retries) break;
+      onRetry?.(attempt + 1);
+      await sleep(Math.min(err.retryAfterMs ?? backoffMs * 2 ** attempt, MAX_RETRY_WAIT_MS));
+    }
+  }
+  throw lastErr;
+}
+
+// Same key format the per-card lookup uses (category as shown on the quiz
+// UI, prompt as the exact on-screen text) — prefetched subjects must land
+// under this key for the per-card path to hit the cache transparently.
+export function subjectCacheKey(category, prompt) {
+  return CACHE_PREFIX + category + '_' + prompt;
+}
+
+// Image-only radicals display their lowercased, space-separated name instead
+// of characters (see getPrompt's aria-label fallback in src/wanikani.js).
+function promptForSubject(subject) {
+  return subject.data.characters || subject.data.slug?.replace(/-/g, ' ') || null;
+}
+
 export const RADICALS_CACHE_KEY = 'kikoe_radicals';
 
 // Keep only the fields the matcher needs — full subjects carry image data
@@ -143,36 +174,68 @@ export async function fetchSubjectsForPrompt(prompt, category, apiToken,
 
   // An empty cache entry is treated as a miss — earlier versions cached
   // failed/empty lookups, which permanently broke the affected card.
-  const cacheKey = CACHE_PREFIX + category + '_' + prompt;
+  const cacheKey = subjectCacheKey(category, prompt);
   const cached = await chrome.storage.local.get(cacheKey);
   if (cached[cacheKey]?.length) return { subjects: cached[cacheKey], error: null };
 
   const slug = encodeURIComponent(prompt);
   const url = `https://api.wanikani.com/v2/subjects?slugs=${slug}&types=${category}`;
 
-  let lastErr;
-  for (let attempt = 0; attempt <= retries; attempt++) {
-    try {
-      let subjects;
+  try {
+    const subjects = await withRetry(async () => {
       if (category === 'radical') {
         const radicals = await fetchAllRadicals(apiToken);
-        subjects = radicals.filter(r => matchRadical(r, prompt));
-      } else {
-        const json = await fetchSubjectPage(url, apiToken);
-        subjects = json.data || [];
+        return radicals.filter(r => matchRadical(r, prompt));
       }
-      if (subjects.length) await chrome.storage.local.set({ [cacheKey]: subjects });
-      return { subjects, error: null };
-    } catch (err) {
-      lastErr = err;
-      console.error(`[kikoe] subject fetch error (attempt ${attempt + 1}/${retries + 1}):`, err);
-      if (NO_RETRY_STATUSES.has(err.status) || attempt === retries) break;
-      onRetry?.(attempt + 1);
-      // 429: wait out the rate-limit reset; otherwise exponential backoff.
-      await sleep(Math.min(err.retryAfterMs ?? backoffMs * 2 ** attempt, MAX_RETRY_WAIT_MS));
-    }
+      const json = await fetchSubjectPage(url, apiToken);
+      return json.data || [];
+    }, { retries, backoffMs, onRetry });
+    if (subjects.length) await chrome.storage.local.set({ [cacheKey]: subjects });
+    return { subjects, error: null };
+  } catch (err) {
+    return { subjects: [], error: err.message || 'subject fetch failed' };
   }
-  return { subjects: [], error: lastErr.message || 'subject fetch failed' };
+}
+
+// Warm the cache for a batch of upcoming subject IDs (from the session
+// queue) in a single request, storing each under the same category+prompt
+// key the per-card path looks up later. Subjects that fail to resolve a
+// prompt (shouldn't happen for real subjects) are skipped, not errored.
+export async function prefetchSubjects(subjectIds, apiToken, { retries = 2, backoffMs = 1000, onRetry } = {}) {
+  if (!apiToken || !subjectIds?.length) return { fetchedCount: 0, error: null };
+
+  const url = `https://api.wanikani.com/v2/subjects?ids=${subjectIds.join(',')}`;
+
+  let subjects;
+  try {
+    subjects = await withRetry(
+      () => fetchSubjectPage(url, apiToken).then((json) => json.data || []),
+      { retries, backoffMs, onRetry }
+    );
+  } catch (err) {
+    return { fetchedCount: 0, error: err.message || 'prefetch failed' };
+  }
+
+  const byKey = new Map();
+  for (const subject of subjects) {
+    const prompt = promptForSubject(subject);
+    if (!prompt) continue;
+    const key = subjectCacheKey(subject.object, prompt);
+    if (!byKey.has(key)) byKey.set(key, []);
+    byKey.get(key).push(pruneSubject(subject));
+  }
+
+  if (byKey.size) {
+    const existing = await chrome.storage.local.get([...byKey.keys()]);
+    const updates = {};
+    for (const [key, fetched] of byKey) {
+      const prior = existing[key] || [];
+      updates[key] = [...prior, ...fetched.filter((s) => !prior.some((p) => p.id === s.id))];
+    }
+    await chrome.storage.local.set(updates);
+  }
+
+  return { fetchedCount: subjects.length, error: null };
 }
 
 function injectScript(src) {
@@ -210,6 +273,18 @@ async function main() {
       document.dispatchEvent(new CustomEvent('kikoe:subjectData', {
         detail: { prompt, category, subjects, error }
       }));
+    });
+
+    // Each subject ID is only ever prefetched once per page load — the
+    // queue is rescanned on every card change, but repeats are cheap no-ops.
+    const requestedPrefetchIds = new Set();
+    document.addEventListener('kikoe:prefetchRequest', async (e) => {
+      const newIds = (e.detail.subjectIds || []).filter((id) => !requestedPrefetchIds.has(id));
+      if (!newIds.length) return;
+      newIds.forEach((id) => requestedPrefetchIds.add(id));
+      if (!apiToken) apiToken = await getApiToken();
+      const { error } = await prefetchSubjects(newIds, apiToken);
+      if (error) console.error('[kikoe] prefetch failed:', error);
     });
   }
 

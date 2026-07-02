@@ -2,6 +2,7 @@ import {
   getPrompt, getLanguage, getContext,
   didContextChange, didAnswerCorrectly,
   getUserSynonyms, inputAnswer, createCardWatcher,
+  getQueuedSubjectIds,
 } from '../src/wanikani.js';
 
 
@@ -283,5 +284,57 @@ describe('getUserSynonyms', () => {
   test('returns empty array when synonyms element is absent', () => {
     setDOM('');
     expect(getUserSynonyms(440)).toStrictEqual([]);
+  });
+});
+
+describe('getQueuedSubjectIds', () => {
+  function setQueueJSON(value) {
+    setDOM(`<script type="application/json">${JSON.stringify(value)}</script>`);
+  }
+
+  test('returns a bare top-level array of subject ids', () => {
+    setQueueJSON([440, 441, 442]);
+    expect(getQueuedSubjectIds()).toEqual([440, 441, 442]);
+  });
+
+  test('finds an array nested under a subject_ids-like key', () => {
+    setQueueJSON({ queue: { subject_ids: [1, 2, 3] } });
+    expect(getQueuedSubjectIds()).toEqual([1, 2, 3]);
+  });
+
+  test('extracts ids from an array of queue entry objects', () => {
+    setQueueJSON([
+      { subject_id: 10, srs_stage: 1 },
+      { subject_id: 20, srs_stage: 4 },
+    ]);
+    expect(getQueuedSubjectIds()).toEqual([10, 20]);
+  });
+
+  test('ignores unrelated integer arrays not under a subject-id key', () => {
+    setQueueJSON({ levels: [1, 2, 3], subjectIds: [55, 66] });
+    expect(getQueuedSubjectIds()).toEqual([55, 66]);
+  });
+
+  test('skips malformed JSON and checks the next script tag', () => {
+    setDOM(
+      '<script type="application/json">not json</script>' +
+      '<script type="application/json">[7, 8, 9]</script>'
+    );
+    expect(getQueuedSubjectIds()).toEqual([7, 8, 9]);
+  });
+
+  test('respects the limit', () => {
+    setQueueJSON([1, 2, 3, 4, 5]);
+    expect(getQueuedSubjectIds(2)).toEqual([1, 2]);
+  });
+
+  test('returns empty array when no recognizable queue is present', () => {
+    setQueueJSON({ foo: 'bar' });
+    expect(getQueuedSubjectIds()).toEqual([]);
+  });
+
+  test('returns empty array when there is no embedded JSON at all', () => {
+    setDOM('');
+    expect(getQueuedSubjectIds()).toEqual([]);
   });
 });

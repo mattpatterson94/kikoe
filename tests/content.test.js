@@ -1,4 +1,4 @@
-import { getSettings, buildSafeConfig, scrapeApiToken, fetchSubjectsForPrompt, CACHE_PREFIX, RADICALS_CACHE_KEY } from '../extension/content.js';
+import { getSettings, buildSafeConfig, scrapeApiToken, fetchSubjectsForPrompt, prefetchSubjects, subjectCacheKey, CACHE_PREFIX, RADICALS_CACHE_KEY } from '../extension/content.js';
 import { defaults } from '../src/settings.js';
 
 // ── Chrome API mock ───────────────────────────────────────────────────────────
@@ -20,9 +20,13 @@ const chromeMock = {
       set: vi.fn(async (obj) => { Object.assign(syncStore, obj); }),
     },
     local: {
-      get: vi.fn(async (key) => {
-        const k = typeof key === 'string' ? key : Object.keys(key)[0];
-        return localStore[k] !== undefined ? { [k]: localStore[k] } : {};
+      get: vi.fn(async (keys) => {
+        const ks = Array.isArray(keys) ? keys : [keys];
+        const result = {};
+        for (const k of ks) {
+          if (localStore[k] !== undefined) result[k] = localStore[k];
+        }
+        return result;
       }),
       set: vi.fn(async (obj) => { Object.assign(localStore, obj); }),
     },
@@ -330,5 +334,116 @@ describe('fetchSubjectsForPrompt for radicals', () => {
     expect(result.subjects).toEqual([]);
     expect(result.error).toMatch(/500/);
     expect(localStore[RADICALS_CACHE_KEY]).toBeUndefined();
+  });
+});
+
+// ── subjectCacheKey ───────────────────────────────────────────────────────────
+
+describe('subjectCacheKey', () => {
+  test('matches the key fetchSubjectsForPrompt caches under', async () => {
+    const mockSubject = { id: 1, object: 'kanji', data: { slug: '下', characters: '下', meanings: [] } };
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => ({ data: [mockSubject] }) })));
+    await fetchSubjectsForPrompt('下', 'kanji', 'tok');
+    expect(localStore[subjectCacheKey('kanji', '下')]).toEqual([mockSubject]);
+  });
+});
+
+// ── prefetchSubjects ──────────────────────────────────────────────────────────
+
+describe('prefetchSubjects', () => {
+  const TOKEN = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
+
+  const kanji = {
+    id: 440, object: 'kanji',
+    data: { slug: '下', characters: '下', meanings: [{ meaning: 'Below', accepted_answer: true }], readings: [] },
+  };
+  const kanaVocab = {
+    id: 900, object: 'kana_vocabulary',
+    data: { slug: 'ばか', characters: 'ばか', meanings: [{ meaning: 'Idiot', accepted_answer: true }], readings: [] },
+  };
+  const imageRadical = {
+    id: 2, object: 'radical',
+    data: { slug: 'coat-rack', characters: null, meanings: [{ meaning: 'Coat Rack', accepted_answer: true }], readings: [] },
+  };
+
+  test('does nothing when there is no apiToken', async () => {
+    const fetchSpy = vi.fn();
+    vi.stubGlobal('fetch', fetchSpy);
+    const result = await prefetchSubjects([440], null);
+    expect(result).toEqual({ fetchedCount: 0, error: null });
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  test('does nothing when the id list is empty', async () => {
+    const fetchSpy = vi.fn();
+    vi.stubGlobal('fetch', fetchSpy);
+    const result = await prefetchSubjects([], TOKEN);
+    expect(result).toEqual({ fetchedCount: 0, error: null });
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  test('fetches a batch of ids in a single request', async () => {
+    const fetchSpy = vi.fn(async () => ({ ok: true, json: async () => ({ data: [kanji, kanaVocab] }) }));
+    vi.stubGlobal('fetch', fetchSpy);
+    const result = await prefetchSubjects([440, 900], TOKEN);
+    expect(result).toEqual({ fetchedCount: 2, error: null });
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    expect(fetchSpy.mock.calls[0][0]).toBe('https://api.wanikani.com/v2/subjects?ids=440,900');
+  });
+
+  test('caches each subject under its category+prompt key, pruned', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => ({ data: [kanji] }) })));
+    await prefetchSubjects([440], TOKEN);
+    const cached = localStore[subjectCacheKey('kanji', '下')];
+    expect(cached).toHaveLength(1);
+    expect(cached[0].id).toBe(440);
+    expect(cached[0].data.meanings).toEqual(kanji.data.meanings);
+  });
+
+  test('uses the API object type directly for kana_vocabulary', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => ({ data: [kanaVocab] }) })));
+    await prefetchSubjects([900], TOKEN);
+    expect(localStore[subjectCacheKey('kana_vocabulary', 'ばか')]).toHaveLength(1);
+  });
+
+  test('falls back to the space-separated slug for image-only radicals', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => ({ data: [imageRadical] }) })));
+    await prefetchSubjects([2], TOKEN);
+    expect(localStore[subjectCacheKey('radical', 'coat rack')]).toHaveLength(1);
+  });
+
+  test('merges with subjects already cached under the same key instead of clobbering', async () => {
+    const otherKanji = { id: 441, object: 'kanji', data: { slug: '下2', characters: '下', meanings: [] } };
+    localStore[subjectCacheKey('kanji', '下')] = [otherKanji];
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => ({ data: [kanji] }) })));
+    await prefetchSubjects([440], TOKEN);
+    const cached = localStore[subjectCacheKey('kanji', '下')];
+    expect(cached.map(s => s.id).sort()).toEqual([440, 441]);
+  });
+
+  test('does not duplicate a subject already present under its key', async () => {
+    localStore[subjectCacheKey('kanji', '下')] = [{ id: 440, object: 'kanji', data: { slug: '下', characters: '下', meanings: [] } }];
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => ({ data: [kanji] }) })));
+    await prefetchSubjects([440], TOKEN);
+    expect(localStore[subjectCacheKey('kanji', '下')]).toHaveLength(1);
+  });
+
+  test('retries a transient failure', async () => {
+    let calls = 0;
+    vi.stubGlobal('fetch', vi.fn(async () => {
+      if (++calls === 1) return { ok: false, status: 503 };
+      return { ok: true, json: async () => ({ data: [kanji] }) };
+    }));
+    const result = await prefetchSubjects([440], TOKEN, { backoffMs: 1 });
+    expect(result).toEqual({ fetchedCount: 1, error: null });
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
+
+  test('reports an error and caches nothing when the batch fetch fails', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: false, status: 500 })));
+    const result = await prefetchSubjects([440], TOKEN, { retries: 0 });
+    expect(result.fetchedCount).toBe(0);
+    expect(result.error).toMatch(/500/);
+    expect(localStore[subjectCacheKey('kanji', '下')]).toBeUndefined();
   });
 });

@@ -123,6 +123,51 @@ export function didContextChange(oldContext, newContext) {
          (newContext?.type !== oldContext?.type);
 }
 
+// The review/lesson queue is embedded as JSON in a <script> tag so the SPA
+// can resume without an extra API round-trip. The container differs by page
+// and has changed shape before, so scan every embedded JSON blob for a
+// subject-id-shaped array rather than pinning one selector — pages without a
+// recognizable queue (e.g. extra_study) simply yield no prefetch, and the
+// existing per-card fetch remains the fallback.
+const SUBJECT_ID_KEY_RE = /subject.*id/i;
+
+function extractSubjectIds(node, key = null, depth = 0) {
+  if (depth > 6 || node === null || typeof node !== 'object') return null;
+  if (Array.isArray(node)) {
+    if (node.length && node.every(Number.isInteger) && (key === null || SUBJECT_ID_KEY_RE.test(key))) {
+      return node;
+    }
+    if (node.length && node.every(n => n && typeof n === 'object' && Number.isInteger(n.subject_id))) {
+      return node.map(n => n.subject_id);
+    }
+    for (const item of node) {
+      const found = extractSubjectIds(item, null, depth + 1);
+      if (found) return found;
+    }
+    return null;
+  }
+  for (const [k, value] of Object.entries(node)) {
+    const found = extractSubjectIds(value, k, depth + 1);
+    if (found) return found;
+  }
+  return null;
+}
+
+// Upcoming subject IDs for the current session, in queue order.
+export function getQueuedSubjectIds(limit = 50) {
+  for (const script of document.querySelectorAll('script[type="application/json"]')) {
+    let data;
+    try {
+      data = JSON.parse(script.textContent);
+    } catch {
+      continue;
+    }
+    const ids = extractSubjectIds(data);
+    if (ids?.length) return ids.slice(0, limit);
+  }
+  return [];
+}
+
 export function clickNext() {
   const button = document.querySelector(Selectors.Next);
   if (button) { button.click(); return true; }
