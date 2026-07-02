@@ -23,6 +23,16 @@ import { Numerals } from './candidates/numerals.js';
 const EMPTY_FINAL_RESTART_THRESHOLD = 3;
 const RESTARTING_INDICATOR_MS = 900;
 
+// Maps a SpeechRecognition error type to the idle-indicator state that
+// explains it to the user. Errors with no entry here (e.g. 'aborted') keep
+// whatever indicator state is already showing — recognition.js still logs them.
+const RECOGNITION_ERROR_STATES = {
+  'not-allowed': 'mic-denied',
+  'service-not-allowed': 'mic-denied',
+  'audio-capture': 'no-mic',
+  'network': 'reconnecting',
+};
+
 // Pick the per-site adapter. Both expose the same public shape; only WaniKani
 // needs subject data fetched via the content script — BunPro's accepted
 // answers are already in the DOM.
@@ -157,7 +167,7 @@ async function startListener(dictionary) {
     return result;
   }
 
-  const recognition = createRecognition(() => site.getLanguage(), function(rawInputs, final) {
+  function handleRecognitionResult(rawInputs, final) {
     const raws = rawInputs.map(deduplicate).filter(r => r.trim());
     if (raws.length === 0) {
       if (final && ++emptyFinals >= EMPTY_FINAL_RESTART_THRESHOLD) {
@@ -170,6 +180,9 @@ async function startListener(dictionary) {
       return;
     }
     emptyFinals = 0;
+    // A real result means recognition is alive — clear any mic-denied/no-mic/
+    // reconnecting indicator left over from a prior error.
+    restoreIdleIndicator();
     const raw = raws[0];
     logTranscript(getSettings(), { raw });
 
@@ -201,7 +214,22 @@ async function startListener(dictionary) {
       pendingRaws = raws;
       console.log('[kikoe] subjects not loaded, stored pending transcript:', raws);
     }
-  });
+  }
+
+  function handleRecognitionError(errorType) {
+    const state = RECOGNITION_ERROR_STATES[errorType];
+    if (state) setIdleIndicatorState(state);
+  }
+
+  const recognition = createRecognition(() => site.getLanguage(), handleRecognitionResult, handleRecognitionError);
+
+  if (!recognition) {
+    // No Web Speech support (e.g. Firefox) — nothing below this point can
+    // work, so stop before touching recognition.restart/pause/resume.
+    showIdleIndicator(getSettings());
+    setIdleIndicatorState('unsupported-browser');
+    return;
+  }
 
   // Refresh subjects + language and clear transcript when the card changes.
   async function onCardChange() {

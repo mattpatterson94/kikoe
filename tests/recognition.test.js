@@ -127,4 +127,91 @@ describe('createRecognition', () => {
     expect(callback).toHaveBeenCalledTimes(1);
     expect(callback).toHaveBeenCalledWith(['fresh'], true);
   });
+
+  // Regression: createRecognition returned null when webkitSpeechRecognition
+  // was missing, but nothing checked for it — callers would crash calling
+  // .restart()/.pause()/.resume() on null. See setLanguage's null-safety below.
+  test('returns null when the browser has no webkitSpeechRecognition', () => {
+    vi.unstubAllGlobals();
+    expect(createRecognition('ja-JP', vi.fn())).toBeNull();
+    vi.stubGlobal('webkitSpeechRecognition', MockSpeechRecognition);
+  });
+
+  describe('onError and fatal-error handling', () => {
+    test('invokes onError with the native error type', () => {
+      const onError = vi.fn();
+      createRecognition('ja-JP', vi.fn(), onError);
+      const native = recognitionInstances[0];
+
+      native.onerror({ error: 'not-allowed' });
+
+      expect(onError).toHaveBeenCalledWith('not-allowed');
+    });
+
+    test('does not invoke onError for no-speech', () => {
+      const onError = vi.fn();
+      createRecognition('ja-JP', vi.fn(), onError);
+      const native = recognitionInstances[0];
+
+      native.onerror({ error: 'no-speech' });
+
+      expect(onError).not.toHaveBeenCalled();
+    });
+
+    test.each(['not-allowed', 'service-not-allowed', 'audio-capture'])(
+      'stops auto-restart after a %s error',
+      (errorType) => {
+        const recognition = createRecognition('ja-JP', vi.fn());
+        const native = recognitionInstances[0];
+
+        native.onerror({ error: errorType });
+        native.onend();
+
+        expect(native.nativeStart).not.toHaveBeenCalled();
+        expect(recognition.isPaused()).toBe(true);
+      }
+    );
+
+    test('does not stop auto-restart for a transient network error', () => {
+      const recognition = createRecognition('ja-JP', vi.fn());
+
+      recognitionInstances[0].onerror({ error: 'network' });
+
+      expect(recognition.isPaused()).toBe(false);
+    });
+
+    test('backs off before restarting after a network error instead of restarting immediately', () => {
+      vi.useFakeTimers();
+      try {
+        createRecognition('ja-JP', vi.fn());
+        const native = recognitionInstances[0];
+
+        native.onerror({ error: 'network' });
+        native.onend();
+
+        expect(native.nativeStart).not.toHaveBeenCalled();
+        vi.runAllTimers();
+        expect(native.nativeStart).toHaveBeenCalledTimes(1);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    test('resets the network backoff once a result comes through', () => {
+      vi.useFakeTimers();
+      try {
+        createRecognition('ja-JP', vi.fn());
+        const native = recognitionInstances[0];
+
+        native.onerror({ error: 'network' });
+        native.onresult({ resultIndex: 0, results: [makeResult(['かい'], true)] });
+        native.onend();
+
+        // No lingering backoff — restarts immediately like the healthy path.
+        expect(native.nativeStart).toHaveBeenCalledTimes(1);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+  });
 });
