@@ -372,6 +372,109 @@ describe('startListener voice commands', () => {
   });
 });
 
+describe('startListener mute/pause control', () => {
+  // Same MockSpeechRecognition shape as above — kept local to this describe
+  // block so its instance list doesn't leak between describes.
+  class MockSpeechRecognition {
+    constructor() {
+      this.continuous = false;
+      this.interimResults = false;
+      this.maxAlternatives = 1;
+      this.lang = '';
+      this.nativeStart = vi.fn();
+      this.nativeStop = vi.fn();
+      this.start = this.nativeStart;
+      this.stop = this.nativeStop;
+      MockSpeechRecognition.instances.push(this);
+    }
+  }
+  MockSpeechRecognition.instances = [];
+
+  beforeEach(() => {
+    MockSpeechRecognition.instances = [];
+    vi.stubGlobal('webkitSpeechRecognition', MockSpeechRecognition);
+    // jsdom's document.hasFocus() defaults to false (no element is ever
+    // focused), which reads as a blurred/backgrounded tab to isPageActive().
+    // These tests are about explicit muting, not page-activity, so pin the
+    // tab as foregrounded/focused like a real active review session.
+    vi.spyOn(document, 'hasFocus').mockReturnValue(true);
+  });
+
+  function setReviewCardDOM() {
+    document.body.innerHTML += `
+      <div class="character-header__characters">下</div>
+      <span class="quiz-input__question-category">Kanji</span>
+      <span class="quiz-input__question-type">Meaning</span>
+      <input id="user-response" type="text" />
+      <button class="quiz-input__submit-button">Next</button>
+    `;
+  }
+
+  function finalResult(...transcripts) {
+    const alternatives = transcripts.map(t => ({ transcript: t }));
+    alternatives.isFinal = true;
+    return alternatives;
+  }
+
+  test.each([
+    ['pause'],
+    ['stop listening'],
+    ['ストップ'],
+  ])('saying "%s" mutes recognition and shows the Muted indicator', async (transcript) => {
+    setReviewCardDOM();
+    stampConfig({ hasApiToken: true });
+    await importApp();
+
+    const native = MockSpeechRecognition.instances[0];
+    const stopsBefore = native.nativeStop.mock.calls.length;
+    native.onresult({ resultIndex: 0, results: [finalResult(transcript)] });
+
+    const label = document.getElementById('kikoe-idle-label');
+    expect(label.textContent).toBe('Muted');
+    expect(native.nativeStop.mock.calls.length).toBeGreaterThan(stopsBefore);
+  });
+
+  test('clicking the idle indicator toggles mute then resume', async () => {
+    setReviewCardDOM();
+    stampConfig({ hasApiToken: true });
+    await importApp();
+
+    const native = MockSpeechRecognition.instances[0];
+    const indicator = document.getElementById('kikoe-idle');
+    const label = document.getElementById('kikoe-idle-label');
+
+    const startsBefore = native.nativeStart.mock.calls.length;
+    indicator.click();
+    expect(label.textContent).toBe('Muted');
+
+    indicator.click();
+    expect(label.textContent).toBe('Listening');
+    expect(native.nativeStart.mock.calls.length).toBeGreaterThan(startsBefore);
+  });
+
+  test('a muted mic stays muted across a tab blur/focus cycle', async () => {
+    setReviewCardDOM();
+    stampConfig({ hasApiToken: true });
+    await importApp();
+
+    const native = MockSpeechRecognition.instances[0];
+    native.onresult({ resultIndex: 0, results: [finalResult('pause')] });
+
+    const label = document.getElementById('kikoe-idle-label');
+    expect(label.textContent).toBe('Muted');
+
+    const startsBeforeBlur = native.nativeStart.mock.calls.length;
+    document.hasFocus.mockReturnValue(false);
+    window.dispatchEvent(new Event('blur'));
+    document.hasFocus.mockReturnValue(true);
+    window.dispatchEvent(new Event('focus'));
+
+    // Blur/focus must not silently un-mute an explicit user mute.
+    expect(label.textContent).toBe('Muted');
+    expect(native.nativeStart.mock.calls.length).toBe(startsBeforeBlur);
+  });
+});
+
 describe('startListener fuzzy meaning matching (WaniKani)', () => {
   // Same MockSpeechRecognition shape as above — kept local to this describe
   // block so its instance list doesn't leak between describes.

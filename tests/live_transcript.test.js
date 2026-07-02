@@ -218,4 +218,43 @@ describe('setIdleIndicatorState', () => {
     expect(label.textContent).toBe('Reconnecting…');
     expect(document.getElementById('kikoe-idle').classList.contains('kikoe-chip-error')).toBe(false);
   });
+
+  test('shows muted state with muted styling, not error styling', () => {
+    showIdleIndicator(settings());
+    setIdleIndicatorState('muted');
+    const label = document.getElementById('kikoe-idle-label');
+    expect(label.textContent).toBe('Muted');
+    expect(document.getElementById('kikoe-idle').classList.contains('kikoe-chip-muted')).toBe(true);
+    expect(document.getElementById('kikoe-idle').classList.contains('kikoe-chip-error')).toBe(false);
+  });
+
+  test('clears muted styling when leaving the muted state', () => {
+    showIdleIndicator(settings());
+    setIdleIndicatorState('muted');
+    setIdleIndicatorState('listening');
+    expect(document.getElementById('kikoe-idle').classList.contains('kikoe-chip-muted')).toBe(false);
+  });
+});
+
+describe('showIdleIndicator click-to-toggle', () => {
+  test('clicking the indicator invokes the onToggle callback', () => {
+    const onToggle = vi.fn();
+    showIdleIndicator(settings(), onToggle);
+    document.getElementById('kikoe-idle').click();
+    expect(onToggle).toHaveBeenCalledTimes(1);
+  });
+
+  test('pressing Enter on the indicator invokes the onToggle callback', () => {
+    const onToggle = vi.fn();
+    showIdleIndicator(settings(), onToggle);
+    document.getElementById('kikoe-idle').dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })
+    );
+    expect(onToggle).toHaveBeenCalledTimes(1);
+  });
+
+  test('no click handler is attached when onToggle is omitted', () => {
+    showIdleIndicator(settings());
+    expect(() => document.getElementById('kikoe-idle').click()).not.toThrow();
+  });
 });

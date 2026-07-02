@@ -92,9 +92,14 @@ async function startListener(dictionary) {
   let subjects = [];
   let subjectsLoadFailed = false;
   let context = site.getContext(subjects);
+  // Tracks an explicit user mute (voice command or clicking the indicator),
+  // separately from the page being hidden/blurred — see
+  // updateRecognitionForPageActivity, which must not silently un-mute this.
+  let userMuted = false;
 
   function restoreIdleIndicator() {
-    if (context?.mode === 'unsupported') setIdleIndicatorState('unsupported');
+    if (userMuted) setIdleIndicatorState('muted');
+    else if (context?.mode === 'unsupported') setIdleIndicatorState('unsupported');
     else if (subjectsLoadFailed) setIdleIndicatorState('error');
     else setIdleIndicatorState(_config.hasApiToken ? 'listening' : 'no-token');
   }
@@ -146,6 +151,10 @@ async function startListener(dictionary) {
     '駄目': site.markWrong,
     'next': site.clickNext, 'つぎ': site.clickNext, '次': site.clickNext,
     'ねくすと': site.clickNext, 'ネクスト': site.clickNext,
+    // Resuming by voice while paused is impossible (recognition is stopped),
+    // so this is deliberately pause-only — resuming needs the UI control.
+    'pause': () => setMuted(true), 'stop listening': () => setMuted(true),
+    'ストップ': () => setMuted(true),
   };
 
   // Recognizer finals routinely arrive capitalized/punctuated ("Next.") even
@@ -298,18 +307,30 @@ async function startListener(dictionary) {
 
   startSpeedEnhancer(getSettings);
 
-  showIdleIndicator(getSettings());
+  showIdleIndicator(getSettings(), () => setMuted(!userMuted));
 
+  // Blur/focus toggles recognition based on page activity, but must not
+  // clobber an explicit user mute: muting on a "pause" command or a click on
+  // the indicator should stay muted even if the tab loses and regains focus.
   function updateRecognitionForPageActivity() {
     clearTimeout(restartIndicatorTimer);
     emptyFinals = 0;
-    if (isPageActive()) {
+    if (userMuted) {
+      recognition.pause();
+      restoreIdleIndicator();
+    } else if (isPageActive()) {
       recognition.resume();
       restoreIdleIndicator();
     } else {
       recognition.pause();
       setIdleIndicatorState('paused');
     }
+  }
+
+  function setMuted(muted) {
+    if (userMuted === muted) return;
+    userMuted = muted;
+    updateRecognitionForPageActivity();
   }
 
   document.addEventListener('visibilitychange', updateRecognitionForPageActivity);

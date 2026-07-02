@@ -119,9 +119,23 @@ function injectStyles() {
       padding: 6px 12px 6px 9px;
       font-weight: 500;
     }
+    .kikoe-idle-clickable {
+      cursor: pointer;
+    }
     .kikoe-idle .kikoe-chip-dot {
       width: 6px;
       height: 6px;
+    }
+
+    /* Muted chip overrides theme colours, same pattern as the error chip. */
+    .kikoe-chip.kikoe-chip-muted {
+      background: rgba(120, 120, 130, 0.45);
+      border: 0.5px solid rgba(255, 255, 255, 0.12);
+      color: rgba(255, 255, 255, 0.75);
+    }
+    .kikoe-chip.kikoe-chip-muted .kikoe-chip-dot {
+      animation: none;
+      opacity: 0.4;
     }
   `;
   document.head.appendChild(style);
@@ -175,7 +189,10 @@ function scheduleRemoval(el) {
   setTimeout(remove, 450);
 }
 
-export function showIdleIndicator(settings) {
+// onToggle, if provided, is called (with no arguments) whenever the user
+// clicks the indicator — used to let the mic be muted/unmuted by click
+// instead of only by voice command or tab visibility.
+export function showIdleIndicator(settings, onToggle) {
   if (!settings.transcript) return;
   if (document.getElementById('kikoe-idle')) return;
 
@@ -183,6 +200,19 @@ export function showIdleIndicator(settings) {
   el.id = 'kikoe-idle';
   el.className = `kikoe-chip ${themeClass(settings)} kikoe-idle`;
   el.style.cssText = 'position: fixed; bottom: 16px; right: 16px; z-index: 2147483647;';
+  if (onToggle) {
+    el.classList.add('kikoe-idle-clickable');
+    el.setAttribute('role', 'button');
+    el.setAttribute('tabindex', '0');
+    el.setAttribute('title', 'Toggle voice input');
+    el.addEventListener('click', onToggle);
+    el.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        onToggle();
+      }
+    });
+  }
 
   const dot = document.createElement('span');
   dot.className = 'kikoe-chip-dot';
@@ -202,12 +232,15 @@ const ERROR_STYLED_STATES = new Set(['error', 'mic-denied', 'no-mic', 'unsupport
 export function setIdleIndicatorState(state) {
   const label = document.getElementById('kikoe-idle-label');
   if (!label) return;
-  document.getElementById('kikoe-idle')?.classList.toggle('kikoe-chip-error', ERROR_STYLED_STATES.has(state));
+  const chip = document.getElementById('kikoe-idle');
+  chip?.classList.toggle('kikoe-chip-error', ERROR_STYLED_STATES.has(state));
+  chip?.classList.toggle('kikoe-chip-muted', state === 'muted');
   if (state === 'loading') label.textContent = 'Loading…';
   else if (state === 'retrying') label.textContent = 'Retrying…';
   else if (state === 'restarting') label.textContent = 'Restarting…';
   else if (state === 'reconnecting') label.textContent = 'Reconnecting…';
   else if (state === 'paused') label.textContent = 'Paused';
+  else if (state === 'muted') label.textContent = 'Muted';
   else if (state === 'no-token') label.textContent = '⚠ No API token';
   else if (state === 'unsupported') label.textContent = '⚠ Unsupported card type';
   else if (state === 'unsupported-browser') label.textContent = '⚠ Voice recognition not supported by this browser';
