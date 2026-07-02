@@ -1,8 +1,11 @@
 import { checkAnswer } from './flashcards.js';
 import { createRecognition, setLanguage } from './recognition.js';
-import * as wk from './wanikani.js';
+import * as wanikani from './wanikani.js';
+import * as bunpro from './bunpro.js';
+import { detectSite } from './site.js';
 import { initSettings, updateSettings, getSettings } from './settings.js';
-import { startSpeedEnhancer } from './speed.js';
+import { startSpeedEnhancer as startWanikaniSpeedEnhancer } from './speed.js';
+import { startSpeedEnhancer as startBunproSpeedEnhancer } from './bunpro_speed.js';
 import { createTranscriptContainer, logTranscript, clearTranscript, showIdleIndicator, setIdleIndicatorState } from './live_transcript.js';
 import { loadDictionary } from './dict.js';
 
@@ -19,6 +22,14 @@ import { Numerals } from './candidates/numerals.js';
 
 const EMPTY_FINAL_RESTART_THRESHOLD = 3;
 const RESTARTING_INDICATOR_MS = 900;
+
+// Pick the per-site adapter. Both expose the same public shape; only WaniKani
+// needs subject data fetched via the content script — BunPro's accepted
+// answers are already in the DOM.
+const SITE = detectSite(window.location.hostname);
+const site = SITE === 'bunpro' ? bunpro : wanikani;
+const startSpeedEnhancer = SITE === 'bunpro' ? startBunproSpeedEnhancer : startWanikaniSpeedEnhancer;
+const usesSubjects = SITE !== 'bunpro';
 
 // Read config stamped by content.js, then remove the attribute immediately.
 const _encoded = document.documentElement.dataset.wkviConfig;
@@ -65,10 +76,11 @@ async function startListener(dictionary) {
 
   let subjects = [];
   let subjectsLoadFailed = false;
-  let context = wk.getContext(subjects);
+  let context = site.getContext(subjects);
 
   function restoreIdleIndicator() {
-    if (subjectsLoadFailed) setIdleIndicatorState('error');
+    if (context?.mode === 'unsupported') setIdleIndicatorState('unsupported');
+    else if (subjectsLoadFailed) setIdleIndicatorState('error');
     else setIdleIndicatorState(_config.hasApiToken ? 'listening' : 'no-token');
   }
 
@@ -85,9 +97,9 @@ async function startListener(dictionary) {
   document.addEventListener('wkvi:subjectRetry', () => setIdleIndicatorState('retrying'));
 
   // Pre-fetch subjects for the initial card.
-  if (context?.prompt && context?.category) {
+  if (usesSubjects && context?.prompt && context?.category) {
     subjects = await loadSubjects(context.prompt, context.category);
-    context = wk.getContext(subjects);
+    context = site.getContext(subjects);
     restoreIdleIndicator();
   }
 
@@ -100,12 +112,12 @@ async function startListener(dictionary) {
   ];
 
   const commands = {
-    'wrong': wk.markWrong, 'incorrect': wk.markWrong, 'mistake': wk.markWrong,
-    '不正解': wk.markWrong, 'ふせいかい': wk.markWrong, '間違い': wk.markWrong,
-    'まちがい': wk.markWrong, 'だめ': wk.markWrong, 'ダメ': wk.markWrong,
-    '駄目': wk.markWrong,
-    'next': wk.clickNext, 'つぎ': wk.clickNext, '次': wk.clickNext, 'NEXT': wk.clickNext,
-    'ねくすと': wk.clickNext, 'ネクスト': wk.clickNext,
+    'wrong': site.markWrong, 'incorrect': site.markWrong, 'mistake': site.markWrong,
+    '不正解': site.markWrong, 'ふせいかい': site.markWrong, '間違い': site.markWrong,
+    'まちがい': site.markWrong, 'だめ': site.markWrong, 'ダメ': site.markWrong,
+    '駄目': site.markWrong,
+    'next': site.clickNext, 'つぎ': site.clickNext, '次': site.clickNext, 'NEXT': site.clickNext,
+    'ねくすと': site.clickNext, 'ネクスト': site.clickNext,
   };
 
   let submitted = false;
@@ -133,7 +145,7 @@ async function startListener(dictionary) {
     return result;
   }
 
-  const recognition = createRecognition(() => wk.getLanguage(), function(rawInputs, final) {
+  const recognition = createRecognition(() => site.getLanguage(), function(rawInputs, final) {
     const raws = rawInputs.map(deduplicate).filter(r => r.trim());
     if (raws.length === 0) {
       if (final && ++emptyFinals >= EMPTY_FINAL_RESTART_THRESHOLD) {
@@ -161,8 +173,9 @@ async function startListener(dictionary) {
     // Ignore further speech after the answer has been submitted — wait for card change.
     if (submitted) { console.log('[wkvi] skipped — already submitted'); return; }
 
-    const ctx = wk.getContext(subjects);
+    const ctx = site.getContext(subjects);
     if (!ctx) { console.log('[wkvi] skipped — no context'); return; }
+    if (ctx.mode === 'unsupported') { console.log('[wkvi] skipped — unsupported card type'); return; }
 
     const result = checkAlternatives(ctx, raws);
     logTranscript(getSettings(), result.transcript);
@@ -170,7 +183,7 @@ async function startListener(dictionary) {
 
     if (result.success && result.answer) {
       submitted = true;
-      wk.submitAnswer(result.answer);
+      site.submitAnswer(result.answer);
     } else if (!ctx.readings?.length && !ctx.meanings?.length) {
       // Subjects not loaded yet — store transcript and retry once they arrive.
       pendingRaws = raws;
@@ -180,14 +193,14 @@ async function startListener(dictionary) {
 
   // Refresh subjects + language and clear transcript when the card changes.
   async function onCardChange() {
-    const newContext = wk.getContext(subjects);
-    if (wk.didContextChange(context, newContext)) {
+    const newContext = site.getContext(subjects);
+    if (site.didContextChange(context, newContext)) {
       submitted = false;
       pendingRaws = null;
       context = newContext;
-      if (newContext?.prompt && newContext?.category) {
+      if (usesSubjects && newContext?.prompt && newContext?.category) {
         subjects = await loadSubjects(newContext.prompt, newContext.category);
-        context = wk.getContext(subjects);
+        context = site.getContext(subjects);
         restoreIdleIndicator();
         // Retry any transcript that arrived while subjects were loading.
         if (pendingRaws && !submitted) {
@@ -195,35 +208,21 @@ async function startListener(dictionary) {
           console.log('[wkvi] retrying pending transcript', { pendingRaws, result });
           if (result.success && result.answer) {
             submitted = true;
-            wk.submitAnswer(result.answer);
+            site.submitAnswer(result.answer);
           }
           pendingRaws = null;
         }
+      } else {
+        // Sites without subject fetches (BunPro) still need the indicator
+        // refreshed — e.g. flipping between supported and unsupported cards.
+        restoreIdleIndicator();
       }
-      setLanguage(recognition, wk.getLanguage());
+      setLanguage(recognition, site.getLanguage());
       if (getSettings().transcript_clear) clearTranscript();
     }
   }
 
-  // Only trigger card change when the prompt+type DOM elements settle on new
-  // values. This ignores unrelated mutations (animations, the `correct`
-  // attribute, progress bars) that would otherwise reset a naive debounce and
-  // prevent onCardChange from ever firing.
-  let lastSeenPrompt = context?.prompt;
-  let lastSeenType = context?.type;
-  let cardChangeTimer;
-
-  const observer = new MutationObserver(() => {
-    const prompt = document.querySelector('div.character-header__characters')?.textContent?.trim();
-    const type = document.querySelector('span.quiz-input__question-type')?.textContent?.trim().toLowerCase();
-    if (!prompt || !type) return;
-    if (prompt === lastSeenPrompt && type === lastSeenType) return;
-    lastSeenPrompt = prompt;
-    lastSeenType = type;
-    clearTimeout(cardChangeTimer);
-    cardChangeTimer = setTimeout(onCardChange, 50);
-  });
-  observer.observe(document.body, { childList: true, subtree: true });
+  site.createCardWatcher(onCardChange);
 
   startSpeedEnhancer(getSettings);
 
@@ -253,7 +252,7 @@ async function init() {
 
   function tryStart() {
     if (listenerStarted) return;
-    const context = wk.getContext();
+    const context = site.getContext();
     if (!context) return;
     if (context.page === 'review' || context.page === 'lesson' || context.page === 'quiz') {
       listenerStarted = true;
@@ -262,7 +261,14 @@ async function init() {
   }
 
   tryStart();
+  // WaniKani navigates with Turbo; BunPro is a React SPA with no equivalent
+  // event, so also watch the DOM until the quiz appears.
   document.addEventListener('turbo:load', tryStart);
+  const startObserver = new MutationObserver(() => {
+    tryStart();
+    if (listenerStarted) startObserver.disconnect();
+  });
+  startObserver.observe(document.documentElement, { childList: true, subtree: true });
 }
 
 init().catch(err => console.error('[wkvi] init error:', err));
