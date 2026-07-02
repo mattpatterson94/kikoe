@@ -117,13 +117,14 @@ async function startListener(dictionary) {
     }
   }
 
-  // Pre-fetch subjects for the initial card.
-  if (usesSubjects && context?.prompt && context?.category) {
-    subjects = await loadSubjects(context.prompt, context.category);
-    context = site.getContext(subjects);
-    restoreIdleIndicator();
-  }
-  prefetchUpcoming();
+  // Kick off the initial card's subject fetch now, but don't block the rest
+  // of setup on it — recognition starts listening further down before this
+  // resolves, so any utterance that arrives while it's in flight is captured
+  // as a pending transcript and retried once it resolves (see
+  // retryPendingTranscript, awaited at the bottom of this function).
+  const initialSubjectsPromise = (usesSubjects && context?.prompt && context?.category)
+    ? loadSubjects(context.prompt, context.category)
+    : null;
 
   const transformers = [
     new ToHiragana(), new ConvertWo(),
@@ -165,6 +166,21 @@ async function startListener(dictionary) {
       if (result.success && result.answer) return result;
     }
     return result;
+  }
+
+  // Re-check a transcript that arrived while subjects were still loading
+  // (either the initial card's load, or a card change's load in
+  // onCardChange), now that they've arrived. No-op if nothing is pending or
+  // an answer was already submitted in the meantime.
+  function retryPendingTranscript() {
+    if (!pendingRaws || submitted) return;
+    const result = checkAlternatives(context, pendingRaws);
+    console.log('[kikoe] retrying pending transcript', { pendingRaws, result });
+    if (result.success && result.answer) {
+      submitted = true;
+      site.submitAnswer(result.answer);
+    }
+    pendingRaws = null;
   }
 
   function handleRecognitionResult(rawInputs, final) {
@@ -243,16 +259,7 @@ async function startListener(dictionary) {
         context = site.getContext(subjects);
         restoreIdleIndicator();
         prefetchUpcoming();
-        // Retry any transcript that arrived while subjects were loading.
-        if (pendingRaws && !submitted) {
-          const result = checkAlternatives(context, pendingRaws);
-          console.log('[kikoe] retrying pending transcript', { pendingRaws, result });
-          if (result.success && result.answer) {
-            submitted = true;
-            site.submitAnswer(result.answer);
-          }
-          pendingRaws = null;
-        }
+        retryPendingTranscript();
       } else {
         // Sites without subject fetches (BunPro) still need the indicator
         // refreshed — e.g. flipping between supported and unsupported cards.
@@ -285,6 +292,18 @@ async function startListener(dictionary) {
   window.addEventListener('focus', updateRecognitionForPageActivity);
   window.addEventListener('blur', updateRecognitionForPageActivity);
   updateRecognitionForPageActivity();
+
+  // Recognition is listening as of the call above. Now wait for the initial
+  // card's subjects (already in flight since the top of this function) and
+  // retry anything the user said while they were still loading — mirrors the
+  // retryPendingTranscript() call in onCardChange for later cards.
+  if (initialSubjectsPromise) {
+    subjects = await initialSubjectsPromise;
+    context = site.getContext(subjects);
+    restoreIdleIndicator();
+    retryPendingTranscript();
+  }
+  prefetchUpcoming();
 }
 
 async function init() {
