@@ -9,23 +9,39 @@ const Selectors = {
   Next: 'button.quiz-input__submit-button',
 };
 
+// Path segment matchers, anchored so lookalikes (e.g. "/preview", a
+// "vocabulary" query param, a future "/reviews-dashboard" page) don't
+// false-positive the way a bare href substring match would.
+const PathPatterns = {
+  Review: /^\/subjects\/review(\/|$)/,
+  LessonQuiz: /^\/subjects\/lesson\/quiz(\/|$)/,
+  Lesson: /^\/subjects\/(\d+\/)?lesson(\/|$)/,
+  ExtraStudy: /^\/subjects\/extra_study(\/|$)/,
+  RecentMistakes: /^\/recent-mistakes(\/|$)/,
+  Vocabulary: /^\/vocabulary\//,
+  Kanji: /^\/kanji\//,
+  Radicals: /^\/radicals\//,
+};
+
 function getCategory() {
   const category = document.querySelector(Selectors.Category);
   if (category) return category.textContent.trim().toLowerCase();
-  if (window.location.href.match('vocabulary')) return 'vocabulary';
-  if (window.location.href.match('kanji')) return 'kanji';
-  if (window.location.href.match('radicals')) return 'radical';
+  const pathname = window.location.pathname;
+  if (PathPatterns.Vocabulary.test(pathname)) return 'vocabulary';
+  if (PathPatterns.Kanji.test(pathname)) return 'kanji';
+  if (PathPatterns.Radicals.test(pathname)) return 'radical';
   return null;
 }
 
 function getType() {
   const type = document.querySelector(Selectors.Type);
   if (type) return type.textContent.trim().toLowerCase();
-  if (window.location.href.match('#reading')) return 'reading';
-  if (window.location.href.match('#meaning')) return 'meaning';
-  if (window.location.href.match('vocabulary')) return 'reading';
-  if (window.location.href.match('kanji')) return 'reading';
-  if (window.location.href.match('radicals')) return 'name';
+  const pathname = window.location.pathname;
+  if (window.location.hash === '#reading') return 'reading';
+  if (window.location.hash === '#meaning') return 'meaning';
+  if (PathPatterns.Vocabulary.test(pathname)) return 'reading';
+  if (PathPatterns.Kanji.test(pathname)) return 'reading';
+  if (PathPatterns.Radicals.test(pathname)) return 'name';
   return null;
 }
 
@@ -94,13 +110,18 @@ function getReadingsFromItems(items) {
 
 // subjects: WaniKani API v2 subject objects for the current card (may be empty)
 export function getContext(subjects = []) {
+  const pathname = window.location.pathname;
   let page = null;
-  if (window.location.href.match('review')) page = 'review';
-  if (window.location.href.match('lesson')) page = 'lesson';
-  if (window.location.href.match('quiz')) page = 'quiz';
-  if (window.location.href.match('recent-mistakes')) page = 'quiz';
-  if (window.location.href.match('extra_study')) page = 'quiz';
-  if (window.location.href.match('vocabulary|radicals|kanji')) page = 'entry';
+  if (PathPatterns.Review.test(pathname)) page = 'review';
+  if (PathPatterns.LessonQuiz.test(pathname)) page = 'quiz';
+  else if (PathPatterns.Lesson.test(pathname)) page = 'lesson';
+  if (PathPatterns.ExtraStudy.test(pathname)) page = 'quiz';
+  if (PathPatterns.RecentMistakes.test(pathname)) page = 'quiz';
+  if (
+    PathPatterns.Vocabulary.test(pathname) ||
+    PathPatterns.Radicals.test(pathname) ||
+    PathPatterns.Kanji.test(pathname)
+  ) page = 'entry';
   if (!page) return null;
 
   const prompt = getPrompt();
