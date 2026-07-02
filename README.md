@@ -12,6 +12,7 @@
 - BunPro support, using the same voice-driven flow on BunPro reviews (Fill In and Translate questions with manual input; no API token needed)
 - Smart speech matching that handles common speech-to-text quirks: romaji-to-hiragana conversion, fuzzy vowel matching, numeral recognition (kanji/English), suru verb normalization, and more
 - Turbo mode, which auto-advances to the next card on a correct answer
+- Ippatsu mode (一発), an optional one-shot challenge: a wrong answer auto-submits instead of allowing endless retries, toggled separately for meaning and reading questions
 - Live transcript, an optional overlay showing what the extension heard in real time
 - Voice commands: say "next" (or 次) to advance, "wrong" / 間違い to mark an answer incorrect
 - Automatic language switching between Japanese recognition for reading questions and English for meaning questions
@@ -133,6 +134,21 @@ Open the extension options page (via the toolbar icon or extensions menu) to con
 |---------|---------|-------------|
 | Turbo mode | On | Auto-advances to the next card after a correct answer |
 | Show item info on wrong answer | On | Opens the item info panel automatically when you answer incorrectly |
+
+### Ippatsu Mode（一発）
+
+One shot per question. Normally a non-matching answer is silently ignored so
+you can retry until you get it right; with ippatsu mode on, a genuine miss (an
+answer of the right type that doesn't match) is submitted as wrong
+immediately. Recognizer glitches, like English picked up on a reading
+question, don't count as your shot. The two toggles are separate because
+meaning answers are usually easier to land first try than readings, where
+pronunciation slips are more likely.
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| Meaning questions (English) | Off | A wrong meaning answer auto-submits instead of allowing retries |
+| Reading questions (Japanese) | Off | A wrong reading answer auto-submits instead of allowing retries |
 
 ### Live Transcript
 

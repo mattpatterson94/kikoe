@@ -2,6 +2,8 @@ const defaults = {
   apiToken: '',
   turbo: true,
   speed_show_info: true,
+  ippatsu_meaning: false,
+  ippatsu_reading: false,
   transcript: true,
   transcript_theme: 'system',
   transcript_position: 'top',

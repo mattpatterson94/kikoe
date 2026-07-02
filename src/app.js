@@ -238,6 +238,18 @@ async function startListener(dictionary) {
     return best;
   }
 
+  // Ippatsu (一発) mode: one shot per question. A genuine miss ('no-match' —
+  // a right-type answer that didn't match) is submitted as wrong via
+  // site.markWrong() instead of waiting for a retry. Recognizer glitches
+  // ('wrong-type', 'not-loaded') don't burn the shot. markWrong's placeholder
+  // is used rather than the heard text because WaniKani "shakes" without
+  // grading on kanji or valid-but-unaccepted alternate readings, which would
+  // strand the card with submitted stuck on true.
+  function ippatsuEnabled(type) {
+    const s = getSettings();
+    return type === 'reading' ? s.ippatsu_reading : s.ippatsu_meaning;
+  }
+
   // Re-check a transcript that arrived while subjects were still loading
   // (either the initial card's load, or a card change's load in
   // onCardChange), now that they've arrived. No-op if nothing is pending or
@@ -249,6 +261,9 @@ async function startListener(dictionary) {
     if (result.success && result.answer) {
       submitted = true;
       site.submitAnswer(result.answer);
+    } else if (result?.transcript?.reason === 'no-match' && ippatsuEnabled(context.type)) {
+      submitted = true;
+      site.markWrong();
     }
     pendingRaws = null;
   }
@@ -313,6 +328,9 @@ async function startListener(dictionary) {
       // Subjects not loaded yet — store transcript and retry once they arrive.
       pendingRaws = raws;
       debugLog('subjects not loaded, stored pending transcript:', raws);
+    } else if (result.transcript?.reason === 'no-match' && ippatsuEnabled(ctx.type)) {
+      submitted = true;
+      site.markWrong();
     }
   }
 
