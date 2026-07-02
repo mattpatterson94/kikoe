@@ -10,8 +10,16 @@ import {
 
 // vi.stubGlobal('location', ...) replaces window.location, which is what
 // our wanikani.js reads after we changed it from document.location.href.
+// wanikani.js matches against pathname/hash (not the full href), so derive
+// those from the URL the same way a real Location object would.
 function setURL(url) {
-  vi.stubGlobal('location', { href: url });
+  const parsed = new URL(url);
+  vi.stubGlobal('location', {
+    href: url,
+    pathname: parsed.pathname,
+    hash: parsed.hash,
+    search: parsed.search,
+  });
 }
 
 function setDOM(html) {
@@ -141,6 +149,48 @@ describe('getContext', () => {
   test('recent-mistakes URL → page = "quiz"', () => {
     setURL('https://www.wanikani.com/recent-mistakes');
     expect(getContext().page).toBe('quiz');
+  });
+
+  test('URL containing "review" as a substring but not the review path → not review', () => {
+    setURL('https://www.wanikani.com/subjects/preview');
+    expect(getContext()).toBeNull();
+  });
+
+  test('URL with "review" in the query string only → not review', () => {
+    setURL('https://www.wanikani.com/level/12?ref=review-page');
+    expect(getContext()).toBeNull();
+  });
+
+  test('lesson/quiz URL is classified as quiz, not lesson', () => {
+    setURL('https://www.wanikani.com/subjects/lesson/quiz');
+    expect(getContext().page).toBe('quiz');
+  });
+
+  test('path merely containing "lesson" (not the lesson path) does not match', () => {
+    setURL('https://www.wanikani.com/settings/lessons-preferences');
+    expect(getContext()).toBeNull();
+  });
+
+  test('path merely containing "extra_study" as a prefix of another segment does not match', () => {
+    setURL('https://www.wanikani.com/subjects/extra_study_archive');
+    expect(getContext()).toBeNull();
+  });
+});
+
+describe('getContext entry page category/type fallback', () => {
+  test('vocabulary entry page → category and type derived from path', () => {
+    setDOM('');
+    setURL('https://www.wanikani.com/vocabulary/%E4%B8%8A%E6%89%8B');
+    const ctx = getContext();
+    expect(ctx.page).toBe('entry');
+    expect(ctx.category).toBe('vocabulary');
+    expect(ctx.type).toBe('reading');
+  });
+
+  test('"vocabulary" appearing only in the query string does not trigger entry detection', () => {
+    setDOM('');
+    setURL('https://www.wanikani.com/dashboard?ref=vocabulary-list');
+    expect(getContext()).toBeNull();
   });
 });
 

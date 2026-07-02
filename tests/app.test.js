@@ -4,7 +4,12 @@
 // runs again against that test's DOM/location/globals.
 
 function stubReviewPage() {
-  vi.stubGlobal('location', { hostname: 'www.wanikani.com', href: 'https://www.wanikani.com/subjects/review' });
+  vi.stubGlobal('location', {
+    hostname: 'www.wanikani.com',
+    href: 'https://www.wanikani.com/subjects/review',
+    pathname: '/subjects/review',
+    hash: '',
+  });
 }
 
 function stampConfig(overrides = {}) {
