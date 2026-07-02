@@ -254,25 +254,17 @@
     <div class="field">
       <label for="apiToken">
         API Token
-        <span class="hint">Read-only token from <a href="https://www.wanikani.com/settings/personal_access_tokens" target="_blank">WaniKani settings</a>. Not needed for BunPro.</span>
+        <span class="hint">Read-only token from <a href="https://www.wanikani.com/settings/personal_access_tokens" target="_blank">WaniKani settings</a>.</span>
       </label>
-      <input type="text" id="apiToken" placeholder="paste token here">
+      <input type="password" id="apiToken" placeholder="paste token here" autocomplete="off">
     </div>
   </section>
 
   <section class="card">
-    <h2>Lightning Mode</h2>
+    <h2>Turbo Mode</h2>
     <div class="field">
-      <label for="lightning">Lightning mode<span class="hint">Auto-advance on correct answer</span></label>
-      <input type="checkbox" id="lightning">
-    </div>
-    <div class="field">
-      <label for="lightning_delay">Lightning delay (s)</label>
-      <input type="number" id="lightning_delay" min="0" step="0.1">
-    </div>
-    <div class="field">
-      <label for="mistake_delay">Mistake delay (s)<span class="hint">Before showing item info on wrong answer</span></label>
-      <input type="number" id="mistake_delay" min="0" step="0.1">
+      <label for="turbo">Turbo mode<span class="hint">Auto-advance on correct answer</span></label>
+      <input type="checkbox" id="turbo">
     </div>
     <div class="field">
       <label for="speed_show_info">Show item info on wrong answer<span class="hint">Auto-opens the item info panel when you answer incorrectly</span></label>
@@ -300,18 +292,6 @@
         <option value="top">Top</option>
         <option value="bottom">Bottom</option>
       </select>
-    </div>
-    <div class="field">
-      <label for="transcript_delay">Fade delay (s)</label>
-      <input type="number" id="transcript_delay" min="0" step="0.5">
-    </div>
-    <div class="field">
-      <label for="transcript_count">Max visible transcripts</label>
-      <input type="number" id="transcript_count" min="1" step="1">
-    </div>
-    <div class="field">
-      <label for="transcript_clear">Clear transcript between cards</label>
-      <input type="checkbox" id="transcript_clear">
     </div>
   </section>
 

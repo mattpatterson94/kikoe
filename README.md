@@ -4,22 +4,22 @@
 
 # Kikoe（聞こえ）
 
-**Kikoe** — from 聞こえる, "to be heard" — is a browser extension that lets you answer [WaniKani](https://www.wanikani.com) and [BunPro](https://bunpro.jp) reviews and lessons using your voice instead of typing. Speak your answer and the extension submits it automatically — no hands required.
+**Kikoe** (from 聞こえる, "to be heard") is a browser extension that lets you answer [WaniKani](https://www.wanikani.com) and [BunPro](https://bunpro.jp) reviews and lessons using your voice instead of typing. Speak your answer and the extension submits it automatically, no hands required.
 
 ## Features
 
-- **Voice-driven reviews** — speak reading and meaning answers during WaniKani reviews, lessons, and quizzes
-- **BunPro support** — the same voice-driven flow on BunPro reviews (Fill In and Translate questions with manual input; no API token needed)
-- **Smart speech matching** — handles common speech-to-text quirks: romaji-to-hiragana conversion, fuzzy vowel matching, numeral recognition (kanji/English), suru verb normalization, and more
-- **Lightning mode** — auto-advances to the next card on a correct answer (configurable delay)
-- **Live transcript** — optional overlay showing what the extension heard in real time
-- **Voice commands** — say "next" (or 次) to advance, "wrong" / 間違い to mark an answer incorrect
-- **Automatic language switching** — uses Japanese recognition for reading questions and English for meaning questions
+- Voice-driven reviews: speak reading and meaning answers during WaniKani reviews, lessons, and quizzes
+- BunPro support, using the same voice-driven flow on BunPro reviews (Fill In and Translate questions with manual input; no API token needed)
+- Smart speech matching that handles common speech-to-text quirks: romaji-to-hiragana conversion, fuzzy vowel matching, numeral recognition (kanji/English), suru verb normalization, and more
+- Turbo mode, which auto-advances to the next card on a correct answer
+- Live transcript, an optional overlay showing what the extension heard in real time
+- Voice commands: say "next" (or 次) to advance, "wrong" / 間違い to mark an answer incorrect
+- Automatic language switching between Japanese recognition for reading questions and English for meaning questions
 
 ## Requirements
 
 - A [WaniKani](https://www.wanikani.com) account and/or a [BunPro](https://bunpro.jp) account
-- For WaniKani: an API token (read-only is sufficient). BunPro needs no token — the accepted answers are already on the review page.
+- For WaniKani: an API token (read-only is sufficient). BunPro needs no token, since the accepted answers are already on the review page.
 - Chrome/Chromium (Manifest V3) or Firefox 109+ (Manifest V2)
 - Node.js and npm (to build from source)
 - Microphone access granted to the browser
@@ -50,7 +50,7 @@ npm run pack:firefox # firefox only → dist/kikoe-firefox.zip
 2. Enable **Developer mode** (toggle in the top-right corner).
 3. Click **Load unpacked**.
 4. Select the `chrome/` folder inside the repo.
-5. The extension appears in your toolbar — proceed to [First-time setup](#first-time-setup).
+5. The extension appears in your toolbar. Proceed to [First-time setup](#first-time-setup).
 
 ### Firefox
 
@@ -58,7 +58,7 @@ npm run pack:firefox # firefox only → dist/kikoe-firefox.zip
 2. Click **This Firefox** in the left sidebar.
 3. Click **Load Temporary Add-on…**
 4. Navigate to the `firefox/` folder and select `manifest.json`.
-5. The extension is now active for this session — proceed to [First-time setup](#first-time-setup).
+5. The extension is now active for this session. Proceed to [First-time setup](#first-time-setup).
 
 > **Note:** Firefox only supports temporary add-on loading in development. The extension will be removed when Firefox restarts. For a permanent install, you would need to submit the extension to AMO or sign it manually with `web-ext`.
 
@@ -67,7 +67,7 @@ npm run pack:firefox # firefox only → dist/kikoe-firefox.zip
 1. Click the extension icon in your browser toolbar (or open the options page from the extensions menu).
 2. Paste your WaniKani **API Token** into the API Token field.
    - Get one from [WaniKani → Settings → Personal Access Tokens](https://www.wanikani.com/settings/personal_access_tokens). A read-only token is sufficient.
-   - Skip this step if you only use BunPro — no token is needed there.
+   - Skip this step if you only use BunPro, since no token is needed there.
 3. Click **Save settings**.
 4. When prompted, allow the browser to access your microphone.
 
@@ -90,7 +90,7 @@ Once installed and configured, the extension activates automatically on any Wani
 | `間違い` / `まちがい` / `だめ` | Mark the current answer wrong (Japanese) |
 | `pause` / `stop listening` / `ストップ` | Mute the mic |
 
-Muting is one-way by voice — since recognition stops while muted, there's no voice command to unmute. Click the listening indicator (bottom-right) to toggle the mic on/off at any time; it also shows a distinct "Muted" state.
+Muting is one-way by voice: since recognition stops while muted, there's no voice command to unmute. Click the listening indicator (bottom-right) to toggle the mic on/off at any time; it also shows a distinct "Muted" state.
 
 **How matching works:**
 
@@ -115,7 +115,7 @@ The extension applies several candidate transformations to improve recognition a
   | `reveal` / `show` / `show answer` / `answer` / `見せて` / `答え` | Answer hidden | Show the answer |
   | `good` / `known` / `correct` / `わかった` | Answer shown | Grade as known |
   | `bad` / `again` / `わからない` | Answer shown | Grade as not known |
-- BunPro's own native Lightning Mode setting is detected at runtime, so enabling the extension's lightning mode won't double-advance.
+- BunPro's own native Lightning Mode setting is detected at runtime, so enabling the extension's turbo mode won't double-advance.
 
 ## Settings
 
@@ -127,13 +127,11 @@ Open the extension options page (via the toolbar icon or extensions menu) to con
 |---------|-------------|
 | API Token | Your WaniKani read-only API token |
 
-### Lightning Mode
+### Turbo Mode
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| Lightning mode | Off | Auto-advances to the next card after a correct answer |
-| Lightning delay | 0.1 s | How long to wait before advancing |
-| Mistake delay | 0.1 s | Delay before showing item info on a wrong answer |
+| Turbo mode | On | Auto-advances to the next card after a correct answer |
 | Show item info on wrong answer | On | Opens the item info panel automatically when you answer incorrectly |
 
 ### Live Transcript
@@ -141,18 +139,14 @@ Open the extension options page (via the toolbar icon or extensions menu) to con
 | Setting | Default | Description |
 |---------|---------|-------------|
 | Show live transcript | On | Displays an overlay of what the extension heard |
-| Background color | Gold (#ffd700) | Transcript overlay background color |
-| Text color | Black (#000000) | Transcript overlay text color |
+| Theme | System | Overlay color theme (system, light, or dark) |
 | Position | Top | Where the transcript appears (top or bottom of the page) |
-| Fade delay | 5 s | How long a transcript line stays visible before fading |
-| Max visible transcripts | 1 | How many transcript lines to show at once |
-| Clear transcript between cards | Off | Clears the transcript when moving to a new card |
 
 ### Custom Corrections
 
 When speech recognition keeps mishearing an answer (everyone's mic and accent
 produce different recurring misrecognitions), add your own corrections mapping
-what was heard to what you meant — e.g. `ec2` → `いしつ` or `web cage` →
+what was heard to what you meant, e.g. `ec2` → `いしつ` or `web cage` →
 `ribcage`. Corrections apply to both reading and meaning questions, take
 precedence over the built-in correction tables, and take effect on your next
 answer without reloading the review page. The intended value for a reading can
@@ -183,11 +177,11 @@ src/
   site.js             # hostname → site detection (wanikani / bunpro)
   wanikani.js         # WaniKani page interaction (DOM selectors, answer submission)
   bunpro.js           # BunPro page interaction (quiz metadata element, answer submission)
-  bunpro_speed.js     # BunPro lightning mode / speed enhancements
+  bunpro_speed.js     # BunPro turbo mode / speed enhancements
   flashcards.js       # answer checking logic
   dict.js             # dictionary loading (JMdict / KANJIDIC2)
   settings.js         # settings management
-  speed.js            # lightning mode / speed enhancements
+  speed.js            # turbo mode / speed enhancements
   live_transcript.js  # transcript overlay UI
   util.js             # shared utilities
   candidates/         # speech-to-answer transformation pipeline

@@ -1,15 +1,10 @@
 const defaults = {
   apiToken: '',
-  lightning: false,
-  lightning_delay: 0.1,
-  mistake_delay: 0.1,
+  turbo: true,
   speed_show_info: true,
   transcript: true,
   transcript_theme: 'system',
   transcript_position: 'top',
-  transcript_delay: 5,
-  transcript_count: 1,
-  transcript_clear: false,
   debug: false,
   customCorrections: [],
 };

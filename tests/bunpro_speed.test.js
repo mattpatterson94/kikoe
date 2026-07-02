@@ -51,10 +51,8 @@ function addMetadata(attrs = {}) {
 
 function makeSettings(overrides = {}) {
   return {
-    lightning: false,
-    lightning_delay: 0.1,
+    turbo: false,
     speed_show_info: true,
-    mistake_delay: 0.1,
     ...overrides,
   };
 }
@@ -73,19 +71,19 @@ describe('startSpeedEnhancer (bunpro)', () => {
     expect(_getContainer()).toBe(el);
   });
 
-  test('calls clickNext after lightning_delay on a correct answer', async () => {
+  test('calls clickNext after the result delay on a correct answer', async () => {
     const el = addMetadata();
-    start(() => makeSettings({ lightning: true, lightning_delay: 0.5 }));
+    start(() => makeSettings({ turbo: true }));
     answer(el, true);
     await Promise.resolve();
     expect(clickNext).not.toHaveBeenCalled();
-    vi.advanceTimersByTime(500);
+    vi.advanceTimersByTime(100);
     expect(clickNext).toHaveBeenCalledTimes(1);
   });
 
-  test('does not call clickNext when lightning is off', async () => {
+  test('does not call clickNext when turbo is off', async () => {
     const el = addMetadata();
-    start(() => makeSettings({ lightning: false }));
+    start(() => makeSettings({ turbo: false }));
     answer(el, true);
     await Promise.resolve();
     vi.runAllTimers();
@@ -94,22 +92,22 @@ describe('startSpeedEnhancer (bunpro)', () => {
 
   test('skips clickNext when BunPro native lightning already advanced the card', async () => {
     const el = addMetadata();
-    start(() => makeSettings({ lightning: true, lightning_delay: 0.5 }));
+    start(() => makeSettings({ turbo: true }));
     answer(el, true);
     await Promise.resolve();
     // Native Lightning Mode swaps to the next card before our timer fires.
     el.setAttribute('data-meta-info', JSON.stringify({ id: 807, type: 'vocab' }));
-    vi.advanceTimersByTime(500);
+    vi.advanceTimersByTime(100);
     expect(clickNext).not.toHaveBeenCalled();
   });
 
-  test('calls clickInfo after mistake_delay on a wrong answer', async () => {
+  test('calls clickInfo after the result delay on a wrong answer', async () => {
     const el = addMetadata();
-    start(() => makeSettings({ speed_show_info: true, mistake_delay: 0.2 }));
+    start(() => makeSettings({ speed_show_info: true }));
     answer(el, false);
     await Promise.resolve();
     expect(clickInfo).not.toHaveBeenCalled();
-    vi.advanceTimersByTime(200);
+    vi.advanceTimersByTime(100);
     expect(clickInfo).toHaveBeenCalledTimes(1);
   });
 
@@ -124,7 +122,7 @@ describe('startSpeedEnhancer (bunpro)', () => {
 
   test('ignores pre-answer mutations while is-post-attempt is false', async () => {
     const el = addMetadata();
-    start(() => makeSettings({ lightning: true, speed_show_info: true }));
+    start(() => makeSettings({ turbo: true, speed_show_info: true }));
     // BunPro renders is-correct="false" before any answer is given.
     el.setAttribute('data-meta-is-correct', 'false');
     await Promise.resolve();
@@ -135,7 +133,7 @@ describe('startSpeedEnhancer (bunpro)', () => {
 
   test('handles a result only once even though both attributes mutate', async () => {
     const el = addMetadata();
-    start(() => makeSettings({ lightning: true, lightning_delay: 0.1 }));
+    start(() => makeSettings({ turbo: true }));
     answer(el, true);
     await Promise.resolve();
     // A later unrelated mutation of a watched attribute must not re-fire.
@@ -147,7 +145,7 @@ describe('startSpeedEnhancer (bunpro)', () => {
 
   test('reacts to a repeat attempt on the same card (submission count changed)', async () => {
     const el = addMetadata();
-    start(() => makeSettings({ speed_show_info: true, mistake_delay: 0.1 }));
+    start(() => makeSettings({ speed_show_info: true }));
     answer(el, false);
     await Promise.resolve();
     vi.runAllTimers();

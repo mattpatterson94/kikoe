@@ -1,4 +1,6 @@
 const STYLE_ID = 'kikoe-transcript-styles';
+const TRANSCRIPT_FADE_DELAY_MS = 5000;
+const TRANSCRIPT_MAX_VISIBLE = 1;
 
 function injectStyles() {
   if (document.getElementById(STYLE_ID)) return;
@@ -327,9 +329,9 @@ export function logTranscript(settings, transcript) {
   container.style.cssText = getContainerStyle(settings);
   container.appendChild(el);
 
-  setTimeout(() => scheduleRemoval(el), settings.transcript_delay * 1000);
+  setTimeout(() => scheduleRemoval(el), TRANSCRIPT_FADE_DELAY_MS);
 
-  const start = current - settings.transcript_count;
+  const start = current - TRANSCRIPT_MAX_VISIBLE;
   const end = current - 10;
   for (let i = start; i >= end && i >= 0; i--) {
     clearTranscriptWith(`transcript-${i}`);

@@ -4,13 +4,13 @@
 // element; we then auto-advance or auto-open item info based on settings.
 //
 // Configurable via settings:
-//   lightning       (bool)   – auto-advance to next card on correct answer
-//   lightning_delay (number) – seconds to wait before advancing (default 0.1)
+//   turbo           (bool)   – auto-advance to next card on correct answer
 //   speed_show_info (bool)   – auto-open item info panel on wrong answer
-//   mistake_delay   (number) – seconds to wait before opening info (default 0.1)
 
 import { clickNext, clickInfo } from './wanikani.js';
 import { debugLog } from './logger.js';
+
+const RESULT_DELAY_MS = 100;
 
 export function startSpeedEnhancer(getSettingsFn) {
   let currentContainer = null;
@@ -31,11 +31,11 @@ export function startSpeedEnhancer(getSettingsFn) {
     const result = getResult(container);
     const s = getSettingsFn();
 
-    if (result === 'true' && s.lightning) {
-      setTimeout(clickNext, s.lightning_delay * 1000);
+    if (result === 'true' && s.turbo) {
+      setTimeout(clickNext, RESULT_DELAY_MS);
     }
     if (result === 'false' && s.speed_show_info) {
-      setTimeout(clickInfo, s.mistake_delay * 1000);
+      setTimeout(clickInfo, RESULT_DELAY_MS);
     }
   }
 

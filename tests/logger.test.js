@@ -62,7 +62,7 @@ describe('settings integration', () => {
   });
 
   test('initSettings without debug key leaves it off', () => {
-    initSettings({ lightning: true });
+    initSettings({ turbo: true });
     debugLog('should not appear');
     expect(logSpy).not.toHaveBeenCalled();
   });

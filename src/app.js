@@ -7,7 +7,7 @@ import { initSettings, updateSettings, getSettings } from './settings.js';
 import { debugLog } from './logger.js';
 import { startSpeedEnhancer as startWanikaniSpeedEnhancer } from './speed.js';
 import { startSpeedEnhancer as startBunproSpeedEnhancer } from './bunpro_speed.js';
-import { createTranscriptContainer, logTranscript, clearTranscript, showIdleIndicator, setIdleIndicatorState } from './live_transcript.js';
+import { createTranscriptContainer, logTranscript, showIdleIndicator, setIdleIndicatorState } from './live_transcript.js';
 import { loadDictionary } from './dict.js';
 
 import { ToHiragana } from './candidates/to_hiragana.js';
@@ -350,7 +350,6 @@ async function startListener(dictionary) {
         restoreIdleIndicator();
       }
       setLanguage(recognition, site.getLanguage());
-      if (getSettings().transcript_clear) clearTranscript();
     }
   }
 

@@ -58,15 +58,13 @@ describe('getSettings', () => {
   });
 
   test('overrides defaults with stored values', async () => {
-    syncStore.lightning = true;
-    syncStore.transcript_delay = 10;
+    syncStore.turbo = true;
     const settings = await getSettings();
-    expect(settings.lightning).toBe(true);
-    expect(settings.transcript_delay).toBe(10);
+    expect(settings.turbo).toBe(true);
   });
 
   test('fills missing stored keys with defaults', async () => {
-    syncStore.lightning = true;
+    syncStore.turbo = true;
     const settings = await getSettings();
     expect(settings.transcript).toBe(defaults.transcript);
     expect(settings.transcript_position).toBe(defaults.transcript_position);
@@ -97,8 +95,8 @@ describe('buildSafeConfig', () => {
   });
 
   test('preserves all non-sensitive settings', () => {
-    const config = buildSafeConfig('chrome-extension://id/', { ...defaults, apiToken: 'secret', lightning: true });
-    expect(config.settings.lightning).toBe(true);
+    const config = buildSafeConfig('chrome-extension://id/', { ...defaults, apiToken: 'secret', turbo: true });
+    expect(config.settings.turbo).toBe(true);
     expect(config.settings.transcript).toBe(defaults.transcript);
   });
 });

@@ -10,9 +10,6 @@ const defaultSettings = {
   transcript: true,
   transcript_theme: 'system',
   transcript_position: 'top',
-  transcript_delay: 5,
-  transcript_count: 1,
-  transcript_clear: false,
 };
 
 function settings(overrides = {}) {
@@ -89,17 +86,7 @@ describe('logTranscript', () => {
     expect(texts.filter(t => t.includes('した')).length).toBe(1);
   });
 
-  test('different raw values both appear when transcript_count allows it', () => {
-    const s = settings({ transcript_count: 2 });
-    logTranscript(s, { raw: 'した' });
-    logTranscript(s, { raw: 'うえ' });
-    const container = document.getElementById('kikoe-transcript-container');
-    const texts = Array.from(container.children).map(c => c.textContent);
-    expect(texts.some(t => t.includes('した'))).toBe(true);
-    expect(texts.some(t => t.includes('うえ'))).toBe(true);
-  });
-
-  test('only the latest transcript is shown when transcript_count is 1 (default)', () => {
+  test('only the latest transcript is shown', () => {
     logTranscript(settings(), { raw: 'した' });
     logTranscript(settings(), { raw: 'うえ' });
     const container = document.getElementById('kikoe-transcript-container');
