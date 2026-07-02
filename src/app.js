@@ -4,6 +4,7 @@ import * as wanikani from './wanikani.js';
 import * as bunpro from './bunpro.js';
 import { detectSite } from './site.js';
 import { initSettings, updateSettings, getSettings } from './settings.js';
+import { debugLog } from './logger.js';
 import { startSpeedEnhancer as startWanikaniSpeedEnhancer } from './speed.js';
 import { startSpeedEnhancer as startBunproSpeedEnhancer } from './bunpro_speed.js';
 import { createTranscriptContainer, logTranscript, clearTranscript, showIdleIndicator, setIdleIndicatorState } from './live_transcript.js';
@@ -52,6 +53,7 @@ document.documentElement.removeAttribute('data-kikoe-config');
 const _config = JSON.parse(atob(_encoded));
 
 initSettings(_config.settings);
+debugLog('debug mode on — settings:', getSettings());
 
 document.addEventListener('kikoe:settingsChanged', (e) => {
   updateSettings(e.detail);
@@ -221,7 +223,7 @@ async function startListener(dictionary) {
   function retryPendingTranscript() {
     if (!pendingRaws || submitted) return;
     const result = checkAlternatives(context, pendingRaws);
-    console.log('[kikoe] retrying pending transcript', { pendingRaws, result });
+    debugLog('retrying pending transcript', { pendingRaws, result });
     if (result.success && result.answer) {
       submitted = true;
       site.submitAnswer(result.answer);
@@ -259,15 +261,15 @@ async function startListener(dictionary) {
     }
 
     // Ignore further speech after the answer has been submitted — wait for card change.
-    if (submitted) { console.log('[kikoe] skipped — already submitted'); return; }
+    if (submitted) { debugLog('skipped — already submitted'); return; }
 
     const ctx = site.getContext(subjects);
-    if (!ctx) { console.log('[kikoe] skipped — no context'); return; }
-    if (ctx.mode === 'unsupported') { console.log('[kikoe] skipped — unsupported card type'); return; }
+    if (!ctx) { debugLog('skipped — no context'); return; }
+    if (ctx.mode === 'unsupported') { debugLog('skipped — unsupported card type'); return; }
 
     const result = checkAlternatives(ctx, raws);
     logTranscript(getSettings(), result.transcript);
-    console.log('[kikoe] checkAnswer', { raws, type: ctx.type, readings: ctx.readings, meanings: ctx.meanings, result });
+    debugLog('checkAnswer', { raws, type: ctx.type, readings: ctx.readings, meanings: ctx.meanings, result });
 
     if (result.success && result.answer) {
       submitted = true;
@@ -275,7 +277,7 @@ async function startListener(dictionary) {
     } else if (!ctx.readings?.length && !ctx.meanings?.length) {
       // Subjects not loaded yet — store transcript and retry once they arrive.
       pendingRaws = raws;
-      console.log('[kikoe] subjects not loaded, stored pending transcript:', raws);
+      debugLog('subjects not loaded, stored pending transcript:', raws);
     }
   }
 

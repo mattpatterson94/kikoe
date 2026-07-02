@@ -17,6 +17,7 @@
 //   mistake_delay   (number) – seconds to wait before opening info (default 0.1)
 
 import { clickNext, clickInfo } from './bunpro.js';
+import { debugLog } from './logger.js';
 
 export function startSpeedEnhancer(getSettingsFn) {
   let currentMeta = null;
@@ -60,7 +61,7 @@ export function startSpeedEnhancer(getSettingsFn) {
     if (meta === currentMeta) return;
     currentMeta = meta;
     attrObserver?.disconnect();
-    console.log('[kikoe] bunpro speed enhancer attached');
+    debugLog('bunpro speed enhancer attached');
 
     attrObserver = new MutationObserver(() => onResult(meta));
     attrObserver.observe(meta, {

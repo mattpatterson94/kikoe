@@ -18,8 +18,12 @@ describe('defaults', () => {
     expect(defaults.speed_show_info).toBe(true);
   });
 
+  test('debug is off by default', () => {
+    expect(defaults.debug).toBe(false);
+  });
+
   test('all expected keys are present', () => {
-    const keys = ['lightning', 'lightning_delay', 'mistake_delay', 'speed_show_info',
+    const keys = ['debug', 'lightning', 'lightning_delay', 'mistake_delay', 'speed_show_info',
       'transcript', 'transcript_theme',
       'transcript_position', 'transcript_delay', 'transcript_count',
       'transcript_clear'];

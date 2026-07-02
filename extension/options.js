@@ -10,6 +10,7 @@ const defaults = {
   transcript_delay: 5,
   transcript_count: 1,
   transcript_clear: false,
+  debug: false,
 };
 
 const fields = Object.keys(defaults);

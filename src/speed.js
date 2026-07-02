@@ -10,6 +10,7 @@
 //   mistake_delay   (number) – seconds to wait before opening info (default 0.1)
 
 import { clickNext, clickInfo } from './wanikani.js';
+import { debugLog } from './logger.js';
 
 export function startSpeedEnhancer(getSettingsFn) {
   let currentContainer = null;
@@ -42,7 +43,7 @@ export function startSpeedEnhancer(getSettingsFn) {
     if (container === currentContainer) return;
     currentContainer = container;
     attrObserver?.disconnect();
-    console.log('[kikoe] speed enhancer attached to', container.className || container.tagName);
+    debugLog('speed enhancer attached to', container.className || container.tagName);
 
     attrObserver = new MutationObserver((mutations) => {
       for (const m of mutations) {
