@@ -2,6 +2,10 @@
 // site, and starts the listener once a review/lesson/quiz page is detected).
 // Each test re-imports it fresh with vi.resetModules() so the top-level setup
 // runs again against that test's DOM/location/globals.
+//
+// init() no longer awaits the dictionary fetch before starting the listener
+// (see dict.js) — it starts synchronously and the mocked fetch below just
+// needs to resolve without throwing.
 
 function stubReviewPage() {
   vi.stubGlobal('location', {
@@ -28,8 +32,6 @@ function stubDictionaryFetch() {
 
 async function importApp() {
   await import('../src/app.js');
-  // init() awaits loadDictionary (a mocked fetch) before starting the
-  // listener; let that microtask chain settle before assertions run.
   await vi.waitFor(() => {
     if (!document.getElementById('kikoe-idle-label')) throw new Error('idle indicator not shown yet');
   });
