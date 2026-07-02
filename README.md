@@ -148,6 +148,12 @@ Open the extension options page (via the toolbar icon or extensions menu) to con
 | Max visible transcripts | 1 | How many transcript lines to show at once |
 | Clear transcript between cards | Off | Clears the transcript when moving to a new card |
 
+### Advanced
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| Debug mode | Off | Logs diagnostic details (speech matching, subject loading, token discovery) to the browser console, prefixed with `[kikoe]` |
+
 ## Development
 
 ```bash

@@ -1,4 +1,7 @@
+import { setDebugLogging } from './logger.js';
+
 export const defaults = {
+  debug: false,
   lightning: false,
   lightning_delay: 0.1,
   mistake_delay: 0.1,
@@ -17,10 +20,12 @@ let _settings = { ...defaults };
 
 export function initSettings(settings) {
   _settings = { ...defaults, ...settings };
+  setDebugLogging(_settings.debug);
 }
 
 export function updateSettings(settings) {
   _settings = { ...defaults, ...settings };
+  setDebugLogging(_settings.debug);
 }
 
 export function getSettings() {
