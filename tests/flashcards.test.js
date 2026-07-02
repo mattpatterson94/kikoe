@@ -335,6 +335,61 @@ describe('reading questions', () => {
   });
 });
 
+// ── Failure reasons ───────────────────────────────────────────────────────────
+
+describe('failure reasons', () => {
+  test('reading: reports not-loaded when both answer sets are empty', () => {
+    const ctx = { type: 'reading', readings: [], meanings: [] };
+    const r = checkAnswer(ctx, makeTransformers(), 'せんだい');
+    expect(r.success).toBe(false);
+    expect(r.transcript.reason).toBe('not-loaded');
+  });
+
+  test('meaning: reports not-loaded when both answer sets are empty', () => {
+    const ctx = { type: 'meaning', readings: [], meanings: [] };
+    const r = checkAnswer(ctx, makeTransformers(), 'wheat');
+    expect(r.success).toBe(false);
+    expect(r.transcript.reason).toBe('not-loaded');
+  });
+
+  test('reading: reports no-match when nothing matches and answers are loaded', () => {
+    const ctx = { type: 'reading', readings: ['せんだい'], meanings: ['sendai'] };
+    const r = checkAnswer(ctx, makeTransformers(), 'とうきょう');
+    expect(r.success).toBe(false);
+    expect(r.transcript.reason).toBe('no-match');
+  });
+
+  test('meaning: reports no-match when nothing matches and answers are loaded', () => {
+    const ctx = { type: 'meaning', readings: ['せんだい'], meanings: ['sendai'] };
+    const r = checkAnswer(ctx, makeTransformers(), 'osaka');
+    expect(r.success).toBe(false);
+    expect(r.transcript.reason).toBe('no-match');
+  });
+
+  test('reading: reports wrong-type when the candidate matches the meaning instead', () => {
+    const ctx = { type: 'reading', prompt: '寒い', readings: ['さむい'], meanings: ['cold hearted'] };
+    const r = checkAnswer(ctx, makeTransformers(), 'Cold Hearted');
+    expect(r.success).toBe(false);
+    expect(r.transcript.reason).toBe('wrong-type');
+    expect(r.transcript.type).toBe('reading');
+  });
+
+  test('meaning: reports wrong-type when the candidate matches the reading instead', () => {
+    const ctx = { type: 'meaning', prompt: '寒い', readings: ['さむい'], meanings: ['cold'] };
+    const r = checkAnswer(ctx, makeTransformers(), 'さむい');
+    expect(r.success).toBe(false);
+    expect(r.transcript.reason).toBe('wrong-type');
+    expect(r.transcript.type).toBe('meaning');
+  });
+
+  test('name: reports wrong-type when the candidate matches the reading instead', () => {
+    const ctx = { type: 'name', prompt: '一', readings: ['いち'], meanings: ['ground'] };
+    const r = checkAnswer(ctx, makeTransformers(), 'いち');
+    expect(r.success).toBe(false);
+    expect(r.transcript.reason).toBe('wrong-type');
+  });
+});
+
 // ── Name questions ────────────────────────────────────────────────────────────
 
 describe('name questions (radicals)', () => {

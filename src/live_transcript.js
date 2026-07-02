@@ -250,6 +250,19 @@ export function setIdleIndicatorState(state) {
   else label.textContent = 'Listening';
 }
 
+// Turns a checkAnswer failure reason into a short, actionable hint shown
+// next to the raw heard text (see flashcards.js's failureReason).
+function reasonHint(transcript) {
+  if (transcript.reason === 'not-loaded') return 'loading answers…';
+  if (transcript.reason === 'wrong-type') {
+    return transcript.type === 'reading'
+      ? "that's the meaning — say the reading"
+      : "that's the reading — say the meaning";
+  }
+  if (transcript.reason === 'no-match') return 'no match';
+  return null;
+}
+
 export function logTranscript(settings, transcript) {
   if (!settings.transcript) return;
   const container = document.querySelector('div#kikoe-transcript-container');
@@ -260,9 +273,14 @@ export function logTranscript(settings, transcript) {
   }
 
   const previous = document.getElementById(`transcript-${COUNTER - 1}`);
+  // A reason arrives on the same raw text as the interim log that preceded
+  // it (see app.js's handleRecognitionResult) — treat it like `matched`
+  // below so the hint replaces the bare raw bubble instead of being
+  // swallowed by the same-raw dedup.
+  const hasNewInfo = transcript.matched || transcript.reason;
 
-  if (previous && transcript.raw === previous.raw && !transcript.matched) return;
-  if (previous && transcript.raw === previous.raw && transcript.matched) {
+  if (previous && transcript.raw === previous.raw && !hasNewInfo) return;
+  if (previous && transcript.raw === previous.raw && hasNewInfo) {
     clearTranscriptWith(`transcript-${COUNTER - 1}`);
   }
 
@@ -293,6 +311,14 @@ export function logTranscript(settings, transcript) {
     matched.className = 'kikoe-chip-matched';
     matched.textContent = '→ ' + transcript.matched;
     el.appendChild(matched);
+  } else {
+    const hint = reasonHint(transcript);
+    if (hint) {
+      const hintEl = document.createElement('span');
+      hintEl.className = 'kikoe-chip-matched';
+      hintEl.textContent = '— ' + hint;
+      el.appendChild(hintEl);
+    }
   }
 
   container.style.cssText = getContainerStyle(settings);

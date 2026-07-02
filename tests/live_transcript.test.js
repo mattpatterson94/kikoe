@@ -108,6 +108,37 @@ describe('logTranscript', () => {
     expect(texts.some(t => t.includes('した'))).toBe(false);
   });
 
+  test('shows a "no match" hint for a no-match failure reason', () => {
+    logTranscript(settings(), { raw: 'かい', reason: 'no-match' });
+    const container = document.getElementById('kikoe-transcript-container');
+    expect(container.children[0].textContent).toContain('かい');
+    expect(container.children[0].textContent).toContain('no match');
+  });
+
+  test('shows a "loading" hint for a not-loaded failure reason', () => {
+    logTranscript(settings(), { raw: 'かい', reason: 'not-loaded' });
+    const container = document.getElementById('kikoe-transcript-container');
+    expect(container.children[0].textContent).toContain('loading answers');
+  });
+
+  test('shows a reading-specific hint for a wrong-type failure on a reading question', () => {
+    logTranscript(settings(), { raw: 'cold', reason: 'wrong-type', type: 'reading' });
+    const container = document.getElementById('kikoe-transcript-container');
+    expect(container.children[0].textContent).toContain("that's the meaning");
+  });
+
+  test('shows a meaning-specific hint for a wrong-type failure on a meaning question', () => {
+    logTranscript(settings(), { raw: 'さむい', reason: 'wrong-type', type: 'meaning' });
+    const container = document.getElementById('kikoe-transcript-container');
+    expect(container.children[0].textContent).toContain("that's the reading");
+  });
+
+  test('does not show a hint when a match was found', () => {
+    logTranscript(settings(), { raw: 'した', matched: '下' });
+    const container = document.getElementById('kikoe-transcript-container');
+    expect(container.children[0].textContent).not.toContain('no match');
+  });
+
   // Bug reproduction: logTranscript must not crash when the container has been
   // removed from the DOM (e.g. WaniKani re-renders and wipes its body content).
   test('REGRESSION: does not throw when the transcript container is missing', () => {
