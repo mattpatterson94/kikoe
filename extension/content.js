@@ -5,6 +5,7 @@
 
 import { defaults } from '../src/settings.js';
 import { detectSite } from '../src/site.js';
+import { debugLog, setDebugLogging } from '../src/logger.js';
 
 export const CACHE_PREFIX = 'kikoe_subj_';
 
@@ -43,23 +44,23 @@ export async function getApiToken() {
   // Prefer token entered manually in the options page.
   const synced = await chrome.storage.sync.get('apiToken');
   if (synced.apiToken) {
-    console.log('[kikoe] using API token from options');
+    debugLog('using API token from options');
     return synced.apiToken;
   }
 
   // Fall back to previously auto-scraped token.
   const cached = await chrome.storage.local.get('kikoe_apiToken');
   if (cached.kikoe_apiToken) {
-    console.log('[kikoe] using cached auto-scraped API token');
+    debugLog('using cached auto-scraped API token');
     return cached.kikoe_apiToken;
   }
 
   // Last resort: scrape from the settings page.
-  console.log('[kikoe] attempting to scrape API token from /settings/account');
+  debugLog('attempting to scrape API token from /settings/account');
   const token = await scrapeApiToken();
   if (token) {
     await chrome.storage.local.set({ kikoe_apiToken: token });
-    console.log('[kikoe] auto-discovered API token');
+    debugLog('auto-discovered API token');
   } else {
     console.warn('[kikoe] could not find API token — open extension options and paste your WaniKani v2 API token');
   }
@@ -250,6 +251,7 @@ async function main() {
   if (!site) return;
 
   const settings = await getSettings();
+  setDebugLogging(settings.debug);
   const base = chrome.runtime.getURL('');
 
   // The API token (and subject fetching) is WaniKani-only — BunPro's accepted
@@ -296,6 +298,7 @@ async function main() {
       updated[k] = newValue;
     }
     currentSettings = updated;
+    setDebugLogging(updated.debug);
     const { apiToken: _, ...safeSettings } = updated;
     document.dispatchEvent(new CustomEvent('kikoe:settingsChanged', {
       detail: safeSettings
