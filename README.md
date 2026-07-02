@@ -220,6 +220,14 @@ firefox/              # assembled Firefox extension (output of build)
 - Try speaking more slowly and clearly.
 - For reading questions, romaji input is also accepted.
 
+## Acknowledgments
+
+Kikoe builds on ideas from earlier userscripts:
+
+- [WaniKani Speed](https://greasyfork.org/en/scripts/377778-wanikani-speed) by roboro
+- [WK Voice Recognition Experiment](https://greasyfork.org/scripts/12431-wk-voice-recognition-experiment) by okonomichiyaki
+- [WaniKani Open Framework](https://greasyfork.org/en/scripts/38582-wanikani-open-framework) by Robin Findley
+
 ## License
 
 See [LICENSE](LICENSE) for details.
