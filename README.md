@@ -27,8 +27,8 @@
 ## Building from Source
 
 ```bash
-git clone https://github.com/mattpatterson94/wanikani-koe.git
-cd wanikani-koe
+git clone https://github.com/mattpatterson94/kikoe.git
+cd kikoe
 npm run build
 ```
 
