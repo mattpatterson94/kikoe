@@ -335,6 +335,112 @@ describe('reading questions', () => {
   });
 });
 
+// ── Custom corrections ────────────────────────────────────────────────────────
+
+describe('custom corrections', () => {
+  test('reading: maps a heard string to the intended kana', () => {
+    const ctx = { type: 'reading', prompt: '肘', readings: ['ひじ'] };
+    const corrections = [{ heard: 'PG', intended: 'ひじ' }];
+    const r = checkAnswer(ctx, makeTransformers(), 'PG', { corrections });
+    expect(r.success).toBe(true);
+    expect(r.answer).toBe('ひじ');
+  });
+
+  test('reading: a heard string can map to multiple intended readings', () => {
+    const corrections = [
+      { heard: 'q', intended: 'きゅう' },
+      { heard: 'q', intended: 'く' },
+    ];
+    const kyuu = checkAnswer({ type: 'reading', prompt: '九', readings: ['きゅう'] }, makeTransformers(), 'q', { corrections });
+    expect(kyuu.answer).toBe('きゅう');
+    const ku = checkAnswer({ type: 'reading', prompt: '九', readings: ['く'] }, makeTransformers(), 'q', { corrections });
+    expect(ku.answer).toBe('く');
+  });
+
+  test('reading: converts a romaji intended value to kana ("shiri" → しり)', () => {
+    const ctx = { type: 'reading', prompt: '尻', readings: ['しり'] };
+    const corrections = [{ heard: 'celery', intended: 'shiri' }];
+    const r = checkAnswer(ctx, makeTransformers(), 'celery', { corrections });
+    expect(r.success).toBe(true);
+    expect(r.answer).toBe('しり');
+  });
+
+  test('reading: user entry takes precedence over the built-in homonym table', () => {
+    // Built-in table maps 'ec2' → いしつ; both readings are accepted here,
+    // so the submitted answer shows which table won.
+    const ctx = { type: 'reading', prompt: '遺失', readings: ['いしつ', 'いじつ'] };
+    const corrections = [{ heard: 'ec2', intended: 'いじつ' }];
+    const r = checkAnswer(ctx, makeTransformers(), 'ec2', { corrections });
+    expect(r.success).toBe(true);
+    expect(r.answer).toBe('いじつ');
+  });
+
+  test('reading: falls back to the built-in table when the user entry does not match', () => {
+    const ctx = { type: 'reading', prompt: '遺失', readings: ['いしつ'] };
+    const corrections = [{ heard: 'ec2', intended: 'まったくちがう' }];
+    const r = checkAnswer(ctx, makeTransformers(), 'ec2', { corrections });
+    expect(r.success).toBe(true);
+    expect(r.answer).toBe('いしつ');
+  });
+
+  test('meaning: maps a heard phrase to the intended meaning', () => {
+    const ctx = { type: 'meaning', prompt: '胸郭', meanings: ['ribcage'] };
+    const corrections = [{ heard: 'web cage', intended: 'ribcage' }];
+    const r = checkAnswer(ctx, makeTransformers(), 'web cage', { corrections });
+    expect(r.success).toBe(true);
+    expect(r.answer).toBe('ribcage');
+  });
+
+  test('meaning: user entry takes precedence over the built-in table', () => {
+    // Built-in table maps 'rib cage' → ribcage; both meanings are accepted
+    // here, so the submitted answer shows which table won.
+    const ctx = { type: 'meaning', meanings: ['ribcage', 'cage'] };
+    const corrections = [{ heard: 'rib cage', intended: 'cage' }];
+    const r = checkAnswer(ctx, makeTransformers(), 'rib cage', { corrections });
+    expect(r.success).toBe(true);
+    expect(r.answer).toBe('cage');
+  });
+
+  test('name: applies to radical name questions', () => {
+    const ctx = { type: 'name', prompt: '一', category: 'radical', meanings: ['ground'] };
+    const corrections = [{ heard: 'grounded', intended: 'ground' }];
+    const r = checkAnswer(ctx, makeTransformers(), 'grounded', { corrections });
+    expect(r.success).toBe(true);
+    expect(r.answer).toBe('ground');
+  });
+
+  test('matching is case-insensitive on the heard side', () => {
+    const ctx = { type: 'meaning', meanings: ['ribcage'] };
+    const corrections = [{ heard: 'Web Cage', intended: 'ribcage' }];
+    const r = checkAnswer(ctx, makeTransformers(), 'WEB CAGE', { corrections });
+    expect(r.success).toBe(true);
+  });
+
+  test('blank or malformed entries are skipped without breaking matching', () => {
+    const ctx = { type: 'meaning', meanings: ['ribcage'] };
+    const corrections = [null, {}, { heard: '', intended: 'x' }, { heard: 'y' }, { heard: 'web cage', intended: 'ribcage' }];
+    const r = checkAnswer(ctx, makeTransformers(), 'web cage', { corrections });
+    expect(r.success).toBe(true);
+    expect(r.answer).toBe('ribcage');
+  });
+
+  test('reading: reports wrong-type when a custom correction matches the meaning instead', () => {
+    const ctx = { type: 'reading', prompt: '胸郭', readings: ['きょうかく'], meanings: ['ribcage'] };
+    const corrections = [{ heard: 'web cage', intended: 'ribcage' }];
+    const r = checkAnswer(ctx, makeTransformers(), 'web cage', { corrections });
+    expect(r.success).toBe(false);
+    expect(r.transcript.reason).toBe('wrong-type');
+  });
+
+  test('meaning: reports wrong-type when a custom correction matches the reading instead', () => {
+    const ctx = { type: 'meaning', prompt: '肘', readings: ['ひじ'], meanings: ['elbow'] };
+    const corrections = [{ heard: 'PG', intended: 'ひじ' }];
+    const r = checkAnswer(ctx, makeTransformers(), 'PG', { corrections });
+    expect(r.success).toBe(false);
+    expect(r.transcript.reason).toBe('wrong-type');
+  });
+});
+
 // ── Failure reasons ───────────────────────────────────────────────────────────
 
 describe('failure reasons', () => {

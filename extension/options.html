@@ -149,6 +149,57 @@
     a { color: var(--accent); }
     a:hover { color: var(--accent-hover); }
 
+    /* custom corrections editor */
+    .corrections-intro {
+      font-size: 0.8rem;
+      color: var(--text-soft);
+      margin: 10px 0 0;
+    }
+    .correction-header, .correction-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr 28px;
+      gap: 8px;
+      align-items: center;
+    }
+    /* display: grid above would otherwise override the UA's [hidden] rule */
+    .correction-header[hidden], .corrections-empty[hidden] { display: none; }
+    .correction-header {
+      font-size: 0.72rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--text-soft);
+      padding: 12px 0 4px;
+    }
+    .correction-row { padding: 4px 0; }
+    .correction-row input[type=text] { width: 100%; }
+    .correction-row .remove {
+      background: none;
+      border: none;
+      border-radius: 6px;
+      color: var(--text-soft);
+      font-size: 1rem;
+      line-height: 1;
+      padding: 6px 0;
+      cursor: pointer;
+    }
+    .correction-row .remove:hover { background: var(--accent-soft); color: var(--accent); }
+    .corrections-empty {
+      font-size: 0.85rem;
+      color: var(--text-soft);
+      padding: 10px 0;
+    }
+    #addCorrection {
+      background: none;
+      border: 1px solid var(--input-border);
+      color: var(--text);
+      font-size: 0.85rem;
+      font-weight: 500;
+      padding: 7px 14px;
+      margin: 10px 0 16px;
+    }
+    #addCorrection:hover { border-color: var(--accent); color: var(--accent); background: none; }
+
     .save-bar {
       position: fixed;
       bottom: 0;
@@ -262,6 +313,23 @@
       <label for="transcript_clear">Clear transcript between cards</label>
       <input type="checkbox" id="transcript_clear">
     </div>
+  </section>
+
+  <section class="card">
+    <h2>Custom Corrections</h2>
+    <p class="corrections-intro">
+      When speech recognition keeps mishearing an answer, map what it heard to
+      what you meant. Corrections apply to both readings and meanings, take
+      precedence over the built-in tables, and take effect on your next answer.
+    </p>
+    <div class="correction-header" id="correctionHeader" hidden>
+      <span>Heard</span>
+      <span>Intended</span>
+      <span></span>
+    </div>
+    <div id="corrections"></div>
+    <p class="corrections-empty" id="correctionsEmpty">No corrections yet.</p>
+    <button type="button" id="addCorrection">+ Add correction</button>
   </section>
 
   <section class="card">

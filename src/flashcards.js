@@ -79,6 +79,22 @@ const meaningCorrections = {
   'rib cage': 'ribcage',
 };
 
+// User-defined corrections from settings: an array of { heard, intended }
+// pairs. Multiple pairs may share a heard string (like the built-in
+// '9': ['きゅう', 'く', 'くう'] homonym), so the lookup maps
+// heard → [intended, ...]. Consulted before the built-in tables so users can
+// override shipped entries. Blank or malformed pairs are skipped.
+function buildCorrectionLookup(pairs) {
+  const lookup = {};
+  for (const pair of pairs || []) {
+    const heard = (pair?.heard ?? '').trim().toLowerCase();
+    const intended = (pair?.intended ?? '').trim();
+    if (!heard || !intended) continue;
+    (lookup[heard] = lookup[heard] || []).push(intended);
+  }
+  return lookup;
+}
+
 // Normalise for submission: strip leading articles and trailing punctuation.
 // For Japanese: collapse spaces and convert to hiragana.
 // For English: keep spaces so multi-word meanings are preserved.
@@ -156,11 +172,16 @@ function kanaForms(kana) {
 // detect a meaning-question answer that was actually the reading (or vice
 // versa), so the failure can be reported as "wrong type" instead of a bare
 // non-match.
-function matchesAnyReading(candidates, acceptedReadings) {
+function matchesAnyReading(candidates, acceptedReadings, customLookup = {}) {
   if (!acceptedReadings.length) return false;
   for (const c of candidates) {
     if (isKana(c.data)) {
       for (const answer of kanaForms(c.data)) {
+        if (acceptedReadings.includes(answer)) return true;
+      }
+    }
+    for (const intended of customLookup[c.data.toLowerCase()] || []) {
+      for (const answer of kanaForms(intended)) {
         if (acceptedReadings.includes(answer)) return true;
       }
     }
@@ -174,13 +195,16 @@ function matchesAnyReading(candidates, acceptedReadings) {
 // Whether any candidate resolves to one of the accepted meanings — the
 // meaning-side counterpart of matchesAnyReading, used for the same wrong-type
 // detection on reading questions.
-function matchesAnyMeaning(candidates, normalizedMeanings) {
+function matchesAnyMeaning(candidates, normalizedMeanings, customLookup = {}) {
   if (!normalizedMeanings.length) return false;
   for (const c of candidates) {
+    const custom = customLookup[c.data.toLowerCase()] || [];
     const corrected = meaningCorrections[c.data.toLowerCase()] ?? c.data;
-    const norm = normalize(corrected);
-    if (normalizedMeanings.includes(norm)) return true;
-    if (normalizedMeanings.includes(norm.replaceAll(' ', ''))) return true;
+    for (const text of [...custom, corrected]) {
+      const norm = normalize(text);
+      if (normalizedMeanings.includes(norm)) return true;
+      if (normalizedMeanings.includes(norm.replaceAll(' ', ''))) return true;
+    }
   }
   return false;
 }
@@ -191,14 +215,14 @@ function matchesAnyMeaning(candidates, normalizedMeanings) {
 // - 'wrong-type': the candidate matches the *other* answer set (e.g. spoke
 //   the meaning on a reading question) — the most actionable case.
 // - 'no-match': heard something, but nothing matched either answer set.
-function failureReason(candidates, context) {
+function failureReason(candidates, context, customLookup = {}) {
   const readings = context.readings || [];
   const meanings = context.meanings || [];
   if (readings.length === 0 && meanings.length === 0) return 'not-loaded';
-  if (context.type === 'reading' && matchesAnyMeaning(candidates, meanings.map(normalize))) {
+  if (context.type === 'reading' && matchesAnyMeaning(candidates, meanings.map(normalize), customLookup)) {
     return 'wrong-type';
   }
-  if ((context.type === 'meaning' || context.type === 'name') && matchesAnyReading(candidates, readings)) {
+  if ((context.type === 'meaning' || context.type === 'name') && matchesAnyReading(candidates, readings, customLookup)) {
     return 'wrong-type';
   }
   return 'no-match';
@@ -234,7 +258,8 @@ function generateCandidates(transformers, raw) {
 // (e.g. "b" → "び"). For meaning/name questions: submit normalised English.
 export function checkAnswer(context, transformers, raw, opts = {}) {
   const { type } = context;
-  const { fuzzyMeaning = false } = opts;
+  const { fuzzyMeaning = false, corrections = [] } = opts;
+  const customLookup = buildCorrectionLookup(corrections);
   const candidates = generateCandidates(transformers, raw);
 
   if (type === 'reading') {
@@ -260,6 +285,15 @@ export function checkAnswer(context, transformers, raw, opts = {}) {
           }
         }
       }
+      // User corrections first, so they can override the built-in homonyms.
+      // kanaForms also converts a romaji intended value ("shiri" → しり).
+      for (const intended of customLookup[c.data.toLowerCase()] || []) {
+        for (const answer of kanaForms(intended)) {
+          if (matchesReading(answer)) {
+            return { success: true, answer, transcript: { raw, matched: answer } };
+          }
+        }
+      }
       const h = homonyms[c.data.toLowerCase()];
       const readings = Array.isArray(h) ? h : [h];
       const matched = readings.find(matchesReading);
@@ -276,7 +310,7 @@ export function checkAnswer(context, transformers, raw, opts = {}) {
     return {
       success: false,
       error: false,
-      transcript: { raw, reason: failureReason(candidates, context), type: 'reading' },
+      transcript: { raw, reason: failureReason(candidates, context, customLookup), type: 'reading' },
     };
   }
 
@@ -304,23 +338,27 @@ export function checkAnswer(context, transformers, raw, opts = {}) {
     }
 
     for (const c of candidates) {
-      // Apply English SR corrections before normalizing.
+      // Apply SR corrections before normalizing — user corrections first,
+      // so they can override the built-in table.
+      const custom = customLookup[c.data.toLowerCase()] || [];
       const corrected = meaningCorrections[c.data.toLowerCase()] ?? c.data;
-      const norm = normalize(corrected);
-      const answer = matchingAnswer(norm);
-      if (answer !== null) {
-        return {
-          success: true,
-          answer,
-          transcript: { raw, matched: answer !== raw ? answer : undefined },
-        };
+      for (const text of [...custom, corrected]) {
+        const norm = normalize(text);
+        const answer = matchingAnswer(norm);
+        if (answer !== null) {
+          return {
+            success: true,
+            answer,
+            transcript: { raw, matched: answer !== raw ? answer : undefined },
+          };
+        }
       }
     }
     // No candidate matched — don't submit.
     return {
       success: false,
       error: false,
-      transcript: { raw, reason: failureReason(candidates, context), type },
+      transcript: { raw, reason: failureReason(candidates, context, customLookup), type },
     };
   }
 
