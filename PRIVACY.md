@@ -28,7 +28,7 @@ Your preferences (such as turbo mode and transcript overlay visibility) are stor
 
 Kikoe uses your browser's built-in Web Speech API to convert your speech to text. The extension itself never records, stores, or transmits audio.
 
-Note that your browser's speech recognition service may process audio on the browser vendor's servers (for example, Chrome's speech recognition is provided by Google). This processing is performed by your browser, not by Kikoe, and is governed by your browser vendor's privacy policy.
+Your browser's speech recognition service may process audio on the browser vendor's servers (for example, Chrome's speech recognition is provided by Google). This processing is performed by your browser, not by Kikoe, and is governed by your browser vendor's privacy policy.
 
 ### Page content
 
