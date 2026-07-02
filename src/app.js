@@ -139,9 +139,27 @@ async function startListener(dictionary) {
     '不正解': site.markWrong, 'ふせいかい': site.markWrong, '間違い': site.markWrong,
     'まちがい': site.markWrong, 'だめ': site.markWrong, 'ダメ': site.markWrong,
     '駄目': site.markWrong,
-    'next': site.clickNext, 'つぎ': site.clickNext, '次': site.clickNext, 'NEXT': site.clickNext,
+    'next': site.clickNext, 'つぎ': site.clickNext, '次': site.clickNext,
     'ねくすと': site.clickNext, 'ネクスト': site.clickNext,
   };
+
+  // Recognizer finals routinely arrive capitalized/punctuated ("Next.") even
+  // though the command table only has lowercase keys — normalize before
+  // lookup instead of growing the table with every casing variant.
+  function normalizeCommand(raw) {
+    return raw.trim().toLowerCase().replace(/[.,!?;:。！？]+$/, '').trim();
+  }
+
+  // Mirrors checkAlternatives below: try every alternative the recognizer
+  // offered, not just the top one, since a garbled top slot can still have
+  // the intended command further down the list.
+  function matchCommand(raws) {
+    for (const raw of raws) {
+      const command = commands[normalizeCommand(raw)];
+      if (command) return command;
+    }
+    return null;
+  }
 
   let submitted = false;
   let pendingRaws = null;
@@ -206,8 +224,9 @@ async function startListener(dictionary) {
     if (!final) return;
 
     // Voice commands take priority over answer submission.
-    if (commands[raw]) {
-      commands[raw]();
+    const command = matchCommand(raws);
+    if (command) {
+      command();
       return;
     }
 
