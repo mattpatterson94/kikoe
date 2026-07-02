@@ -331,7 +331,12 @@ async function startListener(dictionary) {
 }
 
 async function init() {
-  const dictionary = await loadDictionary(_config.base);
+  // Don't block startup on the ~12 MB dictionary fetch/parse — start
+  // listening immediately with an empty dictionary and let it fill in place
+  // as entries arrive. Transformers hold a reference to the same object, so
+  // no further plumbing is needed once it's populated.
+  const { dictionary, ready: dictionaryReady } = loadDictionary(_config.base);
+  dictionaryReady.catch(err => console.error('[kikoe] dictionary load failed:', err));
   let listenerStarted = false;
 
   function tryStart() {

@@ -26,6 +26,9 @@ mkdir -p data
 [ -f data/jmdict.json ]    || curl -fsSL "$DATA_BASE/data/jmdict.json"    -o data/jmdict.json
 [ -f data/kanjidic2.json ] || curl -fsSL "$DATA_BASE/data/kanjidic2.json" -o data/kanjidic2.json
 
+echo "→ Trimming dictionary data to the fields kikoe actually reads..."
+node scripts/trim-dictionary-data.js data/jmdict.json data/kanjidic2.json
+
 echo "→ Assembling Chrome extension..."
 mkdir -p chrome/data
 cp bundle.js chrome/bundle.js
