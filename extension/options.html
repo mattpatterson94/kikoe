@@ -217,12 +217,6 @@
       align-items: center;
       justify-content: center;
     }
-    .save-bar #status {
-      position: absolute;
-      right: 0;
-      top: 50%;
-      transform: translateY(-50%);
-    }
     button {
       background: var(--accent);
       color: #fff;
@@ -240,7 +234,7 @@
       outline: none;
       box-shadow: 0 0 0 3px var(--accent-soft);
     }
-    #status { font-size: 0.9rem; color: var(--ok); font-weight: 500; }
+    button:disabled { cursor: default; background: var(--ok); }
   </style>
 </head>
 <body>
@@ -323,7 +317,6 @@
   <div class="save-bar">
     <div class="inner">
       <button id="save">Save settings</button>
-      <div id="status"></div>
     </div>
   </div>
 
