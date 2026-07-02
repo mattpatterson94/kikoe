@@ -184,8 +184,12 @@ function extractSubjectIds(node, key = null, depth = 0) {
   return null;
 }
 
-// Upcoming subject IDs for the current session, in queue order.
-export function getQueuedSubjectIds(limit = 50) {
+// Upcoming subject IDs for the current session, in queue order. Returns the
+// whole queue — slicing it into API-sized batches happens on the
+// content-script side, which owns the already-requested bookkeeping. The cap
+// only guards against extractSubjectIds misidentifying some giant unrelated
+// integer array, and sits well above any real session length.
+export function getQueuedSubjectIds(cap = 1000) {
   for (const script of document.querySelectorAll('script[type="application/json"]')) {
     let data;
     try {
@@ -194,7 +198,7 @@ export function getQueuedSubjectIds(limit = 50) {
       continue;
     }
     const ids = extractSubjectIds(data);
-    if (ids?.length) return ids.slice(0, limit);
+    if (ids?.length) return ids.slice(0, cap);
   }
   return [];
 }

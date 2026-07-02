@@ -454,7 +454,13 @@ describe('getQueuedSubjectIds', () => {
     expect(getQueuedSubjectIds()).toEqual([7, 8, 9]);
   });
 
-  test('respects the limit', () => {
+  test('returns the full queue past 50 items — batching is the content script\'s job', () => {
+    const ids = Array.from({ length: 120 }, (_, i) => i + 1);
+    setQueueJSON(ids);
+    expect(getQueuedSubjectIds()).toEqual(ids);
+  });
+
+  test('caps pathologically large arrays', () => {
     setQueueJSON([1, 2, 3, 4, 5]);
     expect(getQueuedSubjectIds(2)).toEqual([1, 2]);
   });
