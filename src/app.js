@@ -96,12 +96,24 @@ async function startListener(dictionary) {
   // reflect that so a longer wait doesn't look like a stuck "Loading…".
   document.addEventListener('kikoe:subjectRetry', () => setIdleIndicatorState('retrying'));
 
+  // Ask the content script to warm the cache for upcoming cards so they're
+  // ready by the time they appear — see requestSubjects for the per-card path
+  // this backstops.
+  function prefetchUpcoming() {
+    if (!usesSubjects || typeof site.getQueuedSubjectIds !== 'function') return;
+    const subjectIds = site.getQueuedSubjectIds();
+    if (subjectIds.length) {
+      document.dispatchEvent(new CustomEvent('kikoe:prefetchRequest', { detail: { subjectIds } }));
+    }
+  }
+
   // Pre-fetch subjects for the initial card.
   if (usesSubjects && context?.prompt && context?.category) {
     subjects = await loadSubjects(context.prompt, context.category);
     context = site.getContext(subjects);
     restoreIdleIndicator();
   }
+  prefetchUpcoming();
 
   const transformers = [
     new ToHiragana(), new ConvertWo(),
@@ -202,6 +214,7 @@ async function startListener(dictionary) {
         subjects = await loadSubjects(newContext.prompt, newContext.category);
         context = site.getContext(subjects);
         restoreIdleIndicator();
+        prefetchUpcoming();
         // Retry any transcript that arrived while subjects were loading.
         if (pendingRaws && !submitted) {
           const result = checkAlternatives(context, pendingRaws);
