@@ -101,6 +101,86 @@ describe('meaning questions', () => {
   });
 });
 
+// ── Fuzzy meaning matching (WaniKani parity) ─────────────────────────────────
+
+describe('fuzzy meaning matching', () => {
+  test('is off by default — a near-miss does not submit', () => {
+    const ctx = { type: 'meaning', meanings: ['coldhearted'] };
+    const r = checkAnswer(ctx, makeTransformers(), 'coldhearte');
+    expect(r.success).toBe(false);
+  });
+
+  test('accepts a near-miss within tolerance when enabled, and submits the canonical meaning', () => {
+    const ctx = { type: 'meaning', meanings: ['coldhearted'] };
+    const r = checkAnswer(ctx, makeTransformers(), 'coldhearte', { fuzzyMeaning: true });
+    expect(r.success).toBe(true);
+    expect(r.answer).toBe('coldhearted');
+  });
+
+  test('rejects a candidate beyond tolerance even when enabled', () => {
+    const ctx = { type: 'meaning', meanings: ['coldhearted'] };
+    const r = checkAnswer(ctx, makeTransformers(), 'warmhearted', { fuzzyMeaning: true });
+    expect(r.success).toBe(false);
+  });
+
+  // Boundary: 3 chars → 0 tolerance (exact only), 4-5 → 1, 6-8 → 2, 9+ → 3.
+  test('boundary: 3-char meaning requires an exact match (0 tolerance)', () => {
+    const ctx = { type: 'meaning', meanings: ['dog'] };
+    expect(checkAnswer(ctx, makeTransformers(), 'dog', { fuzzyMeaning: true }).success).toBe(true);
+    expect(checkAnswer(ctx, makeTransformers(), 'dob', { fuzzyMeaning: true }).success).toBe(false);
+  });
+
+  test('boundary: 4-char meaning tolerates 1 edit, not 2', () => {
+    const ctx = { type: 'meaning', meanings: ['frog'] };
+    expect(checkAnswer(ctx, makeTransformers(), 'frag', { fuzzyMeaning: true }).success).toBe(true);
+    expect(checkAnswer(ctx, makeTransformers(), 'frab', { fuzzyMeaning: true }).success).toBe(false);
+  });
+
+  test('boundary: 5-char meaning tolerates 1 edit, not 2', () => {
+    const ctx = { type: 'meaning', meanings: ['horse'] };
+    expect(checkAnswer(ctx, makeTransformers(), 'horve', { fuzzyMeaning: true }).success).toBe(true);
+    expect(checkAnswer(ctx, makeTransformers(), 'horvz', { fuzzyMeaning: true }).success).toBe(false);
+  });
+
+  test('boundary: 6-char meaning tolerates 2 edits, not 3', () => {
+    const ctx = { type: 'meaning', meanings: ['rabbit'] };
+    expect(checkAnswer(ctx, makeTransformers(), 'rabbiz', { fuzzyMeaning: true }).success).toBe(true);
+    expect(checkAnswer(ctx, makeTransformers(), 'rzzziz', { fuzzyMeaning: true }).success).toBe(false);
+  });
+
+  test('boundary: 8-char meaning tolerates 2 edits, not 3', () => {
+    const ctx = { type: 'meaning', meanings: ['elephant'] };
+    expect(checkAnswer(ctx, makeTransformers(), 'elephont', { fuzzyMeaning: true }).success).toBe(true);
+    expect(checkAnswer(ctx, makeTransformers(), 'ezzphont', { fuzzyMeaning: true }).success).toBe(false);
+  });
+
+  test('boundary: 9-char meaning tolerates 3 edits, not 4', () => {
+    const ctx = { type: 'meaning', meanings: ['blackbird'] };
+    expect(checkAnswer(ctx, makeTransformers(), 'blzckbard', { fuzzyMeaning: true }).success).toBe(true);
+    expect(checkAnswer(ctx, makeTransformers(), 'blzzkzzrd', { fuzzyMeaning: true }).success).toBe(false);
+  });
+
+  test('applies to name questions (radicals) as well as meanings', () => {
+    const ctx = { type: 'name', meanings: ['ground'] };
+    const r = checkAnswer(ctx, makeTransformers(), 'grond', { fuzzyMeaning: true });
+    expect(r.success).toBe(true);
+    expect(r.answer).toBe('ground');
+  });
+
+  test('never applies to reading questions, even when enabled', () => {
+    const ctx = { type: 'reading', prompt: '仙台', readings: ['せんだい'] };
+    const r = checkAnswer(ctx, makeTransformers(), 'せんだig', { fuzzyMeaning: true });
+    expect(r.success).toBe(false);
+  });
+
+  test('picks the closest meaning when multiple are within tolerance', () => {
+    const ctx = { type: 'meaning', meanings: ['horse', 'house'] };
+    const r = checkAnswer(ctx, makeTransformers(), 'horse', { fuzzyMeaning: true });
+    expect(r.success).toBe(true);
+    expect(r.answer).toBe('horse');
+  });
+});
+
 // ── Reading questions ─────────────────────────────────────────────────────────
 
 describe('reading questions', () => {

@@ -369,3 +369,90 @@ describe('startListener voice commands', () => {
     expect(clickSpy).toHaveBeenCalled();
   });
 });
+
+describe('startListener fuzzy meaning matching (WaniKani)', () => {
+  // Same MockSpeechRecognition shape as above — kept local to this describe
+  // block so its instance list doesn't leak between describes.
+  class MockSpeechRecognition {
+    constructor() {
+      this.continuous = false;
+      this.interimResults = false;
+      this.maxAlternatives = 1;
+      this.lang = '';
+      this.nativeStart = vi.fn();
+      this.nativeStop = vi.fn();
+      this.start = this.nativeStart;
+      this.stop = this.nativeStop;
+      MockSpeechRecognition.instances.push(this);
+    }
+  }
+  MockSpeechRecognition.instances = [];
+
+  beforeEach(() => {
+    MockSpeechRecognition.instances = [];
+    vi.stubGlobal('webkitSpeechRecognition', MockSpeechRecognition);
+  });
+
+  function setReviewCardDOM() {
+    document.body.innerHTML += `
+      <div class="character-header__characters">下</div>
+      <span class="quiz-input__question-category">Kanji</span>
+      <span class="quiz-input__question-type">Meaning</span>
+      <input id="user-response" type="text" />
+      <button class="quiz-input__submit-button">Next</button>
+    `;
+  }
+
+  function finalResult(...transcripts) {
+    const alternatives = transcripts.map(t => ({ transcript: t }));
+    alternatives.isFinal = true;
+    return alternatives;
+  }
+
+  function interceptSubjectRequest() {
+    let respond;
+    const ready = new Promise((resolve) => {
+      document.addEventListener('kikoe:subjectRequest', function handler(e) {
+        document.removeEventListener('kikoe:subjectRequest', handler);
+        const { prompt, category } = e.detail;
+        respond = (subjects) => document.dispatchEvent(new CustomEvent('kikoe:subjectData', {
+          detail: { prompt, category, subjects, error: null },
+        }));
+        resolve();
+      });
+    });
+    return { ready, respond: (subjects) => respond(subjects) };
+  }
+
+  test('a near-miss meaning (edit distance within WaniKani tolerance) still submits the canonical meaning', async () => {
+    setReviewCardDOM();
+    stampConfig({ hasApiToken: true });
+    const subjectRequest = interceptSubjectRequest();
+
+    await importApp();
+    await subjectRequest.ready;
+    subjectRequest.respond([{
+      id: 1, object: 'kanji',
+      data: {
+        slug: '下', characters: '下',
+        meanings: [{ meaning: 'Below', accepted_answer: true }],
+        auxiliary_meanings: [],
+      },
+    }]);
+
+    const userResponse = document.getElementById('user-response');
+    await vi.waitFor(() => {
+      if (!document.getElementById('kikoe-idle-label')?.textContent) throw new Error('not ready yet');
+    });
+
+    // "belou" is one substitution away from "below" — within the 5-char
+    // tolerance (1) WaniKani's own fuzzy check allows.
+    const native = MockSpeechRecognition.instances[0];
+    native.onresult({ resultIndex: 0, results: [finalResult('belou')] });
+
+    await vi.waitFor(() => {
+      if (userResponse.value !== 'below') throw new Error('not submitted yet');
+    });
+    expect(userResponse.value).toBe('below');
+  });
+});
