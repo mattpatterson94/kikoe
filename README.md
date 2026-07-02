@@ -88,6 +88,9 @@ Once installed and configured, the extension activates automatically on any Wani
 | `next` / `次` / `つぎ` | Advance to the next card |
 | `wrong` / `incorrect` / `mistake` | Mark the current answer wrong |
 | `間違い` / `まちがい` / `だめ` | Mark the current answer wrong (Japanese) |
+| `pause` / `stop listening` / `ストップ` | Mute the mic |
+
+Muting is one-way by voice — since recognition stops while muted, there's no voice command to unmute. Click the listening indicator (bottom-right) to toggle the mic on/off at any time; it also shows a distinct "Muted" state.
 
 **How matching works:**
 
@@ -164,7 +167,6 @@ src/
   settings.js         # settings management
   speed.js            # lightning mode / speed enhancements
   live_transcript.js  # transcript overlay UI
-  mic.js              # microphone helpers
   util.js             # shared utilities
   candidates/         # speech-to-answer transformation pipeline
     to_hiragana.js
