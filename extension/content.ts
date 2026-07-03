@@ -297,6 +297,12 @@ async function main(): Promise<void> {
   injectScript(base + 'injected.js');
   injectScript(base + 'bundle.js');
 
+  // The app (page world) can't reach extension APIs — forward its request to
+  // the background script, the only context that can open the options page.
+  document.addEventListener('kikoe:openOptions', () => {
+    chrome.runtime.sendMessage({ type: 'kikoe:openOptions' });
+  });
+
   if (site === 'wanikani') {
     document.addEventListener('kikoe:subjectRequest', async (e) => {
       const { prompt, category } = (e as CustomEvent<{ prompt: string; category: string }>).detail;

@@ -34,6 +34,7 @@ mkdir -p chrome/data
 cp bundle.js chrome/bundle.js
 cp content.js chrome/content.js
 cp extension/injected.js chrome/injected.js
+cp extension/background.js chrome/background.js
 cp extension/options.html chrome/options.html
 cp extension/options.js chrome/options.js
 cp data/jmdict.json chrome/data/jmdict.json
@@ -44,6 +45,7 @@ mkdir -p firefox/data
 cp bundle.js firefox/bundle.js
 cp content.js firefox/content.js
 cp extension/injected.js firefox/injected.js
+cp extension/background.js firefox/background.js
 cp extension/options.html firefox/options.html
 cp extension/options.js firefox/options.js
 cp data/jmdict.json firefox/data/jmdict.json

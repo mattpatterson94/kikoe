@@ -452,6 +452,29 @@ describe('startListener mute/pause control', () => {
     expect(native.nativeStart.mock.calls.length).toBeGreaterThan(startsBefore);
   });
 
+  test('clicking the indicator with no API token asks for the options page instead of muting', async () => {
+    setReviewCardDOM();
+    stampConfig({ hasApiToken: false });
+    await importApp();
+
+    const indicator = document.getElementById('kikoe-idle');
+    const label = document.getElementById('kikoe-idle-label');
+    await vi.waitFor(() => {
+      if (label.textContent !== '⚠ No API token') throw new Error('not in no-token state yet');
+    });
+
+    const openOptions = vi.fn();
+    document.addEventListener('kikoe:openOptions', openOptions);
+    const native = MockSpeechRecognition.instances[0];
+    const stopsBefore = native.nativeStop.mock.calls.length;
+    indicator.click();
+    document.removeEventListener('kikoe:openOptions', openOptions);
+
+    expect(openOptions).toHaveBeenCalledTimes(1);
+    expect(label.textContent).toBe('⚠ No API token');
+    expect(native.nativeStop.mock.calls.length).toBe(stopsBefore);
+  });
+
   test('a muted mic stays muted across a tab blur/focus cycle', async () => {
     setReviewCardDOM();
     stampConfig({ hasApiToken: true });

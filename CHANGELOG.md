@@ -56,7 +56,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
-- API token auto-discovery. The fallback scraped `/settings/account`, but
+- API token auto-discovery, replaced by a clickable indicator: the
+  "⚠ No API token" chip now opens the extension options page when clicked,
+  via a new background script (content scripts can't open the options page
+  themselves). The fallback scraped `/settings/account`, but
   WaniKani only shows tokens on `/settings/personal_access_tokens`, so it
   never found one — every setup already used the documented manual paste on
   the options page. The extension no longer fetches any WaniKani settings
