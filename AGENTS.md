@@ -32,8 +32,9 @@ it can't be fixed in scope, stop and flag it instead.
 - Plain ES modules, TypeScript throughout `src/` and for the bundled
   content script. New modules must be written in TypeScript. Do not use
   `any` casts or `@ts-ignore`/`@ts-expect-error` to silence type errors.
-- `extension/injected.js` and `extension/options.js` are copied verbatim into
-  the extension (no bundling/transpiling), so they must stay plain JS.
+- `extension/background.js`, `extension/injected.js`, and
+  `extension/options.js` are copied verbatim into the extension (no
+  bundling/transpiling), so they must stay plain JS.
 - Every module in `src/` has a matching test file in `tests/`; keep it that
   way when adding or renaming modules.
 - Pure-logic tests are TypeScript. The mock-heavy suites (app, content,
