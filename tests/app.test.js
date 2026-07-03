@@ -23,7 +23,7 @@ function stampConfig(overrides = {}) {
     hasApiToken: false,
     ...overrides,
   };
-  document.documentElement.dataset.kikoeConfig = Buffer.from(JSON.stringify(config)).toString('base64');
+  document.documentElement.dataset.kikoeConfig = JSON.stringify(config);
 }
 
 function stubDictionaryFetch() {

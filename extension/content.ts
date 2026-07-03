@@ -3,7 +3,7 @@
 // entered on the options page, fetches + caches subjects, and injects the
 // bridge + app bundle into the page context.
 
-import { defaults } from '../src/settings';
+import { defaults, encodeConfig } from '../src/settings';
 import type { Settings } from '../src/settings';
 import { detectSite } from '../src/site';
 import { debugLog, setDebugLogging } from '../src/logger';
@@ -292,7 +292,7 @@ async function main(): Promise<void> {
   let apiToken = site === 'wanikani' ? await getApiToken() : null;
   const hasApiToken = site === 'wanikani' ? !!apiToken : true;
   const config = buildSafeConfig(base, settings, hasApiToken);
-  document.documentElement.dataset.kikoeConfig = btoa(JSON.stringify(config));
+  document.documentElement.dataset.kikoeConfig = encodeConfig(config);
 
   injectScript(base + 'injected.js');
   injectScript(base + 'bundle.js');

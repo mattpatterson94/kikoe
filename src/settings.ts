@@ -37,6 +37,22 @@ export const defaults: Settings = {
   help_hint_shown: false,
 };
 
+// The config travels from the content script to the page bundle as plain
+// JSON in a data attribute — the DOM stores any Unicode losslessly, whereas
+// btoa() throws on non-Latin1 (e.g. Japanese custom corrections).
+export function encodeConfig(config: unknown): string {
+  return JSON.stringify(config);
+}
+
+export function decodeConfig<T>(encoded: string | undefined): T | null {
+  if (!encoded) return null;
+  try {
+    return JSON.parse(encoded) as T;
+  } catch {
+    return null;
+  }
+}
+
 // In the page-context bundle, settings are pushed in from the content script
 // via initSettings() at startup and updateSettings() on change events.
 let _settings: Settings = { ...defaults };

@@ -4,7 +4,7 @@ import { createRecognition, setLanguage } from './recognition';
 import * as wanikani from './wanikani';
 import * as bunpro from './bunpro';
 import { detectSite } from './site';
-import { initSettings, updateSettings, getSettings } from './settings';
+import { initSettings, updateSettings, getSettings, decodeConfig } from './settings';
 import type { Settings } from './settings';
 import { debugLog } from './logger';
 import { startSpeedEnhancer as startWanikaniSpeedEnhancer } from './speed';
@@ -97,7 +97,9 @@ const FUZZY_MEANING_MATCHING = SITE === 'wanikani';
 // Read config stamped by content.ts, then remove the attribute immediately.
 const _encoded = document.documentElement.dataset.kikoeConfig;
 document.documentElement.removeAttribute('data-kikoe-config');
-const _config = JSON.parse(atob(_encoded ?? '')) as AppConfig;
+const _decoded = decodeConfig<AppConfig>(_encoded);
+if (!_decoded) throw new Error('[kikoe] missing or malformed config stamp');
+const _config: AppConfig = _decoded;
 
 initSettings(_config.settings);
 debugLog('debug mode on — settings:', getSettings());
