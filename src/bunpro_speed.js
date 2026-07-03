@@ -15,7 +15,7 @@
 //   speed_show_info (bool)   – auto-open the hint on wrong answer
 
 import { clickNext, clickInfo } from './bunpro.js';
-import { debugLog } from './logger.js';
+import { debugLog } from './logger';
 
 const RESULT_DELAY_MS = 100;
 

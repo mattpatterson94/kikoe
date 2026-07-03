@@ -1,4 +1,4 @@
-import { createRecognition } from '../src/recognition.js';
+import { createRecognition } from '../src/recognition';
 
 let recognitionInstances;
 

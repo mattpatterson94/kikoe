@@ -1,4 +1,4 @@
-import { loadDictionary } from '../src/dict.js';
+import { loadDictionary } from '../src/dict';
 
 function stubFetch(responses) {
   vi.stubGlobal('fetch', vi.fn((url) => {

@@ -1,14 +1,14 @@
 import { checkAnswer } from './flashcards.js';
-import { createRecognition, setLanguage } from './recognition.js';
+import { createRecognition, setLanguage } from './recognition';
 import * as wanikani from './wanikani.js';
 import * as bunpro from './bunpro.js';
-import { detectSite } from './site.js';
-import { initSettings, updateSettings, getSettings } from './settings.js';
-import { debugLog } from './logger.js';
+import { detectSite } from './site';
+import { initSettings, updateSettings, getSettings } from './settings';
+import { debugLog } from './logger';
 import { startSpeedEnhancer as startWanikaniSpeedEnhancer } from './speed.js';
 import { startSpeedEnhancer as startBunproSpeedEnhancer } from './bunpro_speed.js';
 import { createTranscriptContainer, logTranscript, showIdleIndicator, setIdleIndicatorState } from './live_transcript.js';
-import { loadDictionary } from './dict.js';
+import { loadDictionary } from './dict';
 
 import { ToHiragana } from './candidates/to_hiragana.js';
 import { ConvertWo } from './candidates/convert_wo.js';

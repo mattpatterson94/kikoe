@@ -1,4 +1,3 @@
-
 // Short utterances and common on'yomi (かい, けい, どう, ...) are frequently
 // autocorrected by the recognizer into an unrelated real word, since its
 // language model favors known vocabulary over an isolated mora. The correct
@@ -9,14 +8,31 @@ const MAX_ALTERNATIVES = 5;
 
 // Errors after which retrying without backoff would just hot-loop against a
 // permission dialog or a missing device — the auto-restart in onend must stop.
-const FATAL_ERRORS = new Set(['not-allowed', 'service-not-allowed', 'audio-capture']);
+const FATAL_ERRORS = new Set<SpeechRecognitionErrorCode>([
+  'not-allowed', 'service-not-allowed', 'audio-capture',
+]);
 
 // Transient 'network' errors back off geometrically instead of restarting
 // immediately, so a flaky connection doesn't spin the recognizer in a loop.
 const NETWORK_BACKOFF_MS = 1000;
 const MAX_NETWORK_BACKOFF_MS = 8000;
 
-export function createRecognition(lang, callback, onError) {
+export type TranscriptCallback = (transcripts: string[], isFinal: boolean) => void;
+
+// The native recognizer, extended with pause/resume/restart controls that
+// manage the auto-restart behavior wired up in createRecognition.
+export interface KikoeRecognition extends SpeechRecognition {
+  pause(): void;
+  resume(): void;
+  restart(): void;
+  isPaused(): boolean;
+}
+
+export function createRecognition(
+  lang: string | (() => string),
+  callback: TranscriptCallback,
+  onError?: (error: SpeechRecognitionErrorCode) => void,
+): KikoeRecognition | null {
   if (!('webkitSpeechRecognition' in window)) {
     console.error('[kikoe] web speech not supported by this browser!');
     return null;
@@ -27,7 +43,7 @@ export function createRecognition(lang, callback, onError) {
   // called with a stale value during a DOM transition.
   const getLang = typeof lang === 'function' ? lang : () => lang;
 
-  const recognition = new webkitSpeechRecognition();
+  const recognition = new webkitSpeechRecognition() as KikoeRecognition;
   recognition.continuous = true;
   recognition.interimResults = true;
   recognition.maxAlternatives = MAX_ALTERNATIVES;
@@ -37,25 +53,24 @@ export function createRecognition(lang, callback, onError) {
   const start = recognition.start.bind(recognition);
   const stop = recognition.stop.bind(recognition);
 
-  function safeStart() {
+  function safeStart(): void {
     recognition.lang = getLang();
     try {
       start();
     } catch (err) {
-      if (err.name !== 'InvalidStateError') throw err;
+      if (!(err instanceof Error) || err.name !== 'InvalidStateError') throw err;
     }
   }
 
-  function safeStop() {
+  function safeStop(): void {
     try {
       stop();
     } catch (err) {
-      if (err.name !== 'InvalidStateError') throw err;
+      if (!(err instanceof Error) || err.name !== 'InvalidStateError') throw err;
     }
   }
 
   recognition.onresult = (event) => {
-    //console.info('[kikoe] onresult', event);
     networkErrorStreak = 0;
 
     for (let i = event.resultIndex; i < event.results.length; ++i) {
@@ -119,7 +134,7 @@ export function createRecognition(lang, callback, onError) {
   return recognition;
 }
 
-export function setLanguage(recognition, newLanguage) {
+export function setLanguage(recognition: KikoeRecognition, newLanguage: string): void {
   if (recognition.lang != newLanguage) {
     recognition.lang = newLanguage;
     if (!recognition.isPaused?.()) recognition.restart();

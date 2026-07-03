@@ -8,7 +8,7 @@
 //   speed_show_info (bool)   – auto-open item info panel on wrong answer
 
 import { clickNext, clickInfo } from './wanikani.js';
-import { debugLog } from './logger.js';
+import { debugLog } from './logger';
 
 const RESULT_DELAY_MS = 100;
 
