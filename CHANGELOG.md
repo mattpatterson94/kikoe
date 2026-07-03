@@ -5,10 +5,16 @@ All notable changes to Kikoe are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.7.0] - 2026-07-03
 
 ### Added
 
+- In-page help: a `?` chip next to the listening indicator (hideable via a
+  new "Show help button" options toggle) opens a context-aware cheat sheet
+  of the voice commands available on the current card, in the current
+  recognition language. Also reachable by saying "help" / "commands" /
+  「ヘルプ」; the mic pauses while the sheet is open and the sheet says so.
+  ([#57](https://github.com/mattpatterson94/kikoe/pull/57))
 - User-editable custom corrections: a new options-page card maps recurring
   speech-recognition mishearings ("heard") to the intended answer, for both
   reading and meaning questions. User entries take precedence over the
@@ -20,11 +26,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   to reading/ja-JP, Translate cards to meaning/en-US; no API token is needed
   since BunPro exposes accepted answers in the DOM.
   ([#12](https://github.com/mattpatterson94/kikoe/pull/12))
-- Opt-in fuzzy meaning matching that mirrors WaniKani's own server-side typo
-  tolerance (edit distance scaled by answer length), so a spoken answer
-  WaniKani would accept is no longer rejected locally. The canonical accepted
-  meaning is submitted, not the misheard candidate.
-  ([#31](https://github.com/mattpatterson94/kikoe/pull/31))
+- Fuzzy meaning matching (always on for WaniKani, where it mirrors the
+  site's own server-side typo tolerance — edit distance scaled by answer
+  length), so a spoken answer WaniKani would accept is no longer rejected
+  locally. The canonical accepted meaning is submitted, not the misheard
+  candidate. ([#31](https://github.com/mattpatterson94/kikoe/pull/31))
 - Mic mute/pause control: a "pause" / "stop listening" / 「ストップ」 voice
   command plus a click-to-toggle affordance on the idle indicator with a new
   "Muted" visual state. An explicit mute is tracked separately from page
@@ -105,6 +111,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   space-separated name to the API's hyphenated slug (so the fetched
   radical is no longer filtered out of the context).
   ([#46](https://github.com/mattpatterson94/kikoe/pull/46))
+- Saving a custom correction containing Japanese (or any non-Latin1 text) no
+  longer kills the extension on every page: the config handoff between the
+  content script and the page bundle used `btoa()`, which throws on
+  non-Latin1 input; it now passes plain JSON through the data attribute.
+  Found in pre-release browser testing.
+- Lesson pages are detected under WaniKani's current URL scheme
+  (`/subject-lessons/<session>` and `/subject-lessons/<session>/quiz`) in
+  addition to the older `/subjects/lesson` paths — voice answering on lesson
+  quizzes was completely inert after WaniKani's URL revamp. Found in
+  pre-release browser testing.
 - Subject prefetching now slides past the first 50 queue items: each card
   change warms the next batch of upcoming subjects instead of re-deriving the
   same head of the queue, so sessions longer than 50 items no longer race the

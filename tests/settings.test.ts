@@ -1,4 +1,4 @@
-import { defaults, initSettings, updateSettings, getSettings, isTurboOn } from '../src/settings';
+import { defaults, initSettings, updateSettings, getSettings, isTurboOn, encodeConfig, decodeConfig } from '../src/settings';
 
 // Reset module state between tests by re-calling initSettings with defaults.
 beforeEach(() => {
@@ -81,5 +81,28 @@ describe('isTurboOn', () => {
   test('returns true when turbo is on', () => {
     initSettings({ turbo: true });
     expect(isTurboOn()).toBe(true);
+  });
+});
+
+describe('config encoding', () => {
+  test('round-trips settings containing non-Latin1 characters', () => {
+    // Regression: the config stamp used btoa(), which throws
+    // InvalidCharacterError on Japanese — e.g. a custom correction like
+    // じじつ→じりつ killed the content script on every page.
+    const config = {
+      base: 'chrome-extension://abc/',
+      hasApiToken: true,
+      settings: {
+        ...defaults,
+        customCorrections: [{ heard: 'じじつ', intended: 'じりつ' }],
+      },
+    };
+    expect(decodeConfig(encodeConfig(config))).toEqual(config);
+  });
+
+  test('decodeConfig returns null for missing or malformed input', () => {
+    expect(decodeConfig(undefined)).toBeNull();
+    expect(decodeConfig('')).toBeNull();
+    expect(decodeConfig('not json {')).toBeNull();
   });
 });

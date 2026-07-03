@@ -183,6 +183,26 @@ describe('getContext', () => {
     expect(getContext().page).toBe('quiz');
   });
 
+  test('current lesson URL scheme (/subject-lessons/<session>/<n>) → page = "lesson"', () => {
+    setURL('https://www.wanikani.com/subject-lessons/-3954934858848879918/7');
+    expect(getContext().page).toBe('lesson');
+  });
+
+  test('current lesson quiz URL scheme (/subject-lessons/<session>/quiz) → page = "quiz"', () => {
+    setURL('https://www.wanikani.com/subject-lessons/-3954934858848879918/quiz');
+    expect(getContext().page).toBe('quiz');
+  });
+
+  test('lesson start page (/subject-lessons/start) → page = "lesson"', () => {
+    setURL('https://www.wanikani.com/subject-lessons/start');
+    expect(getContext().page).toBe('lesson');
+  });
+
+  test('path merely starting with "subject-lessons" as a prefix of another segment does not match', () => {
+    setURL('https://www.wanikani.com/subject-lessonsfoo');
+    expect(getContext()).toBeNull();
+  });
+
   test('extra_study URL → page = "quiz"', () => {
     setURL('https://www.wanikani.com/subjects/extra_study?queue_type=recent_lessons');
     expect(getContext().page).toBe('quiz');

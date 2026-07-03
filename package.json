@@ -1,6 +1,6 @@
 {
   "name": "kikoe",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -13,6 +13,7 @@
     "pack": "npm run pack:chrome && npm run pack:firefox",
     "dev": "node dev.js",
     "dev:firefox": "node dev.js --firefox",
+    "e2e:launch": "node tests/e2e/launch.js",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "readme:commands": "node scripts/readme-commands.js --write",
@@ -32,6 +33,7 @@
     "eslint": "^9.39.4",
     "globals": "^17.7.0",
     "jsdom": "^25.0.0",
+    "playwright": "^1.61.1",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.62.1",
     "vitest": "^2.1.0",

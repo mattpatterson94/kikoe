@@ -25,4 +25,10 @@ firefox/vendor/
 # Packaged zips
 dist/
 
+# Browser-testing profile (logins live here — never commit)
+.playwright-profile/
+
 .claude/worktrees
+
+# Harness screenshots (test artifacts, may show account state)
+tests/e2e/shots/

@@ -14,8 +14,10 @@ const Selectors = {
 // false-positive the way a bare href substring match would.
 const PathPatterns = {
   Review: /^\/subjects\/review(\/|$)/,
-  LessonQuiz: /^\/subjects\/lesson\/quiz(\/|$)/,
-  Lesson: /^\/subjects\/(\d+\/)?lesson(\/|$)/,
+  // Lessons moved from /subjects/lesson[/quiz] to /subject-lessons/<session>[/quiz]
+  // in a WaniKani URL revamp; match both so older paths keep working.
+  LessonQuiz: /^(\/subjects\/lesson\/quiz|\/subject-lessons\/[^/]+\/quiz)(\/|$)/,
+  Lesson: /^(\/subjects\/(\d+\/)?lesson|\/subject-lessons)(\/|$)/,
   ExtraStudy: /^\/subjects\/extra_study(\/|$)/,
   RecentMistakes: /^\/recent-mistakes(\/|$)/,
   Vocabulary: /^\/vocabulary\//,
