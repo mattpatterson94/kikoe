@@ -1,23 +1,24 @@
 import { BasicDictionary } from '../../src/candidates/basic_dictionary';
+import type { Dictionary } from '../../src/dict';
 
-const dictionary = {
+const dictionary: Dictionary = {
   'せんだい': [
-    { id: '1', type: 'word', kanji: ['仙台'], kana: ['せんだい'] },
-    { id: '2', type: 'word', kanji: ['先代'], kana: ['せんだい'] },
+    { type: 'word', kana: ['せんだい'] },
+    { type: 'word', kana: ['せんだい'] },
   ],
   'か': [
-    { id: '3', type: 'character', readings: [{ value: 'か' }, { value: 'け' }] },
+    { type: 'character', readings: [{ value: 'か' }, { value: 'け' }] },
   ],
   'むす': [
-    { id: '4', type: 'character', readings: [{ value: 'むす.ぶ' }] },
+    { type: 'character', readings: [{ value: 'むす.ぶ' }] },
   ],
   '玉': [
-    { id: '5', type: 'character', readings: [{ value: 'たま' }, { value: '-だま' }] },
+    { type: 'character', readings: [{ value: 'たま' }, { value: '-だま' }] },
   ],
 };
 
 const bd = new BasicDictionary(dictionary);
-const get = (raw) => bd.getCandidates(raw).map(c => c.data);
+const get = (raw: string) => bd.getCandidates(raw).map(c => c.data);
 
 describe('BasicDictionary', () => {
   test('returns kana readings for a word entry', () => {

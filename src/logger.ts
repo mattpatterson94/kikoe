@@ -8,7 +8,9 @@
 // it from the same `debug` setting.
 let _debug = false;
 
-export function setDebugLogging(enabled: boolean): void {
+// Accepts any value: settings arrive from storage/config payloads, so the
+// flag is coerced rather than trusted to be a boolean.
+export function setDebugLogging(enabled: unknown): void {
   _debug = !!enabled;
 }
 

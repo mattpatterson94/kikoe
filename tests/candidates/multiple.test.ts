@@ -1,12 +1,13 @@
 import { MultipleWords } from '../../src/candidates/multiple';
+import type { Dictionary } from '../../src/dict';
 
-const dictionary = {
-  '南極': [{ id: '1460180', type: 'word', kanji: ['南極'], kana: ['なんきょく'] }],
-  '県':   [{ id: '1258810', type: 'word', kanji: ['県', '縣'], kana: ['けん'] }],
+const dictionary: Dictionary = {
+  '南極': [{ type: 'word', kana: ['なんきょく'] }],
+  '県':   [{ type: 'word', kana: ['けん'] }],
 };
 
 const multiple = new MultipleWords(dictionary);
-const get = (raw) => multiple.getCandidates(raw).map(c => c.data).sort();
+const get = (raw: string | null) => multiple.getCandidates(raw).map(c => c.data).sort();
 
 describe('MultipleWords', () => {
   test('null returns no candidates', () => {

@@ -86,6 +86,8 @@ const meaningCorrections: Record<string, string> = {
 // while subjects are still loading.
 export interface QuestionContext {
   type?: string | null;
+  prompt?: string | null;
+  category?: string | null;
   readings?: string[];
   meanings?: string[];
 }
@@ -105,7 +107,7 @@ export type CheckResult =
 
 export interface CheckOptions {
   fuzzyMeaning?: boolean;
-  corrections?: Correction[];
+  corrections?: readonly (Partial<Correction> | null)[];
 }
 
 // User-defined corrections from settings: an array of { heard, intended }
@@ -113,7 +115,7 @@ export interface CheckOptions {
 // '9': ['きゅう', 'く', 'くう'] homonym), so the lookup maps
 // heard → [intended, ...]. Consulted before the built-in tables so users can
 // override shipped entries. Blank or malformed pairs are skipped.
-function buildCorrectionLookup(pairs: Partial<Correction>[] | undefined): Record<string, string[]> {
+function buildCorrectionLookup(pairs: readonly (Partial<Correction> | null)[] | undefined): Record<string, string[]> {
   const lookup: Record<string, string[]> = {};
   for (const pair of pairs || []) {
     const heard = (pair?.heard ?? '').trim().toLowerCase();

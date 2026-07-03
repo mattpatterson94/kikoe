@@ -1,80 +1,81 @@
 import { CompoundDictionary } from '../../src/candidates/compound_dictionary';
+import type { Dictionary } from '../../src/dict';
 
-const dictionary = {
+const dictionary: Dictionary = {
   '何': [
-    { id: '1', type: 'word', kanji: ['何'], kana: ['なに', 'ナニ'] },
-    { id: '2', type: 'word', kanji: ['何'], kana: ['なん'] },
-    { literal: '何', type: 'character', readings: [
-      { type: 'on', value: 'カ' }, { type: 'kun', value: 'なに' },
-      { type: 'kun', value: 'なん' }, { type: 'kun', value: 'なに-' },
-      { type: 'kun', value: 'なん-' },
+    { type: 'word', kana: ['なに', 'ナニ'] },
+    { type: 'word', kana: ['なん'] },
+    { type: 'character', readings: [
+      { value: 'カ' }, { value: 'なに' },
+      { value: 'なん' }, { value: 'なに-' },
+      { value: 'なん-' },
     ] },
   ],
   '月': [
-    { literal: '月', type: 'character', readings: [
-      { type: 'on', value: 'ゲツ' }, { type: 'on', value: 'ガツ' },
-      { type: 'kun', value: 'つき' },
+    { type: 'character', readings: [
+      { value: 'ゲツ' }, { value: 'ガツ' },
+      { value: 'つき' },
     ] },
   ],
   '結': [
-    { literal: '結', type: 'character', readings: [{ type: 'kun', value: 'むす.ぶ' }] },
+    { type: 'character', readings: [{ value: 'むす.ぶ' }] },
   ],
   '仙台': [
-    { id: '3', type: 'word', kanji: ['仙台'], kana: ['せんだい'] },
+    { type: 'word', kana: ['せんだい'] },
   ],
   '南': [
-    { literal: '南', type: 'character', readings: [
-      { type: 'on', value: 'ナン' }, { type: 'kun', value: 'みなみ' },
+    { type: 'character', readings: [
+      { value: 'ナン' }, { value: 'みなみ' },
     ] },
   ],
   '国': [
-    { literal: '国', type: 'character', readings: [
-      { type: 'on', value: 'コク' }, { type: 'kun', value: 'くに' },
+    { type: 'character', readings: [
+      { value: 'コク' }, { value: 'くに' },
     ] },
   ],
   '穴': [
-    { literal: '穴', type: 'character', readings: [
-      { type: 'on', value: 'ケツ' }, { type: 'kun', value: 'あな' },
+    { type: 'character', readings: [
+      { value: 'ケツ' }, { value: 'あな' },
     ] },
   ],
   '子': [
-    { literal: '子', type: 'character', readings: [
-      { type: 'on', value: 'シ' }, { type: 'kun', value: 'こ' },
+    { type: 'character', readings: [
+      { value: 'シ' }, { value: 'こ' },
     ] },
   ],
   '一': [
-    { literal: '一', type: 'character', readings: [
-      { type: 'on', value: 'イチ' }, { type: 'kun', value: 'ひと' },
+    { type: 'character', readings: [
+      { value: 'イチ' }, { value: 'ひと' },
     ] },
   ],
   '斤': [
-    { literal: '斤', type: 'character', readings: [{ type: 'on', value: 'キン' }] },
+    { type: 'character', readings: [{ value: 'キン' }] },
   ],
   '本': [
-    { literal: '本', type: 'character', readings: [
-      { type: 'on', value: 'ホン' }, { type: 'kun', value: 'もと' },
+    { type: 'character', readings: [
+      { value: 'ホン' }, { value: 'もと' },
     ] },
   ],
   '気': [
-    { literal: '気', type: 'character', readings: [
-      { type: 'on', value: 'キ' }, { type: 'on', value: 'ケ' },
+    { type: 'character', readings: [
+      { value: 'キ' }, { value: 'ケ' },
     ] },
   ],
   '人': [
-    { literal: '人', type: 'character', readings: [
-      { type: 'on', value: 'ジン' }, { type: 'on', value: 'ニン' },
-      { type: 'kun', value: 'ひと' },
+    { type: 'character', readings: [
+      { value: 'ジン' }, { value: 'ニン' },
+      { value: 'ひと' },
     ] },
   ],
   '時': [
-    { literal: '時', type: 'character', readings: [
-      { type: 'on', value: 'ジ' }, { type: 'kun', value: 'とき' },
+    { type: 'character', readings: [
+      { value: 'ジ' }, { value: 'とき' },
     ] },
   ],
 };
 
 const cd = new CompoundDictionary(dictionary);
-const get = (raw) => cd.getCandidates(raw).map(c => c.data);
+const get = (raw: string) => cd.getCandidates(raw).map(c => c.data);
 
 describe('CompoundDictionary', () => {
   test('combines per-character readings for a compound missing from JMdict', () => {

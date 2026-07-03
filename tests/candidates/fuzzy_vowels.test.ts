@@ -1,7 +1,7 @@
 import { FuzzyVowels } from '../../src/candidates/fuzzy_vowels';
 
 const fuzzy = new FuzzyVowels();
-const get = (raw) => fuzzy.getCandidates(raw).map(c => c.data).sort();
+const get = (raw: string) => fuzzy.getCandidates(raw).map(c => c.data).sort();
 
 describe('FuzzyVowels', () => {
   test('generates long-vowel candidates for short syllable', () => {

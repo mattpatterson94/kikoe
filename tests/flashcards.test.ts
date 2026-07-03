@@ -1,4 +1,6 @@
 import { checkAnswer, normalize } from '../src/flashcards';
+import type { CheckResult } from '../src/flashcards';
+import type { Dictionary } from '../src/dict';
 import { ToHiragana } from '../src/candidates/to_hiragana';
 import { BasicDictionary } from '../src/candidates/basic_dictionary';
 import { FuzzyVowels } from '../src/candidates/fuzzy_vowels';
@@ -7,14 +9,25 @@ import { CompoundDictionary } from '../src/candidates/compound_dictionary';
 import { SplitDictionary } from '../src/candidates/split_dictionary';
 import { Numerals } from '../src/candidates/numerals';
 
-const dictionary = {
+// Vitest's expect() can't narrow the CheckResult union, so success-only
+// fields (answer) and failure-only fields (error, message) need these
+// asserting helpers before they can be read.
+function expectSuccess(r: CheckResult): asserts r is Extract<CheckResult, { success: true }> {
+  expect(r.success).toBe(true);
+}
+
+function expectFailure(r: CheckResult): asserts r is Extract<CheckResult, { success: false }> {
+  expect(r.success).toBe(false);
+}
+
+const dictionary: Dictionary = {
   'せんだい': [
-    { id: '1388080', type: 'word', kanji: ['先代'], kana: ['せんだい'] },
-    { id: '2164680', type: 'word', kanji: ['仙台', '仙臺'], kana: ['せんだい'] },
+    { type: 'word', kana: ['せんだい'] },
+    { type: 'word', kana: ['せんだい'] },
   ],
 };
 
-function makeTransformers(dict = {}) {
+function makeTransformers(dict: Dictionary = {}) {
   return [new ToHiragana(), new BasicDictionary(dict)];
 }
 
@@ -52,21 +65,21 @@ describe('meaning questions', () => {
   test('returns normalised English text when it matches a meaning', () => {
     const ctx = { type: 'meaning', prompt: '薄情', category: 'vocabulary', meanings: ['Cold Hearted', 'Coldhearted'] };
     const r = checkAnswer(ctx, makeTransformers(), 'Cold Hearted');
-    expect(r.success).toBe(true);
+    expectSuccess(r);
     expect(r.answer).toBe('cold hearted');
   });
 
   test('strips leading article before matching', () => {
     const ctx = { type: 'meaning', prompt: '村', category: 'vocabulary', meanings: ['village'] };
     const r = checkAnswer(ctx, makeTransformers(), 'the village');
-    expect(r.success).toBe(true);
+    expectSuccess(r);
     expect(r.answer).toBe('village');
   });
 
   test('preserves spaces in multi-word answers', () => {
     const ctx = { type: 'meaning', meanings: ['put on clothes'] };
     const r = checkAnswer(ctx, makeTransformers(), 'put on clothes');
-    expect(r.success).toBe(true);
+    expectSuccess(r);
     expect(r.answer).toBe('put on clothes');
   });
 
@@ -85,7 +98,7 @@ describe('meaning questions', () => {
   test('matches compound word with space ("rib cage" → "ribcage")', () => {
     const ctx = { type: 'meaning', meanings: ['ribcage'] };
     const r = checkAnswer(ctx, makeTransformers(), 'rib cage');
-    expect(r.success).toBe(true);
+    expectSuccess(r);
     expect(r.answer).toBe('ribcage');
   });
 
@@ -96,7 +109,7 @@ describe('meaning questions', () => {
   test('REGRESSION: submits the compact form for spelled-out letters ("e a r" → "ear")', () => {
     const ctx = { type: 'meaning', prompt: '耳', meanings: ['ear'] };
     const r = checkAnswer(ctx, makeTransformers(), 'e a r');
-    expect(r.success).toBe(true);
+    expectSuccess(r);
     expect(r.answer).toBe('ear');
   });
 });
@@ -113,7 +126,7 @@ describe('fuzzy meaning matching', () => {
   test('accepts a near-miss within tolerance when enabled, and submits the canonical meaning', () => {
     const ctx = { type: 'meaning', meanings: ['coldhearted'] };
     const r = checkAnswer(ctx, makeTransformers(), 'coldhearte', { fuzzyMeaning: true });
-    expect(r.success).toBe(true);
+    expectSuccess(r);
     expect(r.answer).toBe('coldhearted');
   });
 
@@ -163,7 +176,7 @@ describe('fuzzy meaning matching', () => {
   test('applies to name questions (radicals) as well as meanings', () => {
     const ctx = { type: 'name', meanings: ['ground'] };
     const r = checkAnswer(ctx, makeTransformers(), 'grond', { fuzzyMeaning: true });
-    expect(r.success).toBe(true);
+    expectSuccess(r);
     expect(r.answer).toBe('ground');
   });
 
@@ -176,7 +189,7 @@ describe('fuzzy meaning matching', () => {
   test('picks the closest meaning when multiple are within tolerance', () => {
     const ctx = { type: 'meaning', meanings: ['horse', 'house'] };
     const r = checkAnswer(ctx, makeTransformers(), 'horse', { fuzzyMeaning: true });
-    expect(r.success).toBe(true);
+    expectSuccess(r);
     expect(r.answer).toBe('horse');
   });
 });
@@ -188,36 +201,36 @@ describe('reading questions', () => {
 
   test('returns hiragana when input is already hiragana', () => {
     const r = checkAnswer(ctx, makeTransformers(dictionary), 'せんだい');
-    expect(r.success).toBe(true);
+    expectSuccess(r);
     expect(r.answer).toBe('せんだい');
   });
 
   test('converts katakana input to hiragana', () => {
     const r = checkAnswer(ctx, makeTransformers(dictionary), 'センダイ');
-    expect(r.success).toBe(true);
+    expectSuccess(r);
     expect(r.answer).toBe('せんだい');
   });
 
   // Bug reproduction: SR returns kanji (何月) for a compound JMdict doesn't
   // list, so no whole-word lookup can produce the kana reading.
   test('REGRESSION: converts kanji compounds missing from JMdict (何月 → なんがつ)', () => {
-    const dict = {
+    const dict: Dictionary = {
       '何': [
-        { id: '1577100', type: 'word', kanji: ['何'], kana: ['なに', 'ナニ'] },
-        { literal: '何', type: 'character', readings: [
-          { type: 'on', value: 'カ' }, { type: 'kun', value: 'なに' }, { type: 'kun', value: 'なん-' },
+        { type: 'word', kana: ['なに', 'ナニ'] },
+        { type: 'character', readings: [
+          { value: 'カ' }, { value: 'なに' }, { value: 'なん-' },
         ] },
       ],
       '月': [
-        { literal: '月', type: 'character', readings: [
-          { type: 'on', value: 'ゲツ' }, { type: 'on', value: 'ガツ' }, { type: 'kun', value: 'つき' },
+        { type: 'character', readings: [
+          { value: 'ゲツ' }, { value: 'ガツ' }, { value: 'つき' },
         ] },
       ],
     };
     const transformers = [...makeTransformers(dict), new CompoundDictionary(dict)];
     const ctx = { type: 'reading', prompt: '何月', category: 'vocabulary', readings: ['なんがつ'] };
     const r = checkAnswer(ctx, transformers, '何月');
-    expect(r.success).toBe(true);
+    expectSuccess(r);
     expect(r.answer).toBe('なんがつ');
   });
 
@@ -226,11 +239,11 @@ describe('reading questions', () => {
   // ろくにち) only derivable via a whole-word dictionary lookup on the
   // kansuji-converted kanji form.
   test('REGRESSION: converts a digit-form day counter to its irregular reading (6日 → むいか)', () => {
-    const dict = { '六日': [{ id: '1', type: 'word', kanji: ['六日'], kana: ['むいか'] }] };
+    const dict: Dictionary = { '六日': [{ type: 'word', kana: ['むいか'] }] };
     const transformers = [...makeTransformers(dict), new Numerals(dict)];
     const ctx = { type: 'reading', prompt: '6日', category: 'vocabulary', readings: ['むいか'] };
     const r = checkAnswer(ctx, transformers, '6日');
-    expect(r.success).toBe(true);
+    expectSuccess(r);
     expect(r.answer).toBe('むいか');
   });
 
@@ -240,22 +253,22 @@ describe('reading questions', () => {
   test('REGRESSION: keeps the chōonpu when comparing katakana readings (ビール → びーる)', () => {
     const ctx = { type: 'reading', prompt: 'ビール', category: 'vocabulary', readings: ['びーる'] };
     const r = checkAnswer(ctx, makeTransformers(), 'ビール');
-    expect(r.success).toBe(true);
+    expectSuccess(r);
     expect(r.answer).toBe('びーる');
   });
 
   test('REGRESSION: chōonpu preserved through a kanji+katakana split (生ビール → なまびーる)', () => {
-    const dict = {
+    const dict: Dictionary = {
       '生': [
-        { literal: '生', type: 'character', readings: [
-          { type: 'on', value: 'セイ' }, { type: 'kun', value: 'なま' },
+        { type: 'character', readings: [
+          { value: 'セイ' }, { value: 'なま' },
         ] },
       ],
     };
     const transformers = [...makeTransformers(dict), new SplitDictionary(dict)];
     const ctx = { type: 'reading', prompt: '生ビール', category: 'vocabulary', readings: ['なまびーる'] };
     const r = checkAnswer(ctx, transformers, '生ビール');
-    expect(r.success).toBe(true);
+    expectSuccess(r);
     expect(r.answer).toBe('なまびーる');
   });
 
@@ -264,19 +277,19 @@ describe('reading questions', () => {
   // combination can derive them — they live in the hardcoded homonym table.
   test('REGRESSION: resolves ateji from the homonym table (台詞 → せりふ)', () => {
     const r = checkAnswer({ type: 'reading', prompt: '台詞', readings: ['せりふ'] }, makeTransformers(), '台詞');
-    expect(r.success).toBe(true);
+    expectSuccess(r);
     expect(r.answer).toBe('せりふ');
   });
 
   test('REGRESSION: resolves ateji with a chōonpu reading (烏龍茶 → うーろんちゃ)', () => {
     const r = checkAnswer({ type: 'reading', prompt: '烏龍茶', readings: ['うーろんちゃ'] }, makeTransformers(), '烏龍茶');
-    expect(r.success).toBe(true);
+    expectSuccess(r);
     expect(r.answer).toBe('うーろんちゃ');
   });
 
   test('uses homonym table for mishearings ("b" → "び")', () => {
     const r = checkAnswer({ type: 'reading', prompt: '美', readings: ['び'] }, makeTransformers(), 'b');
-    expect(r.success).toBe(true);
+    expectSuccess(r);
     expect(r.answer).toBe('び');
   });
 
@@ -285,37 +298,41 @@ describe('reading questions', () => {
   // no dictionary lookup or transformer could recover it on its own.
   test('REGRESSION: uses homonym table for "事実" misheard for 自立 (じりつ)', () => {
     const r = checkAnswer({ type: 'reading', prompt: '自立', readings: ['じりつ'] }, makeTransformers(), '事実');
-    expect(r.success).toBe(true);
+    expectSuccess(r);
     expect(r.answer).toBe('じりつ');
   });
 
   test('uses homonym table for short "ta" reading', () => {
     const r = checkAnswer({ type: 'reading', prompt: '田', readings: ['た'] }, makeTransformers(), 'ta');
-    expect(r.success).toBe(true);
+    expectSuccess(r);
     expect(r.answer).toBe('た');
   });
 
   test('uses homonym table for "ta" heard as English-ish variants', () => {
     const ctx = { type: 'reading', prompt: '田', readings: ['た'] };
-    expect(checkAnswer(ctx, makeTransformers(), 'tar').answer).toBe('た');
-    expect(checkAnswer(ctx, makeTransformers(), 'tah').answer).toBe('た');
+    const tar = checkAnswer(ctx, makeTransformers(), 'tar');
+    expectSuccess(tar);
+    expect(tar.answer).toBe('た');
+    const tah = checkAnswer(ctx, makeTransformers(), 'tah');
+    expectSuccess(tah);
+    expect(tah.answer).toBe('た');
   });
 
   test('uses numeric speech correction for "go" heard as 5', () => {
     const r = checkAnswer({ type: 'reading', prompt: '五', readings: ['ご'] }, makeTransformers(), '5');
-    expect(r.success).toBe(true);
+    expectSuccess(r);
     expect(r.answer).toBe('ご');
   });
 
   test('uses numeric speech correction for "kuu" heard as 9', () => {
     const r = checkAnswer({ type: 'reading', prompt: '空', readings: ['くう'] }, makeTransformers(), '9');
-    expect(r.success).toBe(true);
+    expectSuccess(r);
     expect(r.answer).toBe('くう');
   });
 
   test('keeps numeric speech correction for "kyuu" heard as 9', () => {
     const r = checkAnswer({ type: 'reading', prompt: '九', readings: ['きゅう'] }, makeTransformers(), '9');
-    expect(r.success).toBe(true);
+    expectSuccess(r);
     expect(r.answer).toBe('きゅう');
   });
 
@@ -342,7 +359,7 @@ describe('custom corrections', () => {
     const ctx = { type: 'reading', prompt: '肘', readings: ['ひじ'] };
     const corrections = [{ heard: 'PG', intended: 'ひじ' }];
     const r = checkAnswer(ctx, makeTransformers(), 'PG', { corrections });
-    expect(r.success).toBe(true);
+    expectSuccess(r);
     expect(r.answer).toBe('ひじ');
   });
 
@@ -352,8 +369,10 @@ describe('custom corrections', () => {
       { heard: 'q', intended: 'く' },
     ];
     const kyuu = checkAnswer({ type: 'reading', prompt: '九', readings: ['きゅう'] }, makeTransformers(), 'q', { corrections });
+    expectSuccess(kyuu);
     expect(kyuu.answer).toBe('きゅう');
     const ku = checkAnswer({ type: 'reading', prompt: '九', readings: ['く'] }, makeTransformers(), 'q', { corrections });
+    expectSuccess(ku);
     expect(ku.answer).toBe('く');
   });
 
@@ -361,7 +380,7 @@ describe('custom corrections', () => {
     const ctx = { type: 'reading', prompt: '尻', readings: ['しり'] };
     const corrections = [{ heard: 'celery', intended: 'shiri' }];
     const r = checkAnswer(ctx, makeTransformers(), 'celery', { corrections });
-    expect(r.success).toBe(true);
+    expectSuccess(r);
     expect(r.answer).toBe('しり');
   });
 
@@ -371,7 +390,7 @@ describe('custom corrections', () => {
     const ctx = { type: 'reading', prompt: '遺失', readings: ['いしつ', 'いじつ'] };
     const corrections = [{ heard: 'ec2', intended: 'いじつ' }];
     const r = checkAnswer(ctx, makeTransformers(), 'ec2', { corrections });
-    expect(r.success).toBe(true);
+    expectSuccess(r);
     expect(r.answer).toBe('いじつ');
   });
 
@@ -379,7 +398,7 @@ describe('custom corrections', () => {
     const ctx = { type: 'reading', prompt: '遺失', readings: ['いしつ'] };
     const corrections = [{ heard: 'ec2', intended: 'まったくちがう' }];
     const r = checkAnswer(ctx, makeTransformers(), 'ec2', { corrections });
-    expect(r.success).toBe(true);
+    expectSuccess(r);
     expect(r.answer).toBe('いしつ');
   });
 
@@ -387,7 +406,7 @@ describe('custom corrections', () => {
     const ctx = { type: 'meaning', prompt: '胸郭', meanings: ['ribcage'] };
     const corrections = [{ heard: 'web cage', intended: 'ribcage' }];
     const r = checkAnswer(ctx, makeTransformers(), 'web cage', { corrections });
-    expect(r.success).toBe(true);
+    expectSuccess(r);
     expect(r.answer).toBe('ribcage');
   });
 
@@ -397,7 +416,7 @@ describe('custom corrections', () => {
     const ctx = { type: 'meaning', meanings: ['ribcage', 'cage'] };
     const corrections = [{ heard: 'rib cage', intended: 'cage' }];
     const r = checkAnswer(ctx, makeTransformers(), 'rib cage', { corrections });
-    expect(r.success).toBe(true);
+    expectSuccess(r);
     expect(r.answer).toBe('cage');
   });
 
@@ -405,7 +424,7 @@ describe('custom corrections', () => {
     const ctx = { type: 'name', prompt: '一', category: 'radical', meanings: ['ground'] };
     const corrections = [{ heard: 'grounded', intended: 'ground' }];
     const r = checkAnswer(ctx, makeTransformers(), 'grounded', { corrections });
-    expect(r.success).toBe(true);
+    expectSuccess(r);
     expect(r.answer).toBe('ground');
   });
 
@@ -413,14 +432,14 @@ describe('custom corrections', () => {
     const ctx = { type: 'meaning', meanings: ['ribcage'] };
     const corrections = [{ heard: 'Web Cage', intended: 'ribcage' }];
     const r = checkAnswer(ctx, makeTransformers(), 'WEB CAGE', { corrections });
-    expect(r.success).toBe(true);
+    expectSuccess(r);
   });
 
   test('blank or malformed entries are skipped without breaking matching', () => {
     const ctx = { type: 'meaning', meanings: ['ribcage'] };
     const corrections = [null, {}, { heard: '', intended: 'x' }, { heard: 'y' }, { heard: 'web cage', intended: 'ribcage' }];
     const r = checkAnswer(ctx, makeTransformers(), 'web cage', { corrections });
-    expect(r.success).toBe(true);
+    expectSuccess(r);
     expect(r.answer).toBe('ribcage');
   });
 
@@ -503,7 +522,7 @@ describe('name questions (radicals)', () => {
 
   test('returns normalised English for name type', () => {
     const r = checkAnswer(ctx, makeTransformers(), 'Ground');
-    expect(r.success).toBe(true);
+    expectSuccess(r);
     expect(r.answer).toBe('ground');
   });
 });
@@ -513,7 +532,7 @@ describe('name questions (radicals)', () => {
 describe('unknown question type', () => {
   test('returns error result', () => {
     const r = checkAnswer({ type: 'unknown' }, makeTransformers(), 'test');
-    expect(r.success).toBe(false);
+    expectFailure(r);
     expect(r.error).toBe(true);
   });
 });
@@ -531,7 +550,7 @@ describe('full transformer pipeline', () => {
   test('katakana speech input converts to hiragana via ToHiragana', () => {
     const ctx = { type: 'reading', prompt: '仙台', category: 'vocabulary', readings: ['せんだい'] };
     const r = checkAnswer(ctx, transformers, 'センダイ');
-    expect(r.success).toBe(true);
+    expectSuccess(r);
     expect(r.answer).toBe('せんだい');
   });
 });

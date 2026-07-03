@@ -1,7 +1,7 @@
 import { ToHiragana } from '../../src/candidates/to_hiragana';
 
 const toh = new ToHiragana();
-const get = (raw) => toh.getCandidates(raw).map(c => c.data).sort();
+const get = (raw: string) => toh.getCandidates(raw).map(c => c.data).sort();
 
 // ToHiragana only processes isJapanese() input (hiragana/katakana/kanji).
 // Romaji is handled by the Web Speech API language setting (ja-JP), not here.
