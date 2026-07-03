@@ -1,7 +1,7 @@
 import { toHiragana, isJapanese } from 'wanakana';
 
 export class ToHiragana {
-  constructor(dictionary) {
+  constructor(_dictionary) {
     this.order = 0;
   }
 

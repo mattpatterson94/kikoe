@@ -17,7 +17,6 @@ import { SplitDictionary } from './candidates/split_dictionary.js';
 import { CompoundDictionary } from './candidates/compound_dictionary.js';
 import { SuruVerbs } from './candidates/suru_verbs.js';
 import { RepeatingSubstring } from './candidates/repeating.js';
-import { FuzzyVowels } from './candidates/fuzzy_vowels.js';
 import { MultipleWords } from './candidates/multiple.js';
 import { Numerals } from './candidates/numerals.js';
 

@@ -1,7 +1,7 @@
-import { toHiragana, isJapanese } from 'wanakana';
+import { isJapanese } from 'wanakana';
 
 export class ConvertWo {
-  constructor(dictionary) {
+  constructor(_dictionary) {
     this.order = 1;
   }
 

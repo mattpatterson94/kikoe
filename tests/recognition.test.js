@@ -77,7 +77,7 @@ describe('createRecognition', () => {
 
   test('passes every alternative transcript for a final result', () => {
     const callback = vi.fn();
-    const recognition = createRecognition('ja-JP', callback);
+    createRecognition('ja-JP', callback);
     const native = recognitionInstances[0];
 
     native.onresult({
@@ -90,7 +90,7 @@ describe('createRecognition', () => {
 
   test('passes a single alternative for an interim result', () => {
     const callback = vi.fn();
-    const recognition = createRecognition('ja-JP', callback);
+    createRecognition('ja-JP', callback);
     const native = recognitionInstances[0];
 
     native.onresult({
@@ -103,7 +103,7 @@ describe('createRecognition', () => {
 
   test('trims whitespace from every alternative', () => {
     const callback = vi.fn();
-    const recognition = createRecognition('ja-JP', callback);
+    createRecognition('ja-JP', callback);
     const native = recognitionInstances[0];
 
     native.onresult({
@@ -116,7 +116,7 @@ describe('createRecognition', () => {
 
   test('processes only results from resultIndex onward', () => {
     const callback = vi.fn();
-    const recognition = createRecognition('ja-JP', callback);
+    createRecognition('ja-JP', callback);
     const native = recognitionInstances[0];
 
     native.onresult({
