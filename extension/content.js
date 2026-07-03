@@ -198,6 +198,27 @@ export async function fetchSubjectsForPrompt(prompt, category, apiToken,
   }
 }
 
+// How many subjects to warm per prefetch request. The page sends the full
+// remaining queue on every card change; taking a bounded batch keeps the
+// ids= URL short and spreads a long session's fetches across card changes
+// instead of pulling everything up front — the window still advances 50 IDs
+// per answered card, far ahead of the user.
+export const PREFETCH_BATCH_SIZE = 50;
+
+// Picks the next batch of not-yet-requested IDs (in queue order) and marks
+// them in `requested`. On fetch failure the caller un-marks them so a
+// transient error doesn't leave a permanent cold gap in the queue.
+export function takeNextPrefetchBatch(subjectIds, requested, batchSize = PREFETCH_BATCH_SIZE) {
+  const batch = [];
+  for (const id of subjectIds || []) {
+    if (requested.has(id)) continue;
+    requested.add(id);
+    batch.push(id);
+    if (batch.length >= batchSize) break;
+  }
+  return batch;
+}
+
 // Warm the cache for a batch of upcoming subject IDs (from the session
 // queue) in a single request, storing each under the same category+prompt
 // key the per-card path looks up later. Subjects that fail to resolve a
@@ -277,16 +298,21 @@ async function main() {
       }));
     });
 
-    // Each subject ID is only ever prefetched once per page load — the
-    // queue is rescanned on every card change, but repeats are cheap no-ops.
+    // Each request takes the next unrequested batch, so the warm window
+    // slides forward with every card change instead of re-deriving the same
+    // head of the queue. IDs are marked before the fetch (so overlapping
+    // card changes grab consecutive batches) and un-marked if it fails (so
+    // the next card change retries them — bounded at one batch per change).
     const requestedPrefetchIds = new Set();
     document.addEventListener('kikoe:prefetchRequest', async (e) => {
-      const newIds = (e.detail.subjectIds || []).filter((id) => !requestedPrefetchIds.has(id));
-      if (!newIds.length) return;
-      newIds.forEach((id) => requestedPrefetchIds.add(id));
+      const batch = takeNextPrefetchBatch(e.detail.subjectIds, requestedPrefetchIds);
+      if (!batch.length) return;
       if (!apiToken) apiToken = await getApiToken();
-      const { error } = await prefetchSubjects(newIds, apiToken);
-      if (error) console.error('[kikoe] prefetch failed:', error);
+      const { error } = await prefetchSubjects(batch, apiToken);
+      if (error) {
+        batch.forEach((id) => requestedPrefetchIds.delete(id));
+        console.error('[kikoe] prefetch failed:', error);
+      }
     });
   }
 

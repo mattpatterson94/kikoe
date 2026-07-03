@@ -1,4 +1,4 @@
-import { getSettings, buildSafeConfig, scrapeApiToken, fetchSubjectsForPrompt, prefetchSubjects, subjectCacheKey, CACHE_PREFIX, RADICALS_CACHE_KEY } from '../extension/content.js';
+import { getSettings, buildSafeConfig, scrapeApiToken, fetchSubjectsForPrompt, prefetchSubjects, takeNextPrefetchBatch, subjectCacheKey, CACHE_PREFIX, RADICALS_CACHE_KEY } from '../extension/content.js';
 import { defaults } from '../src/settings.js';
 
 // ── Chrome API mock ───────────────────────────────────────────────────────────
@@ -443,5 +443,47 @@ describe('prefetchSubjects', () => {
     expect(result.fetchedCount).toBe(0);
     expect(result.error).toMatch(/500/);
     expect(localStore[subjectCacheKey('kanji', '下')]).toBeUndefined();
+  });
+});
+
+// ── takeNextPrefetchBatch ─────────────────────────────────────────────────────
+
+describe('takeNextPrefetchBatch', () => {
+  test('takes the first batch and marks it as requested', () => {
+    const requested = new Set();
+    const batch = takeNextPrefetchBatch([1, 2, 3], requested, 2);
+    expect(batch).toEqual([1, 2]);
+    expect([...requested]).toEqual([1, 2]);
+  });
+
+  test('slides past already-requested ids to the next batch', () => {
+    const requested = new Set([1, 2]);
+    expect(takeNextPrefetchBatch([1, 2, 3, 4, 5], requested, 2)).toEqual([3, 4]);
+  });
+
+  test('advances through a queue longer than one batch across successive calls', () => {
+    const queue = Array.from({ length: 120 }, (_, i) => i + 1);
+    const requested = new Set();
+    takeNextPrefetchBatch(queue, requested);
+    takeNextPrefetchBatch(queue, requested);
+    const third = takeNextPrefetchBatch(queue, requested);
+    expect(third).toEqual(queue.slice(100, 120));
+    expect(requested.size).toBe(120);
+  });
+
+  test('returns an empty batch once the whole queue has been requested', () => {
+    const requested = new Set([1, 2, 3]);
+    expect(takeNextPrefetchBatch([1, 2, 3], requested)).toEqual([]);
+  });
+
+  test('re-takes ids that were un-marked after a failed fetch', () => {
+    const requested = new Set();
+    const failed = takeNextPrefetchBatch([1, 2, 3, 4], requested, 2);
+    failed.forEach((id) => requested.delete(id));
+    expect(takeNextPrefetchBatch([1, 2, 3, 4], requested, 2)).toEqual([1, 2]);
+  });
+
+  test('handles a missing id list', () => {
+    expect(takeNextPrefetchBatch(undefined, new Set())).toEqual([]);
   });
 });
