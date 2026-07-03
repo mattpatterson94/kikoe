@@ -7,19 +7,25 @@
 //   turbo           (bool)   – auto-advance to next card on correct answer
 //   speed_show_info (bool)   – auto-open item info panel on wrong answer
 
-import { clickNext, clickInfo } from './wanikani.js';
+import { clickNext, clickInfo } from './wanikani';
 import { debugLog } from './logger';
+import type { Settings } from './settings';
 
 const RESULT_DELAY_MS = 100;
 
-export function startSpeedEnhancer(getSettingsFn) {
-  let currentContainer = null;
-  let attrObserver = null;
+export interface SpeedEnhancer {
+  scan(): void;
+  _getContainer(): Element | null;
+}
+
+export function startSpeedEnhancer(getSettingsFn: () => Settings): SpeedEnhancer {
+  let currentContainer: Element | null = null;
+  let attrObserver: MutationObserver | null = null;
 
   // WaniKani has used both 'correct' and 'data-correct' across versions.
   const RESULT_ATTRS = ['correct', 'data-correct'];
 
-  function getResult(container) {
+  function getResult(container: Element): string | null {
     for (const attr of RESULT_ATTRS) {
       const v = container.getAttribute(attr);
       if (v !== null) return v;
@@ -27,7 +33,7 @@ export function startSpeedEnhancer(getSettingsFn) {
     return null;
   }
 
-  function onResult(container) {
+  function onResult(container: Element): void {
     const result = getResult(container);
     const s = getSettingsFn();
 
@@ -39,7 +45,7 @@ export function startSpeedEnhancer(getSettingsFn) {
     }
   }
 
-  function attach(container) {
+  function attach(container: Element): void {
     if (container === currentContainer) return;
     currentContainer = container;
     attrObserver?.disconnect();
@@ -47,7 +53,7 @@ export function startSpeedEnhancer(getSettingsFn) {
 
     attrObserver = new MutationObserver((mutations) => {
       for (const m of mutations) {
-        if (m.type === 'attributes' && RESULT_ATTRS.includes(m.attributeName)) {
+        if (m.type === 'attributes' && m.attributeName && RESULT_ATTRS.includes(m.attributeName)) {
           onResult(container);
         }
       }
@@ -55,7 +61,7 @@ export function startSpeedEnhancer(getSettingsFn) {
     attrObserver.observe(container, { attributes: true });
   }
 
-  function scan() {
+  function scan(): void {
     // Try the class-based selector first, then fall back to the Stimulus
     // controller attribute in case WaniKani renamed the CSS class.
     const el = document.querySelector('.quiz-input__input-container')

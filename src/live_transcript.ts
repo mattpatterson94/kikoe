@@ -1,8 +1,20 @@
+import type { Settings } from './settings';
+
 const STYLE_ID = 'kikoe-transcript-styles';
 const TRANSCRIPT_FADE_DELAY_MS = 5000;
 const TRANSCRIPT_MAX_VISIBLE = 1;
 
-function injectStyles() {
+// What logTranscript renders. Structurally compatible with flashcards'
+// Transcript, but `reason` is wider: app.js also logs reveal-mode hints
+// ('say-reveal' / 'say-grade') that never come out of checkAnswer.
+export interface TranscriptInfo {
+  raw: string;
+  matched?: string;
+  reason?: string;
+  type?: string;
+}
+
+function injectStyles(): void {
   if (document.getElementById(STYLE_ID)) return;
   const style = document.createElement('style');
   style.id = STYLE_ID;
@@ -143,26 +155,19 @@ function injectStyles() {
   document.head.appendChild(style);
 }
 
-function getContainerStyle(settings) {
+function getContainerStyle(settings: Settings): string {
   const position = settings.transcript_position;
-  let posStyle;
-  if (position === 'bottom') {
-    posStyle = 'bottom: 16px;';
-  } else if (position === 'center') {
-    posStyle = 'top: 50%; transform: translateY(-50%);';
-  } else {
-    posStyle = 'top: 16px;';
-  }
+  const posStyle = position === 'bottom' ? 'bottom: 16px;' : 'top: 16px;';
   return `width: 100%; position: fixed; z-index: 2147483647; display: flex; flex-direction: column; align-items: center; gap: 8px; pointer-events: none; left: 0; ${posStyle}`;
 }
 
-function themeClass(settings) {
+function themeClass(settings: Settings): string {
   const t = settings.transcript_theme;
   if (t === 'dark' || t === 'light') return `kikoe-theme-${t}`;
   return 'kikoe-theme-system';
 }
 
-export function createTranscriptContainer(settings) {
+export function createTranscriptContainer(settings: Settings): void {
   injectStyles();
   const container = document.createElement('div');
   container.id = 'kikoe-transcript-container';
@@ -172,18 +177,18 @@ export function createTranscriptContainer(settings) {
 
 let COUNTER = 1;
 
-export function clearTranscript() {
+export function clearTranscript(): void {
   const container = document.querySelector('div#kikoe-transcript-container');
   if (!container) return;
   container.textContent = '';
 }
 
-function clearTranscriptWith(id) {
+function clearTranscriptWith(id: string): void {
   const t = document.getElementById(id);
   if (t && t.parentNode) t.parentNode.removeChild(t);
 }
 
-function scheduleRemoval(el) {
+function scheduleRemoval(el: HTMLElement): void {
   el.style.opacity = '0';
   el.style.transform = 'translateY(-6px) scale(0.95)';
   const remove = () => { if (el.parentNode) el.parentNode.removeChild(el); };
@@ -194,7 +199,7 @@ function scheduleRemoval(el) {
 // onToggle, if provided, is called (with no arguments) whenever the user
 // clicks the indicator — used to let the mic be muted/unmuted by click
 // instead of only by voice command or tab visibility.
-export function showIdleIndicator(settings, onToggle) {
+export function showIdleIndicator(settings: Settings, onToggle?: () => void): void {
   if (!settings.transcript) return;
   if (document.getElementById('kikoe-idle')) return;
 
@@ -231,7 +236,7 @@ export function showIdleIndicator(settings, onToggle) {
 
 const ERROR_STYLED_STATES = new Set(['error', 'mic-denied', 'no-mic', 'unsupported-browser']);
 
-export function setIdleIndicatorState(state) {
+export function setIdleIndicatorState(state: string): void {
   const label = document.getElementById('kikoe-idle-label');
   if (!label) return;
   const chip = document.getElementById('kikoe-idle');
@@ -253,8 +258,8 @@ export function setIdleIndicatorState(state) {
 }
 
 // Turns a checkAnswer failure reason into a short, actionable hint shown
-// next to the raw heard text (see flashcards.js's failureReason).
-function reasonHint(transcript) {
+// next to the raw heard text (see flashcards.ts's failureReason).
+function reasonHint(transcript: TranscriptInfo): string | null {
   if (transcript.reason === 'not-loaded') return 'loading answers…';
   if (transcript.reason === 'wrong-type') {
     return transcript.type === 'reading'
@@ -268,9 +273,9 @@ function reasonHint(transcript) {
   return null;
 }
 
-export function logTranscript(settings, transcript) {
+export function logTranscript(settings: Settings, transcript: TranscriptInfo | string | null | undefined): void {
   if (!settings.transcript) return;
-  const container = document.querySelector('div#kikoe-transcript-container');
+  const container = document.querySelector<HTMLElement>('div#kikoe-transcript-container');
   if (!container) return;
 
   if (typeof transcript !== 'object' || transcript === null) {
@@ -284,8 +289,8 @@ export function logTranscript(settings, transcript) {
   // swallowed by the same-raw dedup.
   const hasNewInfo = transcript.matched || transcript.reason;
 
-  if (previous && transcript.raw === previous.raw && !hasNewInfo) return;
-  if (previous && transcript.raw === previous.raw && hasNewInfo) {
+  if (previous && transcript.raw === previous.dataset.raw && !hasNewInfo) return;
+  if (previous && transcript.raw === previous.dataset.raw && hasNewInfo) {
     clearTranscriptWith(`transcript-${COUNTER - 1}`);
   }
 
@@ -298,7 +303,7 @@ export function logTranscript(settings, transcript) {
   const id = `transcript-${current}`;
 
   const el = document.createElement('div');
-  el.raw = transcript.raw;
+  el.dataset.raw = transcript.raw;
   el.id = id;
   el.className = `kikoe-chip ${themeClass(settings)}${isError ? ' kikoe-chip-error' : ''}`;
 

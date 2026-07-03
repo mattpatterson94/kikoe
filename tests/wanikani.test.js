@@ -3,7 +3,7 @@ import {
   didContextChange, didAnswerCorrectly,
   getUserSynonyms, inputAnswer, createCardWatcher,
   getQueuedSubjectIds,
-} from '../src/wanikani.js';
+} from '../src/wanikani';
 
 
 // ── Helpers ───────────────────────────────────────────────────────────────────

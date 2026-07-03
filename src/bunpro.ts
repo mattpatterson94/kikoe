@@ -1,4 +1,4 @@
-// BunPro adapter — mirrors the public API of wanikani.js.
+// BunPro adapter — mirrors the public API of wanikani.ts.
 //
 // BunPro exposes a dedicated accessibility element for third-party review
 // tools: #quiz-metadata-element carries the current card's state as
@@ -12,11 +12,36 @@ const Selectors = {
   Hint: 'button[title="Toggle the hint level"]',
 };
 
-function getMetadata() {
-  return document.querySelector(Selectors.Metadata);
+// The card's identity payload embedded in data-meta-info.
+interface MetaInfo {
+  id?: number | string;
+  type?: string;
 }
 
-function parseJson(raw) {
+export interface BunproRevealContext {
+  page: string;
+  prompt: string | null;
+  mode: 'reveal';
+  revealed: boolean;
+}
+
+export interface BunproQuestionContext {
+  page: string;
+  prompt: string | null;
+  category: string | null;
+  type: string | null;
+  meanings: string[];
+  readings: string[];
+  items: never[];
+}
+
+export type BunproContext = BunproRevealContext | BunproQuestionContext;
+
+function getMetadata(): HTMLElement | null {
+  return document.querySelector<HTMLElement>(Selectors.Metadata);
+}
+
+function parseJson(raw: string | null | undefined): unknown {
   if (!raw) return null;
   try {
     return JSON.parse(raw);
@@ -27,7 +52,7 @@ function parseJson(raw) {
 }
 
 // data-meta-question-mode: 'cloze' answers in Japanese, 'translate' in English.
-export function getLanguage() {
+export function getLanguage(): string {
   const mode = getMetadata()?.dataset.metaQuestionMode;
   if (mode === 'cloze') return 'ja-JP';
   return 'en-US';
@@ -43,7 +68,7 @@ const RevealLabels = {
   bad: ['bad'],
 };
 
-function findLabeledButton(labels) {
+function findLabeledButton(labels: string[]): HTMLButtonElement | null {
   for (const button of document.querySelectorAll('button')) {
     const haystack = `${button.title} ${button.textContent}`.toLowerCase();
     if (labels.some((label) => new RegExp(`\\b${label}\\b`).test(haystack))) return button;
@@ -51,7 +76,7 @@ function findLabeledButton(labels) {
   return null;
 }
 
-function clickLabeledButton(labels) {
+function clickLabeledButton(labels: string[]): boolean {
   const button = findLabeledButton(labels);
   if (!button) return false;
   button.click();
@@ -60,14 +85,14 @@ function clickLabeledButton(labels) {
 
 // Revealing is the "attempt" on a Reveal & Grade card, so
 // data-meta-is-post-attempt flips once the answer is shown (the same flag
-// bunpro_speed.js keys results off). Fall back to the grade buttons'
+// bunpro_speed.ts keys results off). Fall back to the grade buttons'
 // presence in case the flag is missing.
-function isRevealed(meta) {
+function isRevealed(meta: HTMLElement): boolean {
   if (meta.dataset.metaIsPostAttempt === 'true') return true;
   return !!(findLabeledButton(RevealLabels.good) && findLabeledButton(RevealLabels.bad));
 }
 
-function getPage(meta) {
+function getPage(meta: HTMLElement): string {
   const loc = meta.dataset.metaLoc;
   if (loc === 'review') return 'review';
   if (loc === 'learn') return 'lesson';
@@ -78,13 +103,13 @@ function getPage(meta) {
 
 // The card identity: item id plus submission count, so a repeated/ghost
 // review of the same item later in the session still counts as a change.
-function getCardKey(meta) {
-  const info = parseJson(meta.dataset.metaInfo);
+function getCardKey(meta: HTMLElement): string | null {
+  const info = parseJson(meta.dataset.metaInfo) as MetaInfo | null;
   if (info?.id == null) return null;
   return `${info.id}:${meta.dataset.metaTotalSubmissionsCount ?? '0'}`;
 }
 
-export function getContext() {
+export function getContext(): BunproContext | null {
   const meta = getMetadata();
   if (!meta) return null;
 
@@ -101,19 +126,23 @@ export function getContext() {
   const questionMode = meta.dataset.metaQuestionMode;
   // cloze/translate map onto the existing checkAnswer types; any other mode
   // falls through to its generic "unknown question type" branch.
-  let type = questionMode;
+  let type = questionMode ?? null;
   if (questionMode === 'cloze') type = 'reading';
   if (questionMode === 'translate') type = 'meaning';
 
-  const answers = parseJson(meta.dataset.metaAnswersArray) ?? [];
+  const answers = (parseJson(meta.dataset.metaAnswersArray) as string[] | null) ?? [];
   const readings = type === 'reading' ? answers : [];
   const meanings = type === 'meaning' ? answers : [];
-  const category = parseJson(meta.dataset.metaInfo)?.type ?? null;
+  const category = (parseJson(meta.dataset.metaInfo) as MetaInfo | null)?.type ?? null;
 
   return { page, prompt, category, type, meanings, readings, items: [] };
 }
 
-export function didContextChange(oldContext, newContext) {
+// Structural type: reveal-mode contexts have no `type`, and app.js compares
+// across both shapes during transitions.
+type ContextIdentity = { prompt?: string | null; type?: string | null } | null | undefined;
+
+export function didContextChange(oldContext: ContextIdentity, newContext: ContextIdentity): boolean {
   return (newContext?.prompt !== oldContext?.prompt) ||
          (newContext?.type !== oldContext?.type);
 }
@@ -121,31 +150,32 @@ export function didContextChange(oldContext, newContext) {
 // BunPro's input is React-controlled: assigning .value directly is ignored
 // because React tracks the value internally. Use the native setter, then
 // dispatch a bubbling input event so React picks up the change.
-export function inputAnswer(input) {
-  const el = document.querySelector(Selectors.Input);
+export function inputAnswer(input: string): boolean {
+  const el = document.querySelector<HTMLInputElement>(Selectors.Input);
   if (!el) return false;
-  const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
+  const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
+  if (!setter) return false;
   setter.call(el, input);
   el.dispatchEvent(new Event('input', { bubbles: true }));
   return true;
 }
 
-export function submitAnswer(input) {
+export function submitAnswer(input: string): boolean {
   if (!inputAnswer(input)) return false;
-  const button = document.querySelector(Selectors.Submit);
+  const button = document.querySelector<HTMLButtonElement>(Selectors.Submit);
   if (button) { button.click(); return true; }
   return false;
 }
 
-export function markWrong() {
+export function markWrong(): void {
   const incorrect = getLanguage() === 'en-US' ? 'aaa' : 'あああ';
   submitAnswer(incorrect);
 }
 
 // Best-effort: only needed for accounts without BunPro's native Lightning
 // Mode, which otherwise auto-advances on a correct answer.
-export function clickNext() {
-  for (const button of document.querySelectorAll('button[title]')) {
+export function clickNext(): boolean {
+  for (const button of document.querySelectorAll<HTMLButtonElement>('button[title]')) {
     if (button.title.toLowerCase().includes('next question')) {
       button.click();
       return true;
@@ -156,34 +186,34 @@ export function clickNext() {
 
 // Reveal & Grade actions — only meaningful when getContext() reported
 // mode 'reveal'; each returns whether a matching button was found.
-export function reveal() {
+export function reveal(): boolean {
   return clickLabeledButton(RevealLabels.reveal);
 }
 
-export function gradeGood() {
+export function gradeGood(): boolean {
   return clickLabeledButton(RevealLabels.good);
 }
 
-export function gradeBad() {
+export function gradeBad(): boolean {
   return clickLabeledButton(RevealLabels.bad);
 }
 
-export function clickInfo() {
-  const hint = document.querySelector(Selectors.Hint);
+export function clickInfo(): void {
+  const hint = document.querySelector<HTMLButtonElement>(Selectors.Hint);
   if (hint) hint.click();
 }
 
 // Fires onChange (debounced) when the current card's identity or question
 // mode settles on a new value — not on every attribute mutation.
-export function createCardWatcher(onChange) {
-  function currentKey() {
+export function createCardWatcher(onChange: () => void): MutationObserver {
+  function currentKey(): string | null {
     const meta = getMetadata();
     if (!meta) return null;
     return `${getCardKey(meta)}|${meta.dataset.metaQuestionMode}|${meta.dataset.metaInputMode}`;
   }
 
   let lastSeenKey = currentKey();
-  let timer;
+  let timer: ReturnType<typeof setTimeout> | undefined;
 
   const observer = new MutationObserver(() => {
     const key = currentKey();
