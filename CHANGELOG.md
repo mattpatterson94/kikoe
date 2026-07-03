@@ -54,6 +54,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   from ~12.3 MB to ~7.7 MB.
   ([#32](https://github.com/mattpatterson94/kikoe/pull/32))
 
+### Removed
+
+- API token auto-discovery, replaced by a clickable indicator: the
+  "⚠ No API token" chip now opens the extension options page when clicked,
+  via a new background script (content scripts can't open the options page
+  themselves). The fallback scraped `/settings/account`, but
+  WaniKani only shows tokens on `/settings/personal_access_tokens`, so it
+  never found one — every setup already used the documented manual paste on
+  the options page. The extension no longer fetches any WaniKani settings
+  page, matching the behavior described in [PRIVACY.md](PRIVACY.md).
+  ([#55](https://github.com/mattpatterson94/kikoe/issues/55))
+
 ### Fixed
 
 - Reading recognition gaps across the candidate pipeline: rendaku/sokuon

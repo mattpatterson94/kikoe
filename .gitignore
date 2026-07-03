@@ -4,6 +4,7 @@ node_modules/
 data/
 
 # Build outputs copied into extension dirs
+chrome/background.js
 chrome/bundle.js
 chrome/content.js
 chrome/injected.js
@@ -12,6 +13,7 @@ chrome/options.js
 chrome/data/
 chrome/vendor/
 
+firefox/background.js
 firefox/bundle.js
 firefox/content.js
 firefox/injected.js

@@ -172,7 +172,7 @@ be entered in kana or romaji.
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| Debug mode | Off | Logs diagnostic details (speech matching, subject loading, token discovery) to the browser console, prefixed with `[kikoe]` |
+| Debug mode | Off | Logs diagnostic details (speech matching, subject loading) to the browser console, prefixed with `[kikoe]` |
 
 ## Development
 

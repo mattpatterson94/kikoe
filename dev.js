@@ -17,6 +17,7 @@ console.log(`[dev] target: ${target}/`);
 
 // Non-bundled files that are copied verbatim into the extension directory.
 const staticFiles = [
+  ['extension/background.js', `${target}/background.js`],
   ['extension/injected.js',  `${target}/injected.js`],
   ['extension/options.html', `${target}/options.html`],
   ['extension/options.js',   `${target}/options.js`],

@@ -1,4 +1,4 @@
-import { getSettings, buildSafeConfig, scrapeApiToken, fetchSubjectsForPrompt, prefetchSubjects, takeNextPrefetchBatch, subjectCacheKey, CACHE_PREFIX, RADICALS_CACHE_KEY } from '../extension/content';
+import { getSettings, buildSafeConfig, getApiToken, fetchSubjectsForPrompt, prefetchSubjects, takeNextPrefetchBatch, subjectCacheKey, CACHE_PREFIX, RADICALS_CACHE_KEY } from '../extension/content';
 import { defaults } from '../src/settings';
 
 // ── Chrome API mock ───────────────────────────────────────────────────────────
@@ -101,51 +101,23 @@ describe('buildSafeConfig', () => {
   });
 });
 
-// ── scrapeApiToken ────────────────────────────────────────────────────────────
+// ── getApiToken ───────────────────────────────────────────────────────────────
 
-describe('scrapeApiToken', () => {
+describe('getApiToken', () => {
   const TOKEN = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
 
-  beforeEach(() => {
-    vi.stubGlobal('DOMParser', class {
-      parseFromString(html) {
-        document.body.innerHTML = html;
-        return document;
-      }
-    });
+  test('returns the token entered on the options page', async () => {
+    syncStore.apiToken = TOKEN;
+    expect(await getApiToken()).toBe(TOKEN);
   });
 
-  afterEach(() => {
-    document.body.innerHTML = '';
-  });
-
-  test('extracts UUID from an input value', async () => {
-    vi.stubGlobal('fetch', async () => ({
-      ok: true,
-      text: async () => `<input type="text" value="${TOKEN}" readonly />`,
-    }));
-    expect(await scrapeApiToken()).toBe(TOKEN);
-  });
-
-  test('extracts UUID from a code element', async () => {
-    vi.stubGlobal('fetch', async () => ({
-      ok: true,
-      text: async () => `<code>${TOKEN}</code>`,
-    }));
-    expect(await scrapeApiToken()).toBe(TOKEN);
-  });
-
-  test('returns null when no UUID is found', async () => {
-    vi.stubGlobal('fetch', async () => ({
-      ok: true,
-      text: async () => `<p>No token here</p>`,
-    }));
-    expect(await scrapeApiToken()).toBeNull();
-  });
-
-  test('returns null on non-ok response', async () => {
-    vi.stubGlobal('fetch', async () => ({ ok: false, status: 404 }));
-    expect(await scrapeApiToken()).toBeNull();
+  test('returns null when no token is stored, without any network fetch', async () => {
+    const fetchSpy = vi.fn();
+    vi.stubGlobal('fetch', fetchSpy);
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    expect(await getApiToken()).toBeNull();
+    expect(fetchSpy).not.toHaveBeenCalled();
+    warnSpy.mockRestore();
   });
 });
 
