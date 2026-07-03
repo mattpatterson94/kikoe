@@ -93,6 +93,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   space-separated name to the API's hyphenated slug (so the fetched
   radical is no longer filtered out of the context).
   ([#46](https://github.com/mattpatterson94/kikoe/pull/46))
+- Subject prefetching now slides past the first 50 queue items: each card
+  change warms the next batch of upcoming subjects instead of re-deriving the
+  same head of the queue, so sessions longer than 50 items no longer race the
+  live per-card fetch (and its transient "loading answers…" state) from
+  position 51 onward. Failed batches are retried on the next card change.
+  ([#47](https://github.com/mattpatterson94/kikoe/pull/47))
 
 ## [0.6.0] - 2026-07-02
 
