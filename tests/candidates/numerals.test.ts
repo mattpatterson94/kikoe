@@ -1,7 +1,8 @@
 import { Numerals } from '../../src/candidates/numerals';
+import type { Dictionary } from '../../src/dict';
 
 const numerals = new Numerals();
-const get = (raw) => numerals.getCandidates(raw).map(c => c.data).sort();
+const get = (raw: string) => numerals.getCandidates(raw).map(c => c.data).sort();
 
 describe('Numerals', () => {
   test('converts Arabic numeral suffix to kanji', () => {
@@ -40,11 +41,11 @@ describe('Numerals with a dictionary', () => {
   // Day-of-month counters have irregular readings (六日 → むいか, not
   // ろくにち) that only exist as whole-word JMdict entries keyed by the
   // kanji spelling — which only exists after kansuji conversion.
-  const dictionary = {
-    '六日': [{ id: '1', type: 'word', kanji: ['六日'], kana: ['むいか'] }],
-    '二十日': [{ id: '2', type: 'word', kanji: ['二十日'], kana: ['はつか', 'にじゅうにち'] }],
+  const dictionary: Dictionary = {
+    '六日': [{ type: 'word', kana: ['むいか'] }],
+    '二十日': [{ type: 'word', kana: ['はつか', 'にじゅうにち'] }],
   };
-  const get = (raw) => new Numerals(dictionary).getCandidates(raw).map(c => c.data);
+  const get = (raw: string) => new Numerals(dictionary).getCandidates(raw).map(c => c.data);
 
   // Bug reproduction: speech recognition returns the digit form (6日), but
   // only Numerals' own kansuji output (六日) is ever looked up.

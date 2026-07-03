@@ -37,7 +37,7 @@ export class MultipleWords implements CandidateGenerator {
     this.dictionary = dictionary;
   }
 
-  getCandidates(raw: string): Candidate[] {
+  getCandidates(raw: string | null): Candidate[] {
     if (!raw || raw.length === 0) {
       return [];
     }

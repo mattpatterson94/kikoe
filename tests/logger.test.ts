@@ -1,7 +1,8 @@
 import { debugLog, setDebugLogging, isDebugLoggingEnabled } from '../src/logger';
 import { initSettings, updateSettings } from '../src/settings';
+import type { MockInstance } from 'vitest';
 
-let logSpy;
+let logSpy: MockInstance;
 
 beforeEach(() => {
   setDebugLogging(false);

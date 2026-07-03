@@ -36,3 +36,8 @@ it can't be fixed in scope, stop and flag it instead.
   the extension (no bundling/transpiling), so they must stay plain JS.
 - Every module in `src/` has a matching test file in `tests/`; keep it that
   way when adding or renaming modules.
+- Pure-logic tests are TypeScript. The mock-heavy suites (app, content,
+  recognition, speed, bunpro_speed, wanikani, bunpro, live_transcript, dict)
+  stay JavaScript deliberately: they stub partial Web Speech / chrome.storage
+  / DOM objects and feed malformed inputs to exercise defensive paths, which
+  strict typing would only bury under casts. Don't migrate them.

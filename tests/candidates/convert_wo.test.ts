@@ -1,7 +1,7 @@
 import { ConvertWo } from '../../src/candidates/convert_wo';
 
 const cw = new ConvertWo();
-const get = (raw) => cw.getCandidates(raw).map(c => c.data);
+const get = (raw: string) => cw.getCandidates(raw).map(c => c.data);
 
 // ConvertWo only fires when を appears at index > 0 (not as the leading char).
 // It models を appearing mid-word as the particle pronunciation slip.

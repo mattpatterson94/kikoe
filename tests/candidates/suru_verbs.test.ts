@@ -1,11 +1,12 @@
 import { SuruVerbs } from '../../src/candidates/suru_verbs';
+import type { Dictionary } from '../../src/dict';
 
-const dictionary = {
-  'べんきょう': [{ id: '1', type: 'word', kanji: ['勉強'], kana: ['べんきょう'] }],
+const dictionary: Dictionary = {
+  'べんきょう': [{ type: 'word', kana: ['べんきょう'] }],
 };
 
 const sv = new SuruVerbs(dictionary);
-const get = (raw) => sv.getCandidates(raw).map(c => c.data);
+const get = (raw: string) => sv.getCandidates(raw).map(c => c.data);
 
 describe('SuruVerbs', () => {
   test('stem + する: returns reading + する', () => {

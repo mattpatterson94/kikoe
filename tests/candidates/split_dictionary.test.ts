@@ -1,40 +1,41 @@
 import { SplitDictionary } from '../../src/candidates/split_dictionary';
+import type { Dictionary } from '../../src/dict';
 
-const dictionary = {
-  '僕': [{ id: '1', type: 'word', kanji: ['僕'], kana: ['ぼく'] }],
-  '私': [{ id: '2', type: 'word', kanji: ['私'], kana: ['わたし'] }],
+const dictionary: Dictionary = {
+  '僕': [{ type: 'word', kana: ['ぼく'] }],
+  '私': [{ type: 'word', kana: ['わたし'] }],
   '客': [
-    { literal: '客', type: 'character', readings: [
-      { type: 'on', value: 'キャク' }, { type: 'on', value: 'カク' },
+    { type: 'character', readings: [
+      { value: 'キャク' }, { value: 'カク' },
     ] },
   ],
   '気': [
-    { literal: '気', type: 'character', readings: [{ type: 'on', value: 'キ' }] },
+    { type: 'character', readings: [{ value: 'キ' }] },
   ],
   '付': [
-    { literal: '付', type: 'character', readings: [
-      { type: 'on', value: 'フ' }, { type: 'kun', value: 'つ.ける' },
+    { type: 'character', readings: [
+      { value: 'フ' }, { value: 'つ.ける' },
     ] },
   ],
   '耳': [
-    { literal: '耳', type: 'character', readings: [
-      { type: 'on', value: 'ジ' }, { type: 'kun', value: 'みみ' },
+    { type: 'character', readings: [
+      { value: 'ジ' }, { value: 'みみ' },
     ] },
   ],
   '打': [
-    { literal: '打', type: 'character', readings: [
-      { type: 'on', value: 'ダ' }, { type: 'kun', value: 'う.つ' },
+    { type: 'character', readings: [
+      { value: 'ダ' }, { value: 'う.つ' },
     ] },
   ],
   '弱': [
-    { literal: '弱', type: 'character', readings: [
-      { type: 'on', value: 'ジャク' }, { type: 'kun', value: 'よわ.い' },
+    { type: 'character', readings: [
+      { value: 'ジャク' }, { value: 'よわ.い' },
     ] },
   ],
 };
 
 const sd = new SplitDictionary(dictionary);
-const get = (raw) => sd.getCandidates(raw).map(c => c.data);
+const get = (raw: string) => sd.getCandidates(raw).map(c => c.data);
 
 // SplitDictionary splits into alternating kana/kanji runs, keeps kana runs
 // literal, and replaces each kanji run with its dictionary readings.
