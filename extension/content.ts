@@ -1,6 +1,6 @@
 // Runs in the ISOLATED content-script world.
-// Manages settings (chrome.storage.sync), auto-discovers the WaniKani API
-// token from the settings page, fetches + caches subjects, and injects the
+// Manages settings (chrome.storage.sync), reads the WaniKani API token
+// entered on the options page, fetches + caches subjects, and injects the
 // bridge + app bundle into the page context.
 
 import { defaults } from '../src/settings';
@@ -50,51 +50,15 @@ export function buildSafeConfig(base: string, settings: StoredSettings, hasApiTo
   return { base, settings: safeSettings, hasApiToken };
 }
 
-// Fetch the account settings page and extract the v2 API token.
-// The token is the only UUID-formatted value on that page.
-export async function scrapeApiToken(): Promise<string | null> {
-  try {
-    const resp = await fetch('/settings/account');
-    if (!resp.ok) return null;
-    const html = await resp.text();
-    const doc = new DOMParser().parseFromString(html, 'text/html');
-    const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    for (const el of doc.querySelectorAll('input, code, span')) {
-      const val = (el as HTMLInputElement).value || el.textContent || '';
-      if (uuidRe.test(val.trim())) return val.trim();
-    }
-    return null;
-  } catch (err) {
-    console.error('[kikoe] failed to scrape API token:', err);
-    return null;
-  }
-}
-
 export async function getApiToken(): Promise<string | null> {
-  // Prefer token entered manually in the options page.
   const synced = await chrome.storage.sync.get('apiToken') as { apiToken?: string };
   if (synced.apiToken) {
     debugLog('using API token from options');
     return synced.apiToken;
   }
 
-  // Fall back to previously auto-scraped token.
-  const cached = await chrome.storage.local.get('kikoe_apiToken') as { kikoe_apiToken?: string };
-  if (cached.kikoe_apiToken) {
-    debugLog('using cached auto-scraped API token');
-    return cached.kikoe_apiToken;
-  }
-
-  // Last resort: scrape from the settings page.
-  debugLog('attempting to scrape API token from /settings/account');
-  const token = await scrapeApiToken();
-  if (token) {
-    await chrome.storage.local.set({ kikoe_apiToken: token });
-    debugLog('auto-discovered API token');
-  } else {
-    console.warn('[kikoe] could not find API token — open extension options and paste your WaniKani v2 API token');
-  }
-  return token || null;
+  console.warn('[kikoe] could not find API token — open extension options and paste your WaniKani v2 API token');
+  return null;
 }
 
 async function fetchSubjectPage(url: string, apiToken: string | null): Promise<SubjectCollection> {
