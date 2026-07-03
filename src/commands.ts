@@ -1,7 +1,9 @@
 // Voice command registry: the single source of truth for what can be said.
-// app.ts builds its recognizer lookup tables from these specs, and the help
-// panel (src/help.ts) renders its command list from the same specs — so a
-// command added here shows up in both automatically and the two can't drift.
+// app.ts builds its recognizer lookup tables from these specs, the help
+// panel (src/help.ts) renders its command list from the same specs, and the
+// README's command tables are generated from them (scripts/readme_tables.ts,
+// `npm run readme:commands`) — so a command added here shows up everywhere
+// automatically and the docs can't drift.
 
 export interface CommandSpec {
   id: string;
@@ -72,7 +74,7 @@ export const HELP_COMMANDS: CommandSpec[] = [
     id: 'help',
     en: ['help', 'commands'],
     ja: ['ヘルプ', 'へるぷ', 'コマンド'],
-    description: 'Show or hide this command list',
+    description: 'Show or hide the command cheat sheet',
   },
 ];
 

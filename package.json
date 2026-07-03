@@ -14,7 +14,9 @@
     "dev": "node dev.js",
     "dev:firefox": "node dev.js --firefox",
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "readme:commands": "node scripts/readme-commands.js --write",
+    "readme:commands:check": "node scripts/readme-commands.js"
   },
   "dependencies": {
     "kansuji": "^1.0.1",

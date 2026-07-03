@@ -85,13 +85,14 @@ Once installed and configured, the extension activates automatically on any Wani
 
 **Voice commands** (available at any time during a session):
 
-| Say | Action |
-|-----|--------|
-| `next` / `次` / `つぎ` | Advance to the next card |
-| `wrong` / `incorrect` / `mistake` | Mark the current answer wrong |
-| `間違い` / `まちがい` / `だめ` | Mark the current answer wrong (Japanese) |
-| `pause` / `stop listening` / `ストップ` | Mute the mic |
-| `help` / `commands` / `ヘルプ` | Open the in-page command cheat sheet |
+<!-- BEGIN GENERATED voice-commands (from src/commands.ts — regenerate with `npm run readme:commands`) -->
+| Say (English) | Say (Japanese) | Action |
+| ------------- | -------------- | ------ |
+| `next` | `次` / `つぎ` / `ねくすと` / `ネクスト` | Advance to the next card |
+| `wrong` / `incorrect` / `mistake` | `間違い` / `まちがい` / `不正解` / `ふせいかい` / `だめ` / `ダメ` / `駄目` | Mark the current answer wrong |
+| `pause` / `stop listening` | `ストップ` | Mute the mic (click the Muted chip to resume) |
+| `help` / `commands` | `ヘルプ` / `へるぷ` / `コマンド` | Show or hide the command cheat sheet |
+<!-- END GENERATED voice-commands -->
 
 Muting is one-way by voice: since recognition stops while muted, there's no voice command to unmute. Click the listening indicator (bottom-right) to toggle the mic on/off at any time; it also shows a distinct "Muted" state.
 
@@ -117,11 +118,13 @@ The extension applies several candidate transformations to improve recognition a
 - Fill In (cloze) questions expect a Japanese answer; Translate questions expect English. The recognition language switches automatically.
 - Cards from decks set to **Reveal & Grade** have no text input and are driven entirely by voice commands instead:
 
-  | Say | When | Action |
-  |-----|------|--------|
-  | `reveal` / `show` / `show answer` / `answer` / `見せて` / `答え` | Answer hidden | Show the answer |
-  | `good` / `known` / `correct` / `わかった` | Answer shown | Grade as known |
-  | `bad` / `again` / `わからない` | Answer shown | Grade as not known |
+  <!-- BEGIN GENERATED bunpro-reveal-grade (from src/commands.ts — regenerate with `npm run readme:commands`) -->
+  | Say (English) | Say (Japanese) | When | Action |
+  | ------------- | -------------- | ---- | ------ |
+  | `reveal` / `show` / `show answer` / `answer` | `見せて` / `みせて` / `答え` / `こたえ` | Answer hidden | Show the answer |
+  | `good` / `known` / `correct` | `わかった` / `分かった` | Answer shown | Grade as known |
+  | `bad` / `again` | `わからない` / `分からない` | Answer shown | Grade as not known |
+  <!-- END GENERATED bunpro-reveal-grade -->
 - BunPro's own native Lightning Mode setting is detected at runtime, so enabling the extension's turbo mode won't double-advance.
 
 ## Settings

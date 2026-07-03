@@ -37,6 +37,10 @@ it can't be fixed in scope, stop and flag it instead.
   bundling/transpiling), so they must stay plain JS.
 - Every module in `src/` has a matching test file in `tests/`; keep it that
   way when adding or renaming modules.
+- The voice-command tables in README.md are generated from `src/commands.ts`
+  (between `BEGIN/END GENERATED` markers) — don't edit them by hand. After
+  changing the command registry, run `npm run readme:commands` and commit the
+  regenerated README; the test suite fails while the two are out of sync.
 - Pure-logic tests are TypeScript. The mock-heavy suites (app, content,
   recognition, speed, bunpro_speed, wanikani, bunpro, live_transcript, dict)
   stay JavaScript deliberately: they stub partial Web Speech / chrome.storage
