@@ -54,13 +54,13 @@ const logger = (label) => ({
 // Build both bundles in watch mode.
 const [appCtx, contentCtx] = await Promise.all([
   esbuild.context({
-    entryPoints: ['src/app.js'],
+    entryPoints: ['src/app.ts'],
     bundle: true, format: 'iife', platform: 'browser',
     outfile: `${target}/bundle.js`,
     plugins: [logger('app')],
   }),
   esbuild.context({
-    entryPoints: ['extension/content.js'],
+    entryPoints: ['extension/content.ts'],
     bundle: true, format: 'iife', platform: 'browser',
     outfile: `${target}/content.js`,
     plugins: [logger('content')],
