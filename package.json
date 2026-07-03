@@ -12,7 +12,8 @@
     "pack:firefox": "mkdir -p dist && cd firefox && zip -r ../dist/kikoe-firefox.zip .",
     "pack": "npm run pack:chrome && npm run pack:firefox",
     "dev": "node dev.js",
-    "dev:firefox": "node dev.js --firefox"
+    "dev:firefox": "node dev.js --firefox",
+    "lint": "eslint ."
   },
   "dependencies": {
     "js-levenshtein": "^1.1.6",
@@ -21,8 +22,11 @@
     "wanakana": "^5.3.1"
   },
   "devDependencies": {
+    "@eslint/js": "^9.39.4",
     "@vitest/coverage-v8": "^2.1.0",
     "esbuild": "^0.21.0",
+    "eslint": "^9.39.4",
+    "globals": "^17.7.0",
     "jsdom": "^25.0.0",
     "vitest": "^2.1.0",
     "web-ext": "^10.4.0"

@@ -1,4 +1,3 @@
-const MIN_INDICATE = 100;
 
 // Short utterances and common on'yomi (かい, けい, どう, ...) are frequently
 // autocorrected by the recognizer into an unrelated real word, since its
