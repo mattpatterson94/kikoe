@@ -1,4 +1,4 @@
-import { SplitDictionary } from '../../src/candidates/split_dictionary.js';
+import { SplitDictionary } from '../../src/candidates/split_dictionary';
 
 const dictionary = {
   '僕': [{ id: '1', type: 'word', kanji: ['僕'], kana: ['ぼく'] }],

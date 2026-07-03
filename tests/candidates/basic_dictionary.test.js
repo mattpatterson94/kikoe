@@ -1,4 +1,4 @@
-import { BasicDictionary } from '../../src/candidates/basic_dictionary.js';
+import { BasicDictionary } from '../../src/candidates/basic_dictionary';
 
 const dictionary = {
   'せんだい': [

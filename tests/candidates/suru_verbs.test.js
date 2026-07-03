@@ -1,4 +1,4 @@
-import { SuruVerbs } from '../../src/candidates/suru_verbs.js';
+import { SuruVerbs } from '../../src/candidates/suru_verbs';
 
 const dictionary = {
   'べんきょう': [{ id: '1', type: 'word', kanji: ['勉強'], kana: ['べんきょう'] }],

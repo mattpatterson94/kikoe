@@ -1,7 +1,9 @@
 import { toHiragana, isJapanese } from 'wanakana';
+import type { Candidate, CandidateGenerator } from './types';
+import type { Dictionary, DictionaryEntry } from '../dict';
 
 // TODO: create dictionary class and move this there
-function lookup(dictionary, s) {
+function lookup(dictionary: Dictionary, s: string): DictionaryEntry[] {
   const result = dictionary[s];
   if (result) {
     return result;
@@ -9,10 +11,10 @@ function lookup(dictionary, s) {
   return [];
 }
 
-function getReadings(entries) {
+function getReadings(entries: DictionaryEntry[]): string[] {
   return entries.flatMap(entry => {
     if (entry.type === 'word') {
-      return entry['kana'].map(toHiragana);
+      return entry.kana.map(k => toHiragana(k));
     }
     if (entry.type === 'character') {
       return entry.readings.map(r => {
@@ -27,13 +29,15 @@ function getReadings(entries) {
   });
 }
 
-export class MultipleWords {
-  constructor(dictionary) {
-    this.order = 0;
+export class MultipleWords implements CandidateGenerator {
+  order = 0;
+  dictionary: Dictionary;
+
+  constructor(dictionary: Dictionary) {
     this.dictionary = dictionary;
   }
 
-  getCandidates(raw) {
+  getCandidates(raw: string): Candidate[] {
     if (!raw || raw.length === 0) {
       return [];
     }
@@ -41,7 +45,7 @@ export class MultipleWords {
     if (!isJapanese(nospaces)) {
       return [];
     }
-    const candidates = [];
+    const candidates: Candidate[] = [];
     if (raw.includes(' ')) {
       const parts = raw.split(' ').filter(x => x.length > 0);
       const readings = parts.map(part => {
@@ -54,7 +58,7 @@ export class MultipleWords {
         }
         return '';
       });
-      candidates.push({type: "multiple", data: readings.join('')});
+      candidates.push({ type: 'multiple', data: readings.join('') });
     }
     return candidates;
   }

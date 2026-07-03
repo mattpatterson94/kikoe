@@ -1,7 +1,9 @@
 import { toHiragana, isKanji } from 'wanakana';
+import type { Candidate, CandidateGenerator } from './types';
+import type { Dictionary, DictionaryEntry } from '../dict';
 
 // TODO: create dictionary class and move this there
-function lookup(dictionary, s) {
+function lookup(dictionary: Dictionary, s: string): DictionaryEntry[] {
   const result = dictionary[s];
   if (result) {
     return result;
@@ -9,11 +11,11 @@ function lookup(dictionary, s) {
   return [];
 }
 
-function characterReadings(entries) {
-  const readings = [];
+function characterReadings(entries: DictionaryEntry[]): string[] {
+  const readings: string[] = [];
   for (const entry of entries) {
     if (entry.type === 'word') {
-      readings.push(...entry.kana.map(toHiragana));
+      readings.push(...entry.kana.map(k => toHiragana(k)));
     }
     if (entry.type === 'character') {
       for (const r of entry.readings) {
@@ -34,20 +36,22 @@ const MAX_CANDIDATES = 50;
 // Rendaku voices the first mora of a non-initial component (南+国 →
 // なんごく); after gemination the h-row can also take the p-sound
 // (一+本 → いっぽん).
-const RENDAKU = {
+const RENDAKU: Record<string, string> = {
   'か': 'が', 'き': 'ぎ', 'く': 'ぐ', 'け': 'げ', 'こ': 'ご',
   'さ': 'ざ', 'し': 'じ', 'す': 'ず', 'せ': 'ぜ', 'そ': 'ぞ',
   'た': 'だ', 'ち': 'ぢ', 'つ': 'づ', 'て': 'で', 'と': 'ど',
   'は': 'ば', 'ひ': 'び', 'ふ': 'ぶ', 'へ': 'べ', 'ほ': 'ぼ',
 };
-const HANDAKU = { 'は': 'ぱ', 'ひ': 'ぴ', 'ふ': 'ぷ', 'へ': 'ぺ', 'ほ': 'ぽ' };
+const HANDAKU: Record<string, string> = {
+  'は': 'ぱ', 'ひ': 'ぴ', 'ふ': 'ぷ', 'へ': 'ぺ', 'ほ': 'ぽ',
+};
 
 // Sokuon geminates the final mora of a non-final component (一+斤 → いっきん).
 const SOKUON_FINALS = new Set(['つ', 'ち', 'く', 'き']);
 
 // Base readings come first so slicing to MAX_CANDIDATES prefers plain
 // combinations over sound-changed ones.
-function withSoundChanges(reading, isFirst, isLast) {
+function withSoundChanges(reading: string, isFirst: boolean, isLast: boolean): string[] {
   const variants = [reading];
   if (!isFirst) {
     const head = reading[0];
@@ -67,7 +71,7 @@ function withSoundChanges(reading, isFirst, isLast) {
 
 // 々 repeats the previous kanji (人々 → 人人) but is neither kana nor kanji
 // to wanakana; expand it so per-character lookup sees a real character.
-function expandIterationMarks(s) {
+function expandIterationMarks(s: string): string {
   let result = '';
   for (const char of s) {
     result += char === '々' ? (result[result.length - 1] ?? char) : char;
@@ -81,13 +85,15 @@ function expandIterationMarks(s) {
 // including rendaku/sokuon variants — wrong combinations are harmless
 // because candidates only submit when they match the card's accepted
 // readings.
-export class CompoundDictionary {
-  constructor(dictionary) {
-    this.order = 0;
+export class CompoundDictionary implements CandidateGenerator {
+  order = 0;
+  dictionary: Dictionary;
+
+  constructor(dictionary: Dictionary) {
     this.dictionary = dictionary;
   }
 
-  getCandidates(raw) {
+  getCandidates(raw: string): Candidate[] {
     const expanded = expandIterationMarks(raw);
     if (expanded.length < 2 || expanded.length > 4 || !isKanji(expanded)) return [];
     // The whole word is known — BasicDictionary already covers it.

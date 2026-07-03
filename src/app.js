@@ -1,4 +1,4 @@
-import { checkAnswer } from './flashcards.js';
+import { checkAnswer } from './flashcards';
 import { createRecognition, setLanguage } from './recognition';
 import * as wanikani from './wanikani.js';
 import * as bunpro from './bunpro.js';
@@ -10,15 +10,15 @@ import { startSpeedEnhancer as startBunproSpeedEnhancer } from './bunpro_speed.j
 import { createTranscriptContainer, logTranscript, showIdleIndicator, setIdleIndicatorState } from './live_transcript.js';
 import { loadDictionary } from './dict';
 
-import { ToHiragana } from './candidates/to_hiragana.js';
-import { ConvertWo } from './candidates/convert_wo.js';
-import { BasicDictionary } from './candidates/basic_dictionary.js';
-import { SplitDictionary } from './candidates/split_dictionary.js';
-import { CompoundDictionary } from './candidates/compound_dictionary.js';
-import { SuruVerbs } from './candidates/suru_verbs.js';
-import { RepeatingSubstring } from './candidates/repeating.js';
-import { MultipleWords } from './candidates/multiple.js';
-import { Numerals } from './candidates/numerals.js';
+import { ToHiragana } from './candidates/to_hiragana';
+import { ConvertWo } from './candidates/convert_wo';
+import { BasicDictionary } from './candidates/basic_dictionary';
+import { SplitDictionary } from './candidates/split_dictionary';
+import { CompoundDictionary } from './candidates/compound_dictionary';
+import { SuruVerbs } from './candidates/suru_verbs';
+import { RepeatingSubstring } from './candidates/repeating';
+import { MultipleWords } from './candidates/multiple';
+import { Numerals } from './candidates/numerals';
 
 const EMPTY_FINAL_RESTART_THRESHOLD = 3;
 const RESTARTING_INDICATOR_MS = 900;

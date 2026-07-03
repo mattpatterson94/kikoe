@@ -1,11 +1,11 @@
-import { checkAnswer, normalize } from '../src/flashcards.js';
-import { ToHiragana } from '../src/candidates/to_hiragana.js';
-import { BasicDictionary } from '../src/candidates/basic_dictionary.js';
-import { FuzzyVowels } from '../src/candidates/fuzzy_vowels.js';
-import { ConvertWo } from '../src/candidates/convert_wo.js';
-import { CompoundDictionary } from '../src/candidates/compound_dictionary.js';
-import { SplitDictionary } from '../src/candidates/split_dictionary.js';
-import { Numerals } from '../src/candidates/numerals.js';
+import { checkAnswer, normalize } from '../src/flashcards';
+import { ToHiragana } from '../src/candidates/to_hiragana';
+import { BasicDictionary } from '../src/candidates/basic_dictionary';
+import { FuzzyVowels } from '../src/candidates/fuzzy_vowels';
+import { ConvertWo } from '../src/candidates/convert_wo';
+import { CompoundDictionary } from '../src/candidates/compound_dictionary';
+import { SplitDictionary } from '../src/candidates/split_dictionary';
+import { Numerals } from '../src/candidates/numerals';
 
 const dictionary = {
   'せんだい': [
