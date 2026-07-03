@@ -1,8 +1,10 @@
 import { toHiragana, isJapanese, isKana } from 'wanakana';
+import type { Candidate, CandidateGenerator } from './candidates/types';
+import type { Correction } from './settings';
 
 // Speech recognition frequently mishears Japanese phonemes as Latin letters or
 // English words. Map known mishearings to their hiragana equivalents.
-const homonyms = {
+const homonyms: Record<string, string | string[]> = {
   'b': 'び',
   'ezone': 'いぞん',
   'gt': 'じき',
@@ -75,17 +77,44 @@ const homonyms = {
 
 // Common English SR mishearings mapped to the correct WaniKani meaning.
 // Add entries here as you encounter new ones.
-const meaningCorrections = {
+const meaningCorrections: Record<string, string> = {
   'rib cage': 'ribcage',
 };
+
+// The card being answered: question type plus the accepted answer sets.
+// Built by the per-site adapters (wanikani/bunpro); answer sets may be empty
+// while subjects are still loading.
+export interface QuestionContext {
+  type: string;
+  readings?: string[];
+  meanings?: string[];
+}
+
+export type FailureReason = 'not-loaded' | 'wrong-type' | 'no-match';
+
+export interface Transcript {
+  raw: string;
+  matched?: string;
+  reason?: FailureReason;
+  type?: string;
+}
+
+export type CheckResult =
+  | { success: true; answer: string; transcript: Transcript }
+  | { success: false; error: boolean; message?: string; transcript: Transcript };
+
+export interface CheckOptions {
+  fuzzyMeaning?: boolean;
+  corrections?: Correction[];
+}
 
 // User-defined corrections from settings: an array of { heard, intended }
 // pairs. Multiple pairs may share a heard string (like the built-in
 // '9': ['きゅう', 'く', 'くう'] homonym), so the lookup maps
 // heard → [intended, ...]. Consulted before the built-in tables so users can
 // override shipped entries. Blank or malformed pairs are skipped.
-function buildCorrectionLookup(pairs) {
-  const lookup = {};
+function buildCorrectionLookup(pairs: Partial<Correction>[] | undefined): Record<string, string[]> {
+  const lookup: Record<string, string[]> = {};
   for (const pair of pairs || []) {
     const heard = (pair?.heard ?? '').trim().toLowerCase();
     const intended = (pair?.intended ?? '').trim();
@@ -98,7 +127,7 @@ function buildCorrectionLookup(pairs) {
 // Normalise for submission: strip leading articles and trailing punctuation.
 // For Japanese: collapse spaces and convert to hiragana.
 // For English: keep spaces so multi-word meanings are preserved.
-export function normalize(s) {
+export function normalize(s: string): string {
   const stripped = s.toLowerCase()
     .replace(/^(a|an|the)\s+/i, '')
     .replace(/[.,!?;:]+$/, '');
@@ -111,7 +140,7 @@ export function normalize(s) {
 // Standard edit-distance DP. Used to mirror WaniKani's own fuzzy meaning
 // matching (see fuzzyThreshold) so a near-miss answer WaniKani would accept
 // isn't rejected locally before it ever reaches the server-side check.
-function levenshtein(a, b) {
+function levenshtein(a: string, b: string): number {
   const m = a.length;
   const n = b.length;
   if (m === 0) return n;
@@ -135,7 +164,7 @@ function levenshtein(a, b) {
 // WaniKani's documented fuzzy-matching tolerance, scaled by answer length
 // (used by userscripts like Double-Check). Verify against current WK
 // behavior before changing.
-function fuzzyThreshold(length) {
+function fuzzyThreshold(length: number): number {
   if (length <= 3) return 0;
   if (length <= 5) return 1;
   if (length <= 8) return 2;
@@ -144,8 +173,8 @@ function fuzzyThreshold(length) {
 
 // Returns the closest accepted meaning within WaniKani's edit-distance
 // tolerance for its length, or null if none qualifies.
-function closestFuzzyMatch(candidate, meanings) {
-  let best = null;
+function closestFuzzyMatch(candidate: string, meanings: string[]): string | null {
+  let best: string | null = null;
   let bestDistance = Infinity;
   for (const meaning of meanings) {
     const distance = levenshtein(candidate, meaning);
@@ -161,7 +190,7 @@ function closestFuzzyMatch(candidate, meanings) {
 // (ビール → びいる), but WaniKani's accepted readings keep the ー
 // (びーる) — compare both forms. Shared by the reading matcher and the
 // wrong-type check below.
-function kanaForms(kana) {
+function kanaForms(kana: string): Set<string> {
   return new Set([
     toHiragana(kana, { convertLongVowelMark: false }),
     toHiragana(kana),
@@ -172,7 +201,11 @@ function kanaForms(kana) {
 // detect a meaning-question answer that was actually the reading (or vice
 // versa), so the failure can be reported as "wrong type" instead of a bare
 // non-match.
-function matchesAnyReading(candidates, acceptedReadings, customLookup = {}) {
+function matchesAnyReading(
+  candidates: Candidate[],
+  acceptedReadings: string[],
+  customLookup: Record<string, string[]> = {},
+): boolean {
   if (!acceptedReadings.length) return false;
   for (const c of candidates) {
     if (isKana(c.data)) {
@@ -195,7 +228,11 @@ function matchesAnyReading(candidates, acceptedReadings, customLookup = {}) {
 // Whether any candidate resolves to one of the accepted meanings — the
 // meaning-side counterpart of matchesAnyReading, used for the same wrong-type
 // detection on reading questions.
-function matchesAnyMeaning(candidates, normalizedMeanings, customLookup = {}) {
+function matchesAnyMeaning(
+  candidates: Candidate[],
+  normalizedMeanings: string[],
+  customLookup: Record<string, string[]> = {},
+): boolean {
   if (!normalizedMeanings.length) return false;
   for (const c of candidates) {
     const custom = customLookup[c.data.toLowerCase()] || [];
@@ -215,7 +252,11 @@ function matchesAnyMeaning(candidates, normalizedMeanings, customLookup = {}) {
 // - 'wrong-type': the candidate matches the *other* answer set (e.g. spoke
 //   the meaning on a reading question) — the most actionable case.
 // - 'no-match': heard something, but nothing matched either answer set.
-function failureReason(candidates, context, customLookup = {}) {
+function failureReason(
+  candidates: Candidate[],
+  context: QuestionContext,
+  customLookup: Record<string, string[]> = {},
+): FailureReason {
   const readings = context.readings || [];
   const meanings = context.meanings || [];
   if (readings.length === 0 && meanings.length === 0) return 'not-loaded';
@@ -228,20 +269,21 @@ function failureReason(candidates, context, customLookup = {}) {
   return 'no-match';
 }
 
-function groupBy(xs, k) {
-  return xs.reduce(function(rv, x) {
-    (rv[x[k]] = rv[x[k]] || []).push(x);
-    return rv;
-  }, {});
-}
-
-function generateCandidates(transformers, raw) {
-  let candidates = [{ type: 'raw', data: raw }];
-  const byOrder = groupBy(transformers, 'order');
-  const keys = Object.keys(byOrder).map(k => parseInt(k)).sort();
+function generateCandidates(transformers: CandidateGenerator[], raw: string): Candidate[] {
+  const candidates: Candidate[] = [{ type: 'raw', data: raw }];
+  const byOrder = new Map<number, CandidateGenerator[]>();
+  for (const t of transformers) {
+    const group = byOrder.get(t.order);
+    if (group) {
+      group.push(t);
+    } else {
+      byOrder.set(t.order, [t]);
+    }
+  }
+  const keys = [...byOrder.keys()].sort((a, b) => a - b);
   for (const key of keys) {
-    const ts = byOrder[key];
-    const newCandidates = [];
+    const ts = byOrder.get(key) ?? [];
+    const newCandidates: Candidate[] = [];
     for (const t of ts) {
       for (const c of candidates) {
         newCandidates.push(...t.getCandidates(c.data));
@@ -256,7 +298,12 @@ function generateCandidates(transformers, raw) {
 // For reading questions: find the first Japanese candidate (converted to
 // hiragana). The homonym table handles common speech-recognition mishearings
 // (e.g. "b" → "び"). For meaning/name questions: submit normalised English.
-export function checkAnswer(context, transformers, raw, opts = {}) {
+export function checkAnswer(
+  context: QuestionContext,
+  transformers: CandidateGenerator[],
+  raw: string,
+  opts: CheckOptions = {},
+): CheckResult {
   const { type } = context;
   const { fuzzyMeaning = false, corrections = [] } = opts;
   const customLookup = buildCorrectionLookup(corrections);
@@ -265,7 +312,7 @@ export function checkAnswer(context, transformers, raw, opts = {}) {
   if (type === 'reading') {
     const acceptedReadings = (context.readings || []);
 
-    function matchesReading(kana) {
+    function matchesReading(kana: string): boolean {
       if (acceptedReadings.length === 0) return false;
       return acceptedReadings.includes(kana);
     }
@@ -295,7 +342,7 @@ export function checkAnswer(context, transformers, raw, opts = {}) {
         }
       }
       const h = homonyms[c.data.toLowerCase()];
-      const readings = Array.isArray(h) ? h : [h];
+      const readings = Array.isArray(h) ? h : (h ? [h] : []);
       const matched = readings.find(matchesReading);
       if (matched) {
         return { success: true, answer: matched, transcript: { raw, matched } };
@@ -325,7 +372,7 @@ export function checkAnswer(context, transformers, raw, opts = {}) {
     // kicks in as a fallback, and submits the canonical accepted meaning
     // rather than the misheard candidate — the server-side check is what
     // actually grades, so submitting anything else it might reject is unsafe.
-    function matchingAnswer(norm) {
+    function matchingAnswer(norm: string): string | null {
       if (normalizedMeanings.length === 0) return null;
       if (normalizedMeanings.includes(norm)) return norm;
       const compact = norm.replaceAll(' ', '');

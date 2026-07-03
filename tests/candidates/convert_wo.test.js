@@ -1,4 +1,4 @@
-import { ConvertWo } from '../../src/candidates/convert_wo.js';
+import { ConvertWo } from '../../src/candidates/convert_wo';
 
 const cw = new ConvertWo();
 const get = (raw) => cw.getCandidates(raw).map(c => c.data);

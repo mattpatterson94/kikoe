@@ -1,4 +1,4 @@
-import { findRepeatingSubstring, RepeatingSubstring } from '../../src/candidates/repeating.js';
+import { findRepeatingSubstring, RepeatingSubstring } from '../../src/candidates/repeating';
 
 describe('findRepeatingSubstring', () => {
   test('length-2 string with single repeated char', () => {

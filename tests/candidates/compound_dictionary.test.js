@@ -1,4 +1,4 @@
-import { CompoundDictionary } from '../../src/candidates/compound_dictionary.js';
+import { CompoundDictionary } from '../../src/candidates/compound_dictionary';
 
 const dictionary = {
   '何': [

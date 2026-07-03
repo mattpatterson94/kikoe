@@ -1,4 +1,4 @@
-import { MultipleWords } from '../../src/candidates/multiple.js';
+import { MultipleWords } from '../../src/candidates/multiple';
 
 const dictionary = {
   '南極': [{ id: '1460180', type: 'word', kanji: ['南極'], kana: ['なんきょく'] }],

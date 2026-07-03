@@ -1,4 +1,4 @@
-import { ToHiragana } from '../../src/candidates/to_hiragana.js';
+import { ToHiragana } from '../../src/candidates/to_hiragana';
 
 const toh = new ToHiragana();
 const get = (raw) => toh.getCandidates(raw).map(c => c.data).sort();

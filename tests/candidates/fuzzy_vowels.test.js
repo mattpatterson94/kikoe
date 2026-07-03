@@ -1,4 +1,4 @@
-import { FuzzyVowels } from '../../src/candidates/fuzzy_vowels.js';
+import { FuzzyVowels } from '../../src/candidates/fuzzy_vowels';
 
 const fuzzy = new FuzzyVowels();
 const get = (raw) => fuzzy.getCandidates(raw).map(c => c.data).sort();

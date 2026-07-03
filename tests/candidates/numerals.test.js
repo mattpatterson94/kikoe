@@ -1,4 +1,4 @@
-import { Numerals } from '../../src/candidates/numerals.js';
+import { Numerals } from '../../src/candidates/numerals';
 
 const numerals = new Numerals();
 const get = (raw) => numerals.getCandidates(raw).map(c => c.data).sort();
