@@ -4,25 +4,55 @@
 // bridge + app bundle into the page context.
 
 import { defaults } from '../src/settings';
+import type { Settings } from '../src/settings';
 import { detectSite } from '../src/site';
 import { debugLog, setDebugLogging } from '../src/logger';
+import type { WanikaniSubject } from '../src/wanikani';
 
 export const CACHE_PREFIX = 'kikoe_subj_';
 
-export async function getSettings() {
+// Stored settings may carry the manually-entered API token alongside the
+// Settings shape; buildSafeConfig strips it before anything reaches the page.
+type StoredSettings = Settings & { apiToken?: string };
+
+interface SafeConfig {
+  base: string;
+  settings: Omit<StoredSettings, 'apiToken'>;
+  hasApiToken: boolean;
+}
+
+// WaniKani API errors carry the HTTP status (and, for 429s, how long to wait).
+interface ApiError extends Error {
+  status?: number;
+  retryAfterMs?: number;
+}
+
+interface RetryOptions {
+  retries?: number;
+  backoffMs?: number;
+  onRetry?: (attempt: number) => void;
+}
+
+// WaniKani API v2 collection response, narrowed to the fields we read.
+interface SubjectCollection {
+  data?: WanikaniSubject[];
+  pages?: { next_url?: string | null };
+}
+
+export async function getSettings(): Promise<StoredSettings> {
   const keys = Object.keys(defaults);
   const stored = await chrome.storage.sync.get(keys);
   return { ...defaults, ...stored };
 }
 
-export function buildSafeConfig(base, settings, hasApiToken = false) {
+export function buildSafeConfig(base: string, settings: StoredSettings, hasApiToken = false): SafeConfig {
   const { apiToken: _, ...safeSettings } = settings;
   return { base, settings: safeSettings, hasApiToken };
 }
 
 // Fetch the account settings page and extract the v2 API token.
 // The token is the only UUID-formatted value on that page.
-export async function scrapeApiToken() {
+export async function scrapeApiToken(): Promise<string | null> {
   try {
     const resp = await fetch('/settings/account');
     if (!resp.ok) return null;
@@ -30,7 +60,7 @@ export async function scrapeApiToken() {
     const doc = new DOMParser().parseFromString(html, 'text/html');
     const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     for (const el of doc.querySelectorAll('input, code, span')) {
-      const val = el.value || el.textContent || '';
+      const val = (el as HTMLInputElement).value || el.textContent || '';
       if (uuidRe.test(val.trim())) return val.trim();
     }
     return null;
@@ -40,16 +70,16 @@ export async function scrapeApiToken() {
   }
 }
 
-export async function getApiToken() {
+export async function getApiToken(): Promise<string | null> {
   // Prefer token entered manually in the options page.
-  const synced = await chrome.storage.sync.get('apiToken');
+  const synced = await chrome.storage.sync.get('apiToken') as { apiToken?: string };
   if (synced.apiToken) {
     debugLog('using API token from options');
     return synced.apiToken;
   }
 
   // Fall back to previously auto-scraped token.
-  const cached = await chrome.storage.local.get('kikoe_apiToken');
+  const cached = await chrome.storage.local.get('kikoe_apiToken') as { kikoe_apiToken?: string };
   if (cached.kikoe_apiToken) {
     debugLog('using cached auto-scraped API token');
     return cached.kikoe_apiToken;
@@ -67,12 +97,12 @@ export async function getApiToken() {
   return token || null;
 }
 
-async function fetchSubjectPage(url, apiToken) {
+async function fetchSubjectPage(url: string, apiToken: string | null): Promise<SubjectCollection> {
   const resp = await fetch(url, {
     headers: { Authorization: `Bearer ${apiToken}` }
   });
   if (!resp.ok) {
-    const err = new Error(`WaniKani API error: ${resp.status}`);
+    const err: ApiError = new Error(`WaniKani API error: ${resp.status}`);
     err.status = resp.status;
     // The API throttles at 60 requests/minute; a 429 carries a
     // RateLimit-Reset epoch (seconds) telling us when requests resume.
@@ -90,21 +120,22 @@ const NO_RETRY_STATUSES = new Set([401, 403, 404, 422]);
 // The rate-limit window is one minute, so a reset is never further away.
 const MAX_RETRY_WAIT_MS = 60_000;
 
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // Shared retry loop for WaniKani API calls: exponential backoff, except a
 // 429 waits out the exact RateLimit-Reset instead of guessing.
-async function withRetry(fn, { retries = 2, backoffMs = 1000, onRetry } = {}) {
-  let lastErr;
+async function withRetry<T>(fn: () => Promise<T>, { retries = 2, backoffMs = 1000, onRetry }: RetryOptions = {}): Promise<T> {
+  let lastErr: unknown;
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
       return await fn();
     } catch (err) {
       lastErr = err;
       console.error(`[kikoe] fetch error (attempt ${attempt + 1}/${retries + 1}):`, err);
-      if (NO_RETRY_STATUSES.has(err.status) || attempt === retries) break;
+      const { status, retryAfterMs } = err as ApiError;
+      if ((status !== undefined && NO_RETRY_STATUSES.has(status)) || attempt === retries) break;
       onRetry?.(attempt + 1);
-      await sleep(Math.min(err.retryAfterMs ?? backoffMs * 2 ** attempt, MAX_RETRY_WAIT_MS));
+      await sleep(Math.min(retryAfterMs ?? backoffMs * 2 ** attempt, MAX_RETRY_WAIT_MS));
     }
   }
   throw lastErr;
@@ -113,13 +144,13 @@ async function withRetry(fn, { retries = 2, backoffMs = 1000, onRetry } = {}) {
 // Same key format the per-card lookup uses (category as shown on the quiz
 // UI, prompt as the exact on-screen text) — prefetched subjects must land
 // under this key for the per-card path to hit the cache transparently.
-export function subjectCacheKey(category, prompt) {
+export function subjectCacheKey(category: string, prompt: string): string {
   return CACHE_PREFIX + category + '_' + prompt;
 }
 
 // Image-only radicals display their lowercased, space-separated name instead
-// of characters (see getPrompt's aria-label fallback in src/wanikani.js).
-function promptForSubject(subject) {
+// of characters (see getPrompt's aria-label fallback in src/wanikani.ts).
+function promptForSubject(subject: WanikaniSubject): string | null {
   return subject.data.characters || subject.data.slug?.replace(/-/g, ' ') || null;
 }
 
@@ -127,7 +158,7 @@ export const RADICALS_CACHE_KEY = 'kikoe_radicals';
 
 // Keep only the fields the matcher needs — full subjects carry image data
 // and mnemonics that would bloat chrome.storage.local.
-function pruneSubject(s) {
+function pruneSubject(s: WanikaniSubject): WanikaniSubject {
   return {
     id: s.id,
     object: s.object,
@@ -144,14 +175,14 @@ function pruneSubject(s) {
 // Radical slugs are English names ("ground"), not characters, so the API's
 // slugs= filter can never find a radical by its displayed character. Fetch
 // the complete radical set once (~500, one page) and match locally.
-async function fetchAllRadicals(apiToken) {
-  const cached = await chrome.storage.local.get(RADICALS_CACHE_KEY);
+async function fetchAllRadicals(apiToken: string | null): Promise<WanikaniSubject[]> {
+  const cached = await chrome.storage.local.get(RADICALS_CACHE_KEY) as Record<string, WanikaniSubject[] | undefined>;
   if (cached[RADICALS_CACHE_KEY]?.length) return cached[RADICALS_CACHE_KEY];
 
-  const radicals = [];
-  let url = 'https://api.wanikani.com/v2/subjects?types=radical';
+  const radicals: WanikaniSubject[] = [];
+  let url: string | null = 'https://api.wanikani.com/v2/subjects?types=radical';
   while (url) {
-    const json = await fetchSubjectPage(url, apiToken);
+    const json: SubjectCollection = await fetchSubjectPage(url, apiToken);
     radicals.push(...(json.data || []).map(pruneSubject));
     url = json.pages?.next_url || null;
   }
@@ -161,7 +192,7 @@ async function fetchAllRadicals(apiToken) {
 
 // The prompt is the radical's character, or for image-only radicals the
 // lowercased name from the aria-label ("coat rack" vs slug "coat-rack").
-function matchRadical(radical, prompt) {
+function matchRadical(radical: WanikaniSubject, prompt: string): boolean {
   return radical.data.characters === prompt ||
          radical.data.slug === prompt ||
          radical.data.slug === prompt.replace(/\s+/g, '-');
@@ -169,14 +200,18 @@ function matchRadical(radical, prompt) {
 
 // Missing token is not reported as an error here — the indicator already
 // shows a dedicated no-token state.
-export async function fetchSubjectsForPrompt(prompt, category, apiToken,
-  { retries = 2, backoffMs = 1000, onRetry } = {}) {
+export async function fetchSubjectsForPrompt(
+  prompt: string,
+  category: string,
+  apiToken: string | null,
+  { retries = 2, backoffMs = 1000, onRetry }: RetryOptions = {},
+): Promise<{ subjects: WanikaniSubject[]; error: string | null }> {
   if (!apiToken) return { subjects: [], error: null };
 
   // An empty cache entry is treated as a miss — earlier versions cached
   // failed/empty lookups, which permanently broke the affected card.
   const cacheKey = subjectCacheKey(category, prompt);
-  const cached = await chrome.storage.local.get(cacheKey);
+  const cached = await chrome.storage.local.get(cacheKey) as Record<string, WanikaniSubject[] | undefined>;
   if (cached[cacheKey]?.length) return { subjects: cached[cacheKey], error: null };
 
   const slug = encodeURIComponent(prompt);
@@ -194,7 +229,7 @@ export async function fetchSubjectsForPrompt(prompt, category, apiToken,
     if (subjects.length) await chrome.storage.local.set({ [cacheKey]: subjects });
     return { subjects, error: null };
   } catch (err) {
-    return { subjects: [], error: err.message || 'subject fetch failed' };
+    return { subjects: [], error: (err as Error).message || 'subject fetch failed' };
   }
 }
 
@@ -208,8 +243,12 @@ export const PREFETCH_BATCH_SIZE = 50;
 // Picks the next batch of not-yet-requested IDs (in queue order) and marks
 // them in `requested`. On fetch failure the caller un-marks them so a
 // transient error doesn't leave a permanent cold gap in the queue.
-export function takeNextPrefetchBatch(subjectIds, requested, batchSize = PREFETCH_BATCH_SIZE) {
-  const batch = [];
+export function takeNextPrefetchBatch(
+  subjectIds: number[] | null | undefined,
+  requested: Set<number>,
+  batchSize = PREFETCH_BATCH_SIZE,
+): number[] {
+  const batch: number[] = [];
   for (const id of subjectIds || []) {
     if (requested.has(id)) continue;
     requested.add(id);
@@ -223,35 +262,43 @@ export function takeNextPrefetchBatch(subjectIds, requested, batchSize = PREFETC
 // queue) in a single request, storing each under the same category+prompt
 // key the per-card path looks up later. Subjects that fail to resolve a
 // prompt (shouldn't happen for real subjects) are skipped, not errored.
-export async function prefetchSubjects(subjectIds, apiToken, { retries = 2, backoffMs = 1000, onRetry } = {}) {
+export async function prefetchSubjects(
+  subjectIds: number[] | null | undefined,
+  apiToken: string | null,
+  { retries = 2, backoffMs = 1000, onRetry }: RetryOptions = {},
+): Promise<{ fetchedCount: number; error: string | null }> {
   if (!apiToken || !subjectIds?.length) return { fetchedCount: 0, error: null };
 
   const url = `https://api.wanikani.com/v2/subjects?ids=${subjectIds.join(',')}`;
 
-  let subjects;
+  let subjects: WanikaniSubject[];
   try {
     subjects = await withRetry(
       () => fetchSubjectPage(url, apiToken).then((json) => json.data || []),
       { retries, backoffMs, onRetry }
     );
   } catch (err) {
-    return { fetchedCount: 0, error: err.message || 'prefetch failed' };
+    return { fetchedCount: 0, error: (err as Error).message || 'prefetch failed' };
   }
 
-  const byKey = new Map();
+  const byKey = new Map<string, WanikaniSubject[]>();
   for (const subject of subjects) {
     const prompt = promptForSubject(subject);
     if (!prompt) continue;
     const key = subjectCacheKey(subject.object, prompt);
-    if (!byKey.has(key)) byKey.set(key, []);
-    byKey.get(key).push(pruneSubject(subject));
+    const group = byKey.get(key);
+    if (group) {
+      group.push(pruneSubject(subject));
+    } else {
+      byKey.set(key, [pruneSubject(subject)]);
+    }
   }
 
   if (byKey.size) {
-    const existing = await chrome.storage.local.get([...byKey.keys()]);
-    const updates = {};
+    const existing = await chrome.storage.local.get([...byKey.keys()]) as Record<string, WanikaniSubject[] | undefined>;
+    const updates: Record<string, WanikaniSubject[]> = {};
     for (const [key, fetched] of byKey) {
-      const prior = existing[key] || [];
+      const prior: WanikaniSubject[] = existing[key] || [];
       updates[key] = [...prior, ...fetched.filter((s) => !prior.some((p) => p.id === s.id))];
     }
     await chrome.storage.local.set(updates);
@@ -260,14 +307,14 @@ export async function prefetchSubjects(subjectIds, apiToken, { retries = 2, back
   return { fetchedCount: subjects.length, error: null };
 }
 
-function injectScript(src) {
+function injectScript(src: string): void {
   const s = document.createElement('script');
   s.src = src;
   document.documentElement.appendChild(s);
   s.remove();
 }
 
-async function main() {
+async function main(): Promise<void> {
   const site = detectSite(window.location.hostname);
   if (!site) return;
 
@@ -288,7 +335,7 @@ async function main() {
 
   if (site === 'wanikani') {
     document.addEventListener('kikoe:subjectRequest', async (e) => {
-      const { prompt, category } = e.detail;
+      const { prompt, category } = (e as CustomEvent<{ prompt: string; category: string }>).detail;
       if (!apiToken) apiToken = await getApiToken();
       const { subjects, error } = await fetchSubjectsForPrompt(prompt, category, apiToken, {
         onRetry: () => document.dispatchEvent(new CustomEvent('kikoe:subjectRetry')),
@@ -303,9 +350,10 @@ async function main() {
     // head of the queue. IDs are marked before the fetch (so overlapping
     // card changes grab consecutive batches) and un-marked if it fails (so
     // the next card change retries them — bounded at one batch per change).
-    const requestedPrefetchIds = new Set();
+    const requestedPrefetchIds = new Set<number>();
     document.addEventListener('kikoe:prefetchRequest', async (e) => {
-      const batch = takeNextPrefetchBatch(e.detail.subjectIds, requestedPrefetchIds);
+      const { subjectIds } = (e as CustomEvent<{ subjectIds: number[] }>).detail;
+      const batch = takeNextPrefetchBatch(subjectIds, requestedPrefetchIds);
       if (!batch.length) return;
       if (!apiToken) apiToken = await getApiToken();
       const { error } = await prefetchSubjects(batch, apiToken);
@@ -321,7 +369,7 @@ async function main() {
     if (area !== 'sync') return;
     const updated = { ...currentSettings };
     for (const [k, { newValue }] of Object.entries(changes)) {
-      updated[k] = newValue;
+      (updated as Record<string, unknown>)[k] = newValue;
     }
     currentSettings = updated;
     setDebugLogging(updated.debug);

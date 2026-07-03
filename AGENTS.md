@@ -22,15 +22,15 @@ it can't be fixed in scope, stop and flag it instead.
 
 ## Build & dev
 
-- `npm run build` — full build: bundles `src/app.js` and
-  `extension/content.js`, downloads dictionary data (cached), assembles
+- `npm run build` — full build: bundles `src/app.ts` and
+  `extension/content.ts`, downloads dictionary data (cached), assembles
   `chrome/` and `firefox/` (both are build output, never edit them directly).
 - `npm run dev` / `npm run dev:firefox` — watch mode with live reload.
 
 ## Conventions
 
-- Plain ES modules; the codebase is migrating incrementally from JavaScript
-  to TypeScript. New modules should be written in TypeScript. Do not use
+- Plain ES modules, TypeScript throughout `src/` and for the bundled
+  content script. New modules must be written in TypeScript. Do not use
   `any` casts or `@ts-ignore`/`@ts-expect-error` to silence type errors.
 - `extension/injected.js` and `extension/options.js` are copied verbatim into
   the extension (no bundling/transpiling), so they must stay plain JS.

@@ -1,4 +1,4 @@
-import { getSettings, buildSafeConfig, scrapeApiToken, fetchSubjectsForPrompt, prefetchSubjects, takeNextPrefetchBatch, subjectCacheKey, CACHE_PREFIX, RADICALS_CACHE_KEY } from '../extension/content.js';
+import { getSettings, buildSafeConfig, scrapeApiToken, fetchSubjectsForPrompt, prefetchSubjects, takeNextPrefetchBatch, subjectCacheKey, CACHE_PREFIX, RADICALS_CACHE_KEY } from '../extension/content';
 import { defaults } from '../src/settings';
 
 // ── Chrome API mock ───────────────────────────────────────────────────────────

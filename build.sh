@@ -7,15 +7,15 @@ DATA_BASE="https://raw.githubusercontent.com/okonomichiyaki/wanikani-voice-input
 echo "→ Installing npm dependencies..."
 npm install --silent
 
-echo "→ Bundling app (src/app.js → bundle.js)..."
-npx esbuild src/app.js \
+echo "→ Bundling app (src/app.ts → bundle.js)..."
+npx esbuild src/app.ts \
   --bundle \
   --format=iife \
   --platform=browser \
   --outfile=bundle.js
 
-echo "→ Bundling content script (extension/content.js → content.js)..."
-npx esbuild extension/content.js \
+echo "→ Bundling content script (extension/content.ts → content.js)..."
+npx esbuild extension/content.ts \
   --bundle \
   --format=iife \
   --platform=browser \

@@ -1,14 +1,18 @@
 import { checkAnswer } from './flashcards';
+import type { CheckResult } from './flashcards';
 import { createRecognition, setLanguage } from './recognition';
 import * as wanikani from './wanikani';
 import * as bunpro from './bunpro';
 import { detectSite } from './site';
 import { initSettings, updateSettings, getSettings } from './settings';
+import type { Settings } from './settings';
 import { debugLog } from './logger';
 import { startSpeedEnhancer as startWanikaniSpeedEnhancer } from './speed';
 import { startSpeedEnhancer as startBunproSpeedEnhancer } from './bunpro_speed';
 import { createTranscriptContainer, logTranscript, showIdleIndicator, setIdleIndicatorState } from './live_transcript';
 import { loadDictionary } from './dict';
+import type { Dictionary } from './dict';
+import type { WanikaniSubject } from './wanikani';
 
 import { ToHiragana } from './candidates/to_hiragana';
 import { ConvertWo } from './candidates/convert_wo';
@@ -25,19 +29,59 @@ const RESTARTING_INDICATOR_MS = 900;
 
 // Maps a SpeechRecognition error type to the idle-indicator state that
 // explains it to the user. Errors with no entry here (e.g. 'aborted') keep
-// whatever indicator state is already showing — recognition.js still logs them.
-const RECOGNITION_ERROR_STATES = {
+// whatever indicator state is already showing — recognition.ts still logs them.
+const RECOGNITION_ERROR_STATES: Partial<Record<SpeechRecognitionErrorCode, string>> = {
   'not-allowed': 'mic-denied',
   'service-not-allowed': 'mic-denied',
   'audio-capture': 'no-mic',
   'network': 'reconnecting',
 };
 
+// Structural supertype of WanikaniContext and BunproContext — app code only
+// ever reads these fields, always defensively, since either adapter (or a
+// transitional DOM state) may omit them.
+interface SiteContext {
+  page: string;
+  prompt: string | null;
+  category?: string | null;
+  type?: string | null;
+  meanings?: string[];
+  readings?: string[];
+  items?: WanikaniSubject[];
+  mode?: string;
+  revealed?: boolean;
+}
+
+// The common surface app.ts needs from a site adapter. getQueuedSubjectIds
+// is WaniKani-only (prefetch); reveal/grade* are BunPro-only (Reveal & Grade
+// cards) — only bunpro's getContext ever reports mode 'reveal'.
+interface SiteAdapter {
+  getLanguage(): string;
+  getContext(subjects?: WanikaniSubject[]): SiteContext | null;
+  didContextChange(oldContext: SiteContext | null | undefined, newContext: SiteContext | null | undefined): boolean;
+  clickNext(): boolean;
+  markWrong(): void;
+  submitAnswer(input: string): boolean;
+  createCardWatcher(onChange: () => void): MutationObserver;
+  getQueuedSubjectIds?(cap?: number): number[];
+  reveal?(): boolean;
+  gradeGood?(): boolean;
+  gradeBad?(): boolean;
+}
+
+// The config stamped on the root element by the content script
+// (see buildSafeConfig in extension/content.ts).
+interface AppConfig {
+  base: string;
+  settings: Partial<Settings>;
+  hasApiToken: boolean;
+}
+
 // Pick the per-site adapter. Both expose the same public shape; only WaniKani
 // needs subject data fetched via the content script — BunPro's accepted
 // answers are already in the DOM.
 const SITE = detectSite(window.location.hostname);
-const site = SITE === 'bunpro' ? bunpro : wanikani;
+const site: SiteAdapter = SITE === 'bunpro' ? bunpro : wanikani;
 const startSpeedEnhancer = SITE === 'bunpro' ? startBunproSpeedEnhancer : startWanikaniSpeedEnhancer;
 const usesSubjects = SITE !== 'bunpro';
 // WaniKani's own server-side check tolerates small typos (edit-distance
@@ -46,20 +90,20 @@ const usesSubjects = SITE !== 'bunpro';
 // same tolerance, so keep this WaniKani-only until verified.
 const FUZZY_MEANING_MATCHING = SITE === 'wanikani';
 
-// Read config stamped by content.js, then remove the attribute immediately.
+// Read config stamped by content.ts, then remove the attribute immediately.
 const _encoded = document.documentElement.dataset.kikoeConfig;
 document.documentElement.removeAttribute('data-kikoe-config');
-const _config = JSON.parse(atob(_encoded));
+const _config = JSON.parse(atob(_encoded ?? '')) as AppConfig;
 
 initSettings(_config.settings);
 debugLog('debug mode on — settings:', getSettings());
 
 document.addEventListener('kikoe:settingsChanged', (e) => {
-  updateSettings(e.detail);
+  updateSettings((e as CustomEvent<Partial<Settings>>).detail);
 });
 
 // If the user repeats themselves ("night night"), collapse to the first half.
-function deduplicate(raw) {
+function deduplicate(raw: string): string {
   const words = raw.trim().split(/\s+/);
   if (words.length >= 2 && words.length % 2 === 0) {
     const half = words.length / 2;
@@ -70,14 +114,22 @@ function deduplicate(raw) {
   return raw;
 }
 
+interface SubjectData {
+  prompt: string;
+  category: string;
+  subjects: WanikaniSubject[];
+  error?: string | null;
+}
+
 // Request subject data from the content script (which holds the API token).
 // Resolves { subjects, error } — error is set when the API fetch failed.
-function requestSubjects(prompt, category) {
+function requestSubjects(prompt: string, category: string): Promise<{ subjects: WanikaniSubject[]; error: string | null }> {
   return new Promise((resolve) => {
-    function handler(e) {
-      if (e.detail.prompt === prompt && e.detail.category === category) {
+    function handler(e: Event) {
+      const detail = (e as CustomEvent<SubjectData>).detail;
+      if (detail.prompt === prompt && detail.category === category) {
         document.removeEventListener('kikoe:subjectData', handler);
-        resolve({ subjects: e.detail.subjects, error: e.detail.error ?? null });
+        resolve({ subjects: detail.subjects, error: detail.error ?? null });
       }
     }
     document.addEventListener('kikoe:subjectData', handler);
@@ -87,10 +139,10 @@ function requestSubjects(prompt, category) {
   });
 }
 
-async function startListener(dictionary) {
+async function startListener(dictionary: Dictionary): Promise<void> {
   createTranscriptContainer(getSettings());
 
-  let subjects = [];
+  let subjects: WanikaniSubject[] = [];
   let subjectsLoadFailed = false;
   let context = site.getContext(subjects);
   // Tracks an explicit user mute (voice command or clicking the indicator),
@@ -98,14 +150,14 @@ async function startListener(dictionary) {
   // updateRecognitionForPageActivity, which must not silently un-mute this.
   let userMuted = false;
 
-  function restoreIdleIndicator() {
+  function restoreIdleIndicator(): void {
     if (userMuted) setIdleIndicatorState('muted');
     else if (context?.mode === 'unsupported') setIdleIndicatorState('unsupported');
     else if (subjectsLoadFailed) setIdleIndicatorState('error');
     else setIdleIndicatorState(_config.hasApiToken ? 'listening' : 'no-token');
   }
 
-  async function loadSubjects(prompt, category) {
+  async function loadSubjects(prompt: string, category: string): Promise<WanikaniSubject[]> {
     setIdleIndicatorState('loading');
     const { subjects: loaded, error } = await requestSubjects(prompt, category);
     subjectsLoadFailed = !!error;
@@ -120,7 +172,7 @@ async function startListener(dictionary) {
   // Ask the content script to warm the cache for upcoming cards so they're
   // ready by the time they appear — see requestSubjects for the per-card path
   // this backstops.
-  function prefetchUpcoming() {
+  function prefetchUpcoming(): void {
     if (!usesSubjects || typeof site.getQueuedSubjectIds !== 'function') return;
     const subjectIds = site.getQueuedSubjectIds();
     if (subjectIds.length) {
@@ -145,7 +197,7 @@ async function startListener(dictionary) {
     new MultipleWords(dictionary), new Numerals(dictionary),
   ];
 
-  const commands = {
+  const commands: Record<string, () => unknown> = {
     'wrong': site.markWrong, 'incorrect': site.markWrong, 'mistake': site.markWrong,
     '不正解': site.markWrong, 'ふせいかい': site.markWrong, '間違い': site.markWrong,
     'まちがい': site.markWrong, 'だめ': site.markWrong, 'ダメ': site.markWrong,
@@ -161,33 +213,33 @@ async function startListener(dictionary) {
   // Reveal & Grade cards (BunPro, context mode 'reveal') take no typed
   // answer — recognition routes to these command-only tables instead of the
   // checkAnswer path. Both recognizer languages are registered since
-  // getLanguage() may pick either; only bunpro.js produces mode 'reveal',
+  // getLanguage() may pick either; only bunpro.ts produces mode 'reveal',
   // so site.reveal/gradeGood/gradeBad are always defined when these run.
-  const revealCommands = {
-    'reveal': () => site.reveal(), 'show': () => site.reveal(),
-    'show answer': () => site.reveal(), 'answer': () => site.reveal(),
-    '見せて': () => site.reveal(), 'みせて': () => site.reveal(),
-    '答え': () => site.reveal(), 'こたえ': () => site.reveal(),
+  const revealCommands: Record<string, () => unknown> = {
+    'reveal': () => site.reveal?.(), 'show': () => site.reveal?.(),
+    'show answer': () => site.reveal?.(), 'answer': () => site.reveal?.(),
+    '見せて': () => site.reveal?.(), 'みせて': () => site.reveal?.(),
+    '答え': () => site.reveal?.(), 'こたえ': () => site.reveal?.(),
   };
-  const gradeCommands = {
-    'good': () => site.gradeGood(), 'known': () => site.gradeGood(),
-    'correct': () => site.gradeGood(),
-    'わかった': () => site.gradeGood(), '分かった': () => site.gradeGood(),
-    'bad': () => site.gradeBad(), 'again': () => site.gradeBad(),
-    'わからない': () => site.gradeBad(), '分からない': () => site.gradeBad(),
+  const gradeCommands: Record<string, () => unknown> = {
+    'good': () => site.gradeGood?.(), 'known': () => site.gradeGood?.(),
+    'correct': () => site.gradeGood?.(),
+    'わかった': () => site.gradeGood?.(), '分かった': () => site.gradeGood?.(),
+    'bad': () => site.gradeBad?.(), 'again': () => site.gradeBad?.(),
+    'わからない': () => site.gradeBad?.(), '分からない': () => site.gradeBad?.(),
   };
 
   // Recognizer finals routinely arrive capitalized/punctuated ("Next.") even
   // though the command table only has lowercase keys — normalize before
   // lookup instead of growing the table with every casing variant.
-  function normalizeCommand(raw) {
+  function normalizeCommand(raw: string): string {
     return raw.trim().toLowerCase().replace(/[.,!?;:。！？]+$/, '').trim();
   }
 
   // Mirrors checkAlternatives below: try every alternative the recognizer
   // offered, not just the top one, since a garbled top slot can still have
   // the intended command further down the list.
-  function matchCommand(raws, table = commands) {
+  function matchCommand(raws: string[], table: Record<string, () => unknown> = commands): (() => unknown) | null {
     for (const raw of raws) {
       const command = table[normalizeCommand(raw)];
       if (command) return command;
@@ -196,11 +248,11 @@ async function startListener(dictionary) {
   }
 
   let submitted = false;
-  let pendingRaws = null;
+  let pendingRaws: string[] | null = null;
   let emptyFinals = 0;
-  let restartIndicatorTimer;
+  let restartIndicatorTimer: ReturnType<typeof setTimeout> | undefined;
 
-  function isPageActive() {
+  function isPageActive(): boolean {
     const hidden = document.hidden || document.visibilityState === 'hidden';
     const blurred = typeof document.hasFocus === 'function' && !document.hasFocus();
     return !hidden && !blurred;
@@ -212,23 +264,23 @@ async function startListener(dictionary) {
   // because it tells the user exactly what to do differently; 'not-loaded'
   // is uniform across every alternative (it depends on context, not the
   // candidate), so it never competes with the other two.
-  const REASON_PRIORITY = { 'wrong-type': 2, 'no-match': 1 };
+  const REASON_PRIORITY: Record<string, number> = { 'wrong-type': 2, 'no-match': 1 };
 
   // Try every alternative transcript the recognizer offered (ranked by its
   // own confidence) and use the first one that produces a match. Short
   // utterances and common on'yomi are often autocorrected to an unrelated
   // real word in the top slot, but the correct reading is frequently still
   // present further down the list.
-  function checkAlternatives(ctx, raws) {
-    let best;
+  function checkAlternatives(ctx: SiteContext, raws: string[]): CheckResult | undefined {
+    let best: CheckResult | undefined;
     // Read corrections at call time so entries saved in the options page
     // apply on the next utterance via the settings-changed event.
     const corrections = getSettings().customCorrections;
     for (const raw of raws) {
       const result = checkAnswer(ctx, transformers, raw, { fuzzyMeaning: FUZZY_MEANING_MATCHING, corrections });
       if (result.success && result.answer) return result;
-      const priority = REASON_PRIORITY[result.transcript?.reason] ?? 0;
-      if (!best || priority > (REASON_PRIORITY[best.transcript?.reason] ?? 0)) best = result;
+      const priority = REASON_PRIORITY[result.transcript.reason ?? ''] ?? 0;
+      if (!best || priority > (REASON_PRIORITY[best.transcript.reason ?? ''] ?? 0)) best = result;
     }
     // Always display the top alternative's raw text — the reason may have
     // come from a lower-ranked alternative, but the heard text shown to the
@@ -244,7 +296,7 @@ async function startListener(dictionary) {
   // is used rather than the heard text because WaniKani "shakes" without
   // grading on kanji or valid-but-unaccepted alternate readings, which would
   // strand the card with submitted stuck on true.
-  function ippatsuEnabled(type) {
+  function ippatsuEnabled(type: string | null | undefined): boolean {
     const s = getSettings();
     return type === 'reading' ? s.ippatsu_reading : s.ippatsu_meaning;
   }
@@ -253,11 +305,11 @@ async function startListener(dictionary) {
   // (either the initial card's load, or a card change's load in
   // onCardChange), now that they've arrived. No-op if nothing is pending or
   // an answer was already submitted in the meantime.
-  function retryPendingTranscript() {
-    if (!pendingRaws || submitted) return;
+  function retryPendingTranscript(): void {
+    if (!pendingRaws || submitted || !context) return;
     const result = checkAlternatives(context, pendingRaws);
     debugLog('retrying pending transcript', { pendingRaws, result });
-    if (result.success && result.answer) {
+    if (result?.success && result.answer) {
       submitted = true;
       site.submitAnswer(result.answer);
     } else if (result?.transcript?.reason === 'no-match' && ippatsuEnabled(context.type)) {
@@ -267,7 +319,7 @@ async function startListener(dictionary) {
     pendingRaws = null;
   }
 
-  function handleRecognitionResult(rawInputs, final) {
+  function handleRecognitionResult(rawInputs: string[], final: boolean): void {
     const raws = rawInputs.map(deduplicate).filter(r => r.trim());
     if (raws.length === 0) {
       if (final && ++emptyFinals >= EMPTY_FINAL_RESTART_THRESHOLD) {
@@ -317,6 +369,7 @@ async function startListener(dictionary) {
     if (ctx.mode === 'unsupported') { debugLog('skipped — unsupported card type'); return; }
 
     const result = checkAlternatives(ctx, raws);
+    if (!result) return;
     logTranscript(getSettings(), result.transcript);
     debugLog('checkAnswer', { raws, type: ctx.type, readings: ctx.readings, meanings: ctx.meanings, result });
 
@@ -327,29 +380,32 @@ async function startListener(dictionary) {
       // Subjects not loaded yet — store transcript and retry once they arrive.
       pendingRaws = raws;
       debugLog('subjects not loaded, stored pending transcript:', raws);
-    } else if (result.transcript?.reason === 'no-match' && ippatsuEnabled(ctx.type)) {
+    } else if (result.transcript.reason === 'no-match' && ippatsuEnabled(ctx.type)) {
       submitted = true;
       site.markWrong();
     }
   }
 
-  function handleRecognitionError(errorType) {
+  function handleRecognitionError(errorType: SpeechRecognitionErrorCode): void {
     const state = RECOGNITION_ERROR_STATES[errorType];
     if (state) setIdleIndicatorState(state);
   }
 
-  const recognition = createRecognition(() => site.getLanguage(), handleRecognitionResult, handleRecognitionError);
+  const recognitionOrNull = createRecognition(() => site.getLanguage(), handleRecognitionResult, handleRecognitionError);
 
-  if (!recognition) {
+  if (!recognitionOrNull) {
     // No Web Speech support (e.g. Firefox) — nothing below this point can
     // work, so stop before touching recognition.restart/pause/resume.
     showIdleIndicator(getSettings());
     setIdleIndicatorState('unsupported-browser');
     return;
   }
+  // Closures below (and handleRecognitionResult above) capture this non-null
+  // binding; the callback only ever fires once a recognizer exists.
+  const recognition = recognitionOrNull;
 
   // Refresh subjects + language and clear transcript when the card changes.
-  async function onCardChange() {
+  async function onCardChange(): Promise<void> {
     const newContext = site.getContext(subjects);
     if (site.didContextChange(context, newContext)) {
       submitted = false;
@@ -379,7 +435,7 @@ async function startListener(dictionary) {
   // Blur/focus toggles recognition based on page activity, but must not
   // clobber an explicit user mute: muting on a "pause" command or a click on
   // the indicator should stay muted even if the tab loses and regains focus.
-  function updateRecognitionForPageActivity() {
+  function updateRecognitionForPageActivity(): void {
     clearTimeout(restartIndicatorTimer);
     emptyFinals = 0;
     if (userMuted) {
@@ -394,7 +450,7 @@ async function startListener(dictionary) {
     }
   }
 
-  function setMuted(muted) {
+  function setMuted(muted: boolean): void {
     if (userMuted === muted) return;
     userMuted = muted;
     updateRecognitionForPageActivity();
@@ -418,7 +474,7 @@ async function startListener(dictionary) {
   prefetchUpcoming();
 }
 
-async function init() {
+async function init(): Promise<void> {
   // Don't block startup on the ~12 MB dictionary fetch/parse — start
   // listening immediately with an empty dictionary and let it fill in place
   // as entries arrive. Transformers hold a reference to the same object, so
@@ -427,7 +483,7 @@ async function init() {
   dictionaryReady.catch(err => console.error('[kikoe] dictionary load failed:', err));
   let listenerStarted = false;
 
-  function tryStart() {
+  function tryStart(): void {
     if (listenerStarted) return;
     const context = site.getContext();
     if (!context) return;

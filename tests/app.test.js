@@ -31,7 +31,7 @@ function stubDictionaryFetch() {
 }
 
 async function importApp() {
-  await import('../src/app.js');
+  await import('../src/app');
   await vi.waitFor(() => {
     if (!document.getElementById('kikoe-idle-label')) throw new Error('idle indicator not shown yet');
   });
