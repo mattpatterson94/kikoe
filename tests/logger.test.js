@@ -1,5 +1,5 @@
-import { debugLog, setDebugLogging, isDebugLoggingEnabled } from '../src/logger.js';
-import { initSettings, updateSettings } from '../src/settings.js';
+import { debugLog, setDebugLogging, isDebugLoggingEnabled } from '../src/logger';
+import { initSettings, updateSettings } from '../src/settings';
 
 let logSpy;
 

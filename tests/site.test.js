@@ -1,4 +1,4 @@
-import { detectSite } from '../src/site.js';
+import { detectSite } from '../src/site';
 
 describe('detectSite', () => {
   test('www.wanikani.com → wanikani', () => {

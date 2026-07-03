@@ -3,9 +3,9 @@
 // token from the settings page, fetches + caches subjects, and injects the
 // bridge + app bundle into the page context.
 
-import { defaults } from '../src/settings.js';
-import { detectSite } from '../src/site.js';
-import { debugLog, setDebugLogging } from '../src/logger.js';
+import { defaults } from '../src/settings';
+import { detectSite } from '../src/site';
+import { debugLog, setDebugLogging } from '../src/logger';
 
 export const CACHE_PREFIX = 'kikoe_subj_';
 

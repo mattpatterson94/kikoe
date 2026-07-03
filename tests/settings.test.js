@@ -1,4 +1,4 @@
-import { defaults, initSettings, updateSettings, getSettings, isTurboOn } from '../src/settings.js';
+import { defaults, initSettings, updateSettings, getSettings, isTurboOn } from '../src/settings';
 
 // Reset module state between tests by re-calling initSettings with defaults.
 beforeEach(() => {

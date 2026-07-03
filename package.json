@@ -13,7 +13,8 @@
     "pack": "npm run pack:chrome && npm run pack:firefox",
     "dev": "node dev.js",
     "dev:firefox": "node dev.js --firefox",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "js-levenshtein": "^1.1.6",
@@ -23,11 +24,14 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.39.4",
+    "@types/dom-speech-recognition": "^0.0.12",
     "@vitest/coverage-v8": "^2.1.0",
     "esbuild": "^0.21.0",
     "eslint": "^9.39.4",
     "globals": "^17.7.0",
     "jsdom": "^25.0.0",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.62.1",
     "vitest": "^2.1.0",
     "web-ext": "^10.4.0"
   }
