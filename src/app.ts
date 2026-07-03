@@ -10,6 +10,10 @@ import { debugLog } from './logger';
 import { startSpeedEnhancer as startWanikaniSpeedEnhancer } from './speed';
 import { startSpeedEnhancer as startBunproSpeedEnhancer } from './bunpro_speed';
 import { createTranscriptContainer, logTranscript, showIdleIndicator, setIdleIndicatorState } from './live_transcript';
+import { SHARED_COMMANDS, REVEAL_COMMANDS, GRADE_COMMANDS, HELP_COMMANDS, buildCommandTable, commandsForMode } from './commands';
+import type { HelpMode } from './commands';
+import { updateHelpChip, openHelpPanel, closeHelpPanel, isHelpPanelOpen, showHelpHint } from './help';
+import type { HelpView } from './help';
 import { loadDictionary } from './dict';
 import type { Dictionary } from './dict';
 import type { WanikaniSubject } from './wanikani';
@@ -197,37 +201,33 @@ async function startListener(dictionary: Dictionary): Promise<void> {
     new MultipleWords(dictionary), new Numerals(dictionary),
   ];
 
-  const commands: Record<string, () => unknown> = {
-    'wrong': site.markWrong, 'incorrect': site.markWrong, 'mistake': site.markWrong,
-    '不正解': site.markWrong, 'ふせいかい': site.markWrong, '間違い': site.markWrong,
-    'まちがい': site.markWrong, 'だめ': site.markWrong, 'ダメ': site.markWrong,
-    '駄目': site.markWrong,
-    'next': site.clickNext, 'つぎ': site.clickNext, '次': site.clickNext,
-    'ねくすと': site.clickNext, 'ネクスト': site.clickNext,
-    // Resuming by voice while paused is impossible (recognition is stopped),
-    // so this is deliberately pause-only — resuming needs the UI control.
-    'pause': () => setMuted(true), 'stop listening': () => setMuted(true),
-    'ストップ': () => setMuted(true),
-  };
+  // Lookup tables are built from the shared registry (src/commands.ts) so
+  // the help panel lists exactly what the matcher accepts.
+  const commands = buildCommandTable(SHARED_COMMANDS, {
+    'wrong': site.markWrong,
+    'next': site.clickNext,
+    'pause': () => setMuted(true),
+  });
 
   // Reveal & Grade cards (BunPro, context mode 'reveal') take no typed
   // answer — recognition routes to these command-only tables instead of the
   // checkAnswer path. Both recognizer languages are registered since
   // getLanguage() may pick either; only bunpro.ts produces mode 'reveal',
   // so site.reveal/gradeGood/gradeBad are always defined when these run.
-  const revealCommands: Record<string, () => unknown> = {
-    'reveal': () => site.reveal?.(), 'show': () => site.reveal?.(),
-    'show answer': () => site.reveal?.(), 'answer': () => site.reveal?.(),
-    '見せて': () => site.reveal?.(), 'みせて': () => site.reveal?.(),
-    '答え': () => site.reveal?.(), 'こたえ': () => site.reveal?.(),
-  };
-  const gradeCommands: Record<string, () => unknown> = {
-    'good': () => site.gradeGood?.(), 'known': () => site.gradeGood?.(),
-    'correct': () => site.gradeGood?.(),
-    'わかった': () => site.gradeGood?.(), '分かった': () => site.gradeGood?.(),
-    'bad': () => site.gradeBad?.(), 'again': () => site.gradeBad?.(),
-    'わからない': () => site.gradeBad?.(), '分からない': () => site.gradeBad?.(),
-  };
+  const revealCommands = buildCommandTable(REVEAL_COMMANDS, {
+    'reveal': () => site.reveal?.(),
+  });
+  const gradeCommands = buildCommandTable(GRADE_COMMANDS, {
+    'grade-good': () => site.gradeGood?.(),
+    'grade-bad': () => site.gradeBad?.(),
+  });
+
+  // Low-priority commands run only after answer matching has failed: "help"
+  // is itself an accepted meaning on some cards (助け, 手伝う, …), so unlike
+  // the tables above it must never shadow a correct answer.
+  const helpCommands = buildCommandTable(HELP_COMMANDS, {
+    'help': () => toggleHelp(),
+  });
 
   // Recognizer finals routinely arrive capitalized/punctuated ("Next.") even
   // though the command table only has lowercase keys — normalize before
@@ -251,6 +251,36 @@ async function startListener(dictionary: Dictionary): Promise<void> {
   let pendingRaws: string[] | null = null;
   let emptyFinals = 0;
   let restartIndicatorTimer: ReturnType<typeof setTimeout> | undefined;
+
+  // While the help panel is open the mic is paused: the panel displays the
+  // words that trigger actions, so reading it aloud must not fire them.
+  let helpOpen = false;
+
+  function setHelpOpen(open: boolean): void {
+    if (helpOpen === open) return;
+    helpOpen = open;
+    updateRecognitionForPageActivity();
+  }
+
+  function helpView(): HelpView {
+    const ctx = site.getContext(subjects);
+    const mode: HelpMode = ctx?.mode === 'reveal'
+      ? (ctx.revealed ? 'reveal-shown' : 'reveal-hidden')
+      : 'standard';
+    return {
+      commands: commandsForMode(mode),
+      language: site.getLanguage().startsWith('ja') ? 'Japanese' : 'English',
+    };
+  }
+
+  function toggleHelp(): void {
+    if (isHelpPanelOpen()) {
+      closeHelpPanel();
+    } else {
+      openHelpPanel(getSettings(), helpView(), () => setHelpOpen(false));
+      setHelpOpen(true);
+    }
+  }
 
   function isPageActive(): boolean {
     const hidden = document.hidden || document.visibilityState === 'hidden';
@@ -343,12 +373,14 @@ async function startListener(dictionary: Dictionary): Promise<void> {
 
     // Reveal & Grade cards are command-only: match the state-appropriate
     // table first (reveal while the answer is hidden, good/bad once shown),
-    // then fall back to the shared commands ('next', 'pause', …). The whole
-    // checkAnswer path below is skipped.
+    // then fall back to the shared commands ('next', 'pause', …) and 'help'.
+    // The whole checkAnswer path below is skipped, so no answer-priority
+    // concern applies to 'help' here.
     const ctx = site.getContext(subjects);
     if (ctx?.mode === 'reveal') {
       const action = matchCommand(raws, ctx.revealed ? gradeCommands : revealCommands)
-        ?? matchCommand(raws);
+        ?? matchCommand(raws)
+        ?? matchCommand(raws, helpCommands);
       if (action) { action(); return; }
       logTranscript(getSettings(), { raw, reason: ctx.revealed ? 'say-grade' : 'say-reveal' });
       debugLog('reveal card — no command matched:', raws);
@@ -362,16 +394,36 @@ async function startListener(dictionary: Dictionary): Promise<void> {
       return;
     }
 
-    // Ignore further speech after the answer has been submitted — wait for card change.
-    if (submitted) { debugLog('skipped — already submitted'); return; }
+    // Low-priority commands ('help') only run once answer matching is off
+    // the table — either impossible (below) or attempted and failed (bottom
+    // of this function) — so they can never shadow a correct answer.
+    const lowCommand = matchCommand(raws, helpCommands);
 
-    if (!ctx) { debugLog('skipped — no context'); return; }
-    if (ctx.mode === 'unsupported') { debugLog('skipped — unsupported card type'); return; }
+    // Ignore further speech after the answer has been submitted — wait for card change.
+    if (submitted) {
+      if (lowCommand) { lowCommand(); return; }
+      debugLog('skipped — already submitted');
+      return;
+    }
+
+    if (!ctx || ctx.mode === 'unsupported') {
+      if (lowCommand) { lowCommand(); return; }
+      debugLog(ctx ? 'skipped — unsupported card type' : 'skipped — no context');
+      return;
+    }
 
     const result = checkAlternatives(ctx, raws);
     if (!result) return;
-    logTranscript(getSettings(), result.transcript);
     debugLog('checkAnswer', { raws, type: ctx.type, readings: ctx.readings, meanings: ctx.meanings, result });
+
+    // A failed answer that reads as 'help' opens the panel instead of
+    // logging a no-match hint or burning an ippatsu shot.
+    if (!(result.success && result.answer) && lowCommand) {
+      lowCommand();
+      return;
+    }
+
+    logTranscript(getSettings(), result.transcript);
 
     if (result.success && result.answer) {
       submitted = true;
@@ -432,16 +484,30 @@ async function startListener(dictionary: Dictionary): Promise<void> {
 
   showIdleIndicator(getSettings(), () => setMuted(!userMuted));
 
+  // The "?" chip next to the indicator; recreated/removed when the setting
+  // changes. Saying "help" works regardless of the chip's visibility.
+  updateHelpChip(getSettings(), toggleHelp);
+  document.addEventListener('kikoe:settingsChanged', () => updateHelpChip(getSettings(), toggleHelp));
+
+  // One-time discovery nudge; content.ts persists the flag so it never
+  // shows again once seen.
+  if (getSettings().show_help_button && !getSettings().help_hint_shown) {
+    showHelpHint(getSettings());
+    document.dispatchEvent(new CustomEvent('kikoe:helpHintSeen'));
+  }
+
   // Blur/focus toggles recognition based on page activity, but must not
   // clobber an explicit user mute: muting on a "pause" command or a click on
   // the indicator should stay muted even if the tab loses and regains focus.
+  // An open help panel pauses like a blurred tab (see setHelpOpen) and
+  // resumes on close, again without clobbering an explicit mute.
   function updateRecognitionForPageActivity(): void {
     clearTimeout(restartIndicatorTimer);
     emptyFinals = 0;
     if (userMuted) {
       recognition.pause();
       restoreIdleIndicator();
-    } else if (isPageActive()) {
+    } else if (isPageActive() && !helpOpen) {
       recognition.resume();
       restoreIdleIndicator();
     } else {

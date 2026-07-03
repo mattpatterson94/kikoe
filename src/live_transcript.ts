@@ -161,10 +161,25 @@ function getContainerStyle(settings: Settings): string {
   return `width: 100%; position: fixed; z-index: 2147483647; display: flex; flex-direction: column; align-items: center; gap: 8px; pointer-events: none; left: 0; ${posStyle}`;
 }
 
-function themeClass(settings: Settings): string {
+export function themeClass(settings: Settings): string {
   const t = settings.transcript_theme;
   if (t === 'dark' || t === 'light') return `kikoe-theme-${t}`;
   return 'kikoe-theme-system';
+}
+
+// The bottom-right corner holds every persistent control (status indicator,
+// help chip) in one flex row, so siblings line up without measuring each
+// other's width. Recreated on demand since WaniKani re-renders can wipe body
+// content (see the missing-container regression tests).
+export function ensureCornerContainer(): HTMLElement {
+  let corner = document.getElementById('kikoe-corner');
+  if (!corner) {
+    corner = document.createElement('div');
+    corner.id = 'kikoe-corner';
+    corner.style.cssText = 'position: fixed; bottom: 16px; right: 16px; z-index: 2147483647; display: flex; align-items: center; gap: 8px;';
+    document.body.appendChild(corner);
+  }
+  return corner;
 }
 
 export function createTranscriptContainer(settings: Settings): void {
@@ -206,7 +221,6 @@ export function showIdleIndicator(settings: Settings, onToggle?: () => void): vo
   const el = document.createElement('div');
   el.id = 'kikoe-idle';
   el.className = `kikoe-chip ${themeClass(settings)} kikoe-idle`;
-  el.style.cssText = 'position: fixed; bottom: 16px; right: 16px; z-index: 2147483647;';
   if (onToggle) {
     el.classList.add('kikoe-idle-clickable');
     el.setAttribute('role', 'button');
@@ -242,7 +256,7 @@ export function showIdleIndicator(settings: Settings, onToggle?: () => void): vo
   label.textContent = 'Listening';
   el.appendChild(label);
 
-  document.body.appendChild(el);
+  ensureCornerContainer().appendChild(el);
 }
 
 const ERROR_STYLED_STATES = new Set(['error', 'mic-denied', 'no-mic', 'unsupported-browser']);

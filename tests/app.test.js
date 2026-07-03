@@ -1037,3 +1037,211 @@ describe('startListener ippatsu mode (one-shot auto-submit on a miss)', () => {
     });
   });
 });
+
+describe('startListener help panel', () => {
+  // Same MockSpeechRecognition shape as above — kept local to this describe
+  // block so its instance list doesn't leak between describes.
+  class MockSpeechRecognition {
+    constructor() {
+      this.continuous = false;
+      this.interimResults = false;
+      this.maxAlternatives = 5;
+      this.lang = '';
+      this.nativeStart = vi.fn();
+      this.nativeStop = vi.fn();
+      this.start = this.nativeStart;
+      this.stop = this.nativeStop;
+      MockSpeechRecognition.instances.push(this);
+    }
+  }
+  MockSpeechRecognition.instances = [];
+
+  beforeEach(() => {
+    MockSpeechRecognition.instances = [];
+    vi.stubGlobal('webkitSpeechRecognition', MockSpeechRecognition);
+    // Pin the tab as focused so pause/resume reflects the help panel, not
+    // jsdom's default blurred state (see the mute/pause describe above).
+    vi.spyOn(document, 'hasFocus').mockReturnValue(true);
+  });
+
+  function setMeaningCardDOM() {
+    document.body.innerHTML += `
+      <div class="character-header__characters">下</div>
+      <span class="quiz-input__question-category">Kanji</span>
+      <span class="quiz-input__question-type">Meaning</span>
+      <input id="user-response" type="text" />
+      <button class="quiz-input__submit-button">Next</button>
+    `;
+  }
+
+  function finalResult(...transcripts) {
+    const alternatives = transcripts.map(t => ({ transcript: t }));
+    alternatives.isFinal = true;
+    return alternatives;
+  }
+
+  function interceptSubjectRequest() {
+    let respond;
+    const ready = new Promise((resolve) => {
+      document.addEventListener('kikoe:subjectRequest', function handler(e) {
+        document.removeEventListener('kikoe:subjectRequest', handler);
+        const { prompt, category } = e.detail;
+        respond = (subjects) => document.dispatchEvent(new CustomEvent('kikoe:subjectData', {
+          detail: { prompt, category, subjects, error: null },
+        }));
+        resolve();
+      });
+    });
+    return { ready, respond: (subjects) => respond(subjects) };
+  }
+
+  function kanjiSubject(meaning) {
+    return {
+      id: 1, object: 'kanji',
+      data: {
+        slug: '下', characters: '下',
+        meanings: [{ meaning, accepted_answer: true }],
+        auxiliary_meanings: [],
+      },
+    };
+  }
+
+  // Starts the listener on a meaning card and waits for subjects, so
+  // utterances afterwards hit the normal (non-pending) check path.
+  async function loadMeaningCard(meaning, settings = {}) {
+    setMeaningCardDOM();
+    stampConfig({ hasApiToken: true, settings });
+    const subjectRequest = interceptSubjectRequest();
+    await importApp();
+    await subjectRequest.ready;
+    subjectRequest.respond([kanjiSubject(meaning)]);
+    await vi.waitFor(() => {
+      if (document.getElementById('kikoe-idle-label')?.textContent !== 'Listening') {
+        throw new Error('subjects not loaded yet');
+      }
+    });
+    return MockSpeechRecognition.instances[0];
+  }
+
+  test('saying "help" opens the panel and pauses recognition', async () => {
+    const native = await loadMeaningCard('Below');
+
+    const stopsBefore = native.nativeStop.mock.calls.length;
+    native.onresult({ resultIndex: 0, results: [finalResult('Help.')] });
+
+    expect(document.getElementById('kikoe-help-panel')).not.toBeNull();
+    expect(document.getElementById('kikoe-idle-label').textContent).toBe('Paused');
+    expect(native.nativeStop.mock.calls.length).toBeGreaterThan(stopsBefore);
+  });
+
+  test('on a card whose accepted meaning is "help", saying it submits the answer instead of opening the panel', async () => {
+    const native = await loadMeaningCard('Help');
+
+    native.onresult({ resultIndex: 0, results: [finalResult('help')] });
+
+    expect(document.getElementById('user-response').value).toBe('help');
+    expect(document.getElementById('kikoe-help-panel')).toBeNull();
+  });
+
+  test('saying "help" with ippatsu on opens the panel without burning the shot', async () => {
+    const native = await loadMeaningCard('Below', { ippatsu_meaning: true });
+
+    native.onresult({ resultIndex: 0, results: [finalResult('help')] });
+
+    expect(document.getElementById('kikoe-help-panel')).not.toBeNull();
+    // No wrong-answer placeholder was submitted.
+    expect(document.getElementById('user-response').value).toBe('');
+  });
+
+  test('Escape closes the panel and resumes recognition', async () => {
+    const native = await loadMeaningCard('Below');
+    native.onresult({ resultIndex: 0, results: [finalResult('help')] });
+    expect(document.getElementById('kikoe-help-panel')).not.toBeNull();
+
+    const startsBefore = native.nativeStart.mock.calls.length;
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+
+    expect(document.getElementById('kikoe-help-panel')).toBeNull();
+    expect(document.getElementById('kikoe-idle-label').textContent).toBe('Listening');
+    expect(native.nativeStart.mock.calls.length).toBeGreaterThan(startsBefore);
+  });
+
+  test('closing the panel does not clobber an explicit user mute', async () => {
+    const native = await loadMeaningCard('Below');
+    native.onresult({ resultIndex: 0, results: [finalResult('pause')] });
+    expect(document.getElementById('kikoe-idle-label').textContent).toBe('Muted');
+
+    // Open via the chip (voice is muted), then close again.
+    document.getElementById('kikoe-help-chip').click();
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+
+    expect(document.getElementById('kikoe-idle-label').textContent).toBe('Muted');
+  });
+
+  test('clicking the ? chip toggles the panel open and closed', async () => {
+    await loadMeaningCard('Below');
+
+    const chip = document.getElementById('kikoe-help-chip');
+    expect(chip).not.toBeNull();
+    chip.click();
+    expect(document.getElementById('kikoe-help-panel')).not.toBeNull();
+    chip.click();
+    expect(document.getElementById('kikoe-help-panel')).toBeNull();
+  });
+
+  test('the chip is not created when show_help_button is off, but saying "help" still works', async () => {
+    const native = await loadMeaningCard('Below', { show_help_button: false, help_hint_shown: true });
+
+    expect(document.getElementById('kikoe-help-chip')).toBeNull();
+    native.onresult({ resultIndex: 0, results: [finalResult('help')] });
+    expect(document.getElementById('kikoe-help-panel')).not.toBeNull();
+  });
+
+  test('saying "help" on a BunPro reveal card opens the panel', async () => {
+    vi.stubGlobal('location', {
+      hostname: 'bunpro.jp',
+      href: 'https://bunpro.jp/study',
+      pathname: '/study',
+      hash: '',
+    });
+    const el = document.createElement('div');
+    el.id = 'quiz-metadata-element';
+    el.setAttribute('data-meta-loc', 'review');
+    el.setAttribute('data-meta-is-correct', 'false');
+    el.setAttribute('data-meta-is-post-attempt', 'false');
+    el.setAttribute('data-meta-info', JSON.stringify({ id: 806, type: 'grammar' }));
+    el.setAttribute('data-meta-input-mode', 'flashcard');
+    el.setAttribute('data-meta-question-mode', 'flashcard');
+    document.body.appendChild(el);
+    stampConfig({ hasApiToken: true });
+    await importApp();
+
+    const native = MockSpeechRecognition.instances[0];
+    native.onresult({ resultIndex: 0, results: [finalResult('help')] });
+
+    const panel = document.getElementById('kikoe-help-panel');
+    expect(panel).not.toBeNull();
+    // Context-aware: the reveal command is listed on a hidden-answer card.
+    expect(panel.textContent).toContain('Show the answer');
+  });
+
+  test('the first session shows the one-time hint and reports it as seen', async () => {
+    const seen = vi.fn();
+    document.addEventListener('kikoe:helpHintSeen', seen);
+    setMeaningCardDOM();
+    stampConfig({ hasApiToken: true });
+    await importApp();
+    document.removeEventListener('kikoe:helpHintSeen', seen);
+
+    expect(document.getElementById('kikoe-help-hint')).not.toBeNull();
+    expect(seen).toHaveBeenCalledTimes(1);
+  });
+
+  test('no hint once help_hint_shown is set', async () => {
+    setMeaningCardDOM();
+    stampConfig({ hasApiToken: true, settings: { help_hint_shown: true } });
+    await importApp();
+
+    expect(document.getElementById('kikoe-help-hint')).toBeNull();
+  });
+});

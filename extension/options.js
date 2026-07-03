@@ -7,6 +7,7 @@ const defaults = {
   transcript: true,
   transcript_theme: 'system',
   transcript_position: 'top',
+  show_help_button: true,
   debug: false,
   customCorrections: [],
 };

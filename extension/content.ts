@@ -303,6 +303,12 @@ async function main(): Promise<void> {
     chrome.runtime.sendMessage({ type: 'kikoe:openOptions' });
   });
 
+  // The one-time help-discovery hint was shown — persist the flag so it
+  // never reappears (the page world can't write chrome.storage itself).
+  document.addEventListener('kikoe:helpHintSeen', () => {
+    chrome.storage.sync.set({ help_hint_shown: true });
+  });
+
   if (site === 'wanikani') {
     document.addEventListener('kikoe:subjectRequest', async (e) => {
       const { prompt, category } = (e as CustomEvent<{ prompt: string; category: string }>).detail;

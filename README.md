@@ -15,6 +15,7 @@
 - Ippatsu mode (一発), an optional one-shot challenge: a wrong answer auto-submits instead of allowing endless retries, toggled separately for meaning and reading questions
 - Live transcript, an optional overlay showing what the extension heard in real time
 - Voice commands: say "next" (or 次) to advance, "wrong" / 間違い to mark an answer incorrect
+- In-page help: say "help" (or ヘルプ) or click the ? button next to the listening indicator for a cheat sheet of the commands that work on the current card
 - Automatic language switching between Japanese recognition for reading questions and English for meaning questions
 
 ## Requirements
@@ -90,8 +91,13 @@ Once installed and configured, the extension activates automatically on any Wani
 | `wrong` / `incorrect` / `mistake` | Mark the current answer wrong |
 | `間違い` / `まちがい` / `だめ` | Mark the current answer wrong (Japanese) |
 | `pause` / `stop listening` / `ストップ` | Mute the mic |
+| `help` / `commands` / `ヘルプ` | Open the in-page command cheat sheet |
 
 Muting is one-way by voice: since recognition stops while muted, there's no voice command to unmute. Click the listening indicator (bottom-right) to toggle the mic on/off at any time; it also shows a distinct "Muted" state.
+
+**In-page help:**
+
+Saying `help` (or clicking the **?** button next to the listening indicator) opens a panel listing the voice commands that work on the current card, the language currently being listened for, and a few tips. The mic is paused while the panel is open, so reading the command list aloud won't trigger anything, and it resumes when the panel closes (✕, `Esc`, or click away). `help` is checked after answer matching, so on a card whose accepted answer is "help" (助け, 手伝う), saying it submits your answer as normal.
 
 **How matching works:**
 
@@ -157,6 +163,7 @@ pronunciation slips are more likely.
 | Show live transcript | On | Displays an overlay of what the extension heard |
 | Theme | System | Overlay color theme (system, light, or dark) |
 | Position | Top | Where the transcript appears (top or bottom of the page) |
+| Show help button | On | The ? button next to the listening indicator; saying "help" works even when it's hidden |
 
 ### Custom Corrections
 
@@ -188,31 +195,34 @@ Tests use [Vitest](https://vitest.dev/) with jsdom.
 
 ```
 src/
-  app.js              # main entry point, orchestrates recognition and submission
-  recognition.js      # Web Speech API wrapper
-  site.js             # hostname → site detection (wanikani / bunpro)
-  wanikani.js         # WaniKani page interaction (DOM selectors, answer submission)
-  bunpro.js           # BunPro page interaction (quiz metadata element, answer submission)
-  bunpro_speed.js     # BunPro turbo mode / speed enhancements
-  flashcards.js       # answer checking logic
-  dict.js             # dictionary loading (JMdict / KANJIDIC2)
-  settings.js         # settings management
-  speed.js            # turbo mode / speed enhancements
-  live_transcript.js  # transcript overlay UI
-  util.js             # shared utilities
+  app.ts              # main entry point, orchestrates recognition and submission
+  recognition.ts      # Web Speech API wrapper
+  site.ts             # hostname → site detection (wanikani / bunpro)
+  wanikani.ts         # WaniKani page interaction (DOM selectors, answer submission)
+  bunpro.ts           # BunPro page interaction (quiz metadata element, answer submission)
+  bunpro_speed.ts     # BunPro turbo mode / speed enhancements
+  flashcards.ts       # answer checking logic
+  dict.ts             # dictionary loading (JMdict / KANJIDIC2)
+  settings.ts         # settings management
+  speed.ts            # turbo mode / speed enhancements
+  live_transcript.ts  # transcript overlay UI
+  commands.ts         # voice command registry (matcher + help panel source of truth)
+  help.ts             # in-page help chip, cheat-sheet panel, first-run hint
   candidates/         # speech-to-answer transformation pipeline
-    to_hiragana.js
-    convert_wo.js
-    basic_dictionary.js
-    split_dictionary.js
-    suru_verbs.js
-    repeating.js
-    fuzzy_vowels.js
-    multiple.js
-    numerals.js
+    to_hiragana.ts
+    convert_wo.ts
+    basic_dictionary.ts
+    split_dictionary.ts
+    compound_dictionary.ts
+    suru_verbs.ts
+    repeating.ts
+    fuzzy_vowels.ts
+    multiple.ts
+    numerals.ts
 extension/
-  content.js          # content script (loads bundle, manages API token / caching)
+  content.ts          # content script (loads bundle, manages API token / caching)
   injected.js         # page-context injected script
+  background.js       # background service worker (opens the options page)
   options.html        # settings UI
   options.js          # settings UI logic
 chrome/               # assembled Chrome extension (output of build)
