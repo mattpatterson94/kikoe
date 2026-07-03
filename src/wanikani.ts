@@ -23,9 +23,36 @@ const PathPatterns = {
   Radicals: /^\/radicals\//,
 };
 
-function getCategory() {
+// WaniKani API v2 subject, narrowed to the fields this adapter reads.
+// Fields stay optional because subjects arrive from the page context and
+// older cached shapes have varied.
+export interface WanikaniSubject {
+  id: number;
+  object: string;
+  data: {
+    slug?: string;
+    characters?: string | null;
+    meanings?: { meaning: string; accepted_answer: boolean }[];
+    auxiliary_meanings?: { meaning: string; accepted_answer: boolean }[];
+    readings?: { reading: string; accepted_answer: boolean }[];
+  };
+}
+
+export type WanikaniPage = 'review' | 'quiz' | 'lesson' | 'entry';
+
+export interface WanikaniContext {
+  page: WanikaniPage;
+  prompt: string | null;
+  category: string | null;
+  type: string | null;
+  meanings: string[];
+  readings: string[];
+  items: WanikaniSubject[];
+}
+
+function getCategory(): string | null {
   const category = document.querySelector(Selectors.Category);
-  if (category) return category.textContent.trim().toLowerCase();
+  if (category) return (category.textContent ?? '').trim().toLowerCase();
   const pathname = window.location.pathname;
   if (PathPatterns.Vocabulary.test(pathname)) return 'vocabulary';
   if (PathPatterns.Kanji.test(pathname)) return 'kanji';
@@ -33,9 +60,9 @@ function getCategory() {
   return null;
 }
 
-function getType() {
+function getType(): string | null {
   const type = document.querySelector(Selectors.Type);
-  if (type) return type.textContent.trim().toLowerCase();
+  if (type) return (type.textContent ?? '').trim().toLowerCase();
   const pathname = window.location.pathname;
   if (window.location.hash === '#reading') return 'reading';
   if (window.location.hash === '#meaning') return 'meaning';
@@ -45,14 +72,14 @@ function getType() {
   return null;
 }
 
-export function getLanguage() {
+export function getLanguage(): string {
   const t = getType();
   if (t === 'meaning' || t === 'name') return 'en-US';
   if (t === 'reading') return 'ja-JP';
   return 'en-US';
 }
 
-function getPromptFromEntry() {
+function getPromptFromEntry(): string | null {
   const el = document.querySelector(Selectors.EntryPrompt);
   if (!el) return null;
   const prompt = el.textContent;
@@ -62,23 +89,23 @@ function getPromptFromEntry() {
 // Image-only radicals (e.g. "Rib Cage") render no text — their name only
 // exists in a descendant's aria-label, so a raw textContent read comes back
 // empty (or whitespace-only) for them.
-function readPromptText(el) {
-  const prompt = el.textContent.trim();
+function readPromptText(el: Element): string | null {
+  const prompt = (el.textContent ?? '').trim();
   if (prompt !== '') return prompt;
   const label = el.querySelector('[aria-label]')?.getAttribute('aria-label')?.trim();
   return label ? label.toLowerCase() : null;
 }
 
-export function getPrompt() {
+export function getPrompt(): string | null {
   const el = document.querySelector(Selectors.Prompt);
   if (!el) return getPromptFromEntry();
   return readPromptText(el);
 }
 
-export function getUserSynonyms(id) {
+export function getUserSynonyms(id: number): string[] {
   const script = document.querySelector(Selectors.Synonyms);
   if (script) {
-    const data = JSON.parse(script.textContent);
+    const data = JSON.parse(script.textContent ?? '') as Record<string, string[]>;
     if (data[id]) return data[id];
   }
   return [];
@@ -87,7 +114,7 @@ export function getUserSynonyms(id) {
 // Image-only radicals display a space-separated name ("rib cage") while the
 // API slug is hyphenated ("rib-cage") — same bridge as matchRadical in the
 // content script's fetch path.
-function getItems(subjects, category, slug) {
+function getItems(subjects: WanikaniSubject[], category: string | null, slug: string | null): WanikaniSubject[] {
   const hyphenated = slug?.replace(/\s+/g, '-');
   return subjects.filter(s =>
     s.object === category &&
@@ -95,8 +122,8 @@ function getItems(subjects, category, slug) {
   );
 }
 
-function getMeaningsFromItems(items) {
-  const meanings = [];
+function getMeaningsFromItems(items: WanikaniSubject[]): string[] {
+  const meanings: string[] = [];
   for (const item of items) {
     if (item?.data?.meanings) {
       meanings.push(...item.data.meanings.filter(m => m.accepted_answer).map(m => m.meaning));
@@ -108,8 +135,8 @@ function getMeaningsFromItems(items) {
   return meanings;
 }
 
-function getReadingsFromItems(items) {
-  const readings = [];
+function getReadingsFromItems(items: WanikaniSubject[]): string[] {
+  const readings: string[] = [];
   for (const item of items) {
     if (item?.data?.readings) {
       readings.push(...item.data.readings.filter(r => r.accepted_answer).map(r => r.reading));
@@ -119,9 +146,9 @@ function getReadingsFromItems(items) {
 }
 
 // subjects: WaniKani API v2 subject objects for the current card (may be empty)
-export function getContext(subjects = []) {
+export function getContext(subjects: WanikaniSubject[] = []): WanikaniContext | null {
   const pathname = window.location.pathname;
-  let page = null;
+  let page: WanikaniPage | null = null;
   if (PathPatterns.Review.test(pathname)) page = 'review';
   if (PathPatterns.LessonQuiz.test(pathname)) page = 'quiz';
   else if (PathPatterns.Lesson.test(pathname)) page = 'lesson';
@@ -136,7 +163,7 @@ export function getContext(subjects = []) {
 
   const prompt = getPrompt();
   let category = getCategory();
-  if (category === 'vocabulary' && isKana(prompt)) category = 'kana_vocabulary';
+  if (category === 'vocabulary' && isKana(prompt ?? '')) category = 'kana_vocabulary';
   const type = getType();
 
   const items = getItems(subjects, category, prompt);
@@ -149,7 +176,11 @@ export function getContext(subjects = []) {
   return { page, prompt, category, type, meanings, readings, items };
 }
 
-export function didContextChange(oldContext, newContext) {
+// Structural type instead of WanikaniContext so the same helper works for
+// any context-ish value app.js hands it during transitions.
+type ContextIdentity = { prompt?: string | null; type?: string | null } | null | undefined;
+
+export function didContextChange(oldContext: ContextIdentity, newContext: ContextIdentity): boolean {
   return (newContext?.prompt !== oldContext?.prompt) ||
          (newContext?.type !== oldContext?.type);
 }
@@ -162,14 +193,14 @@ export function didContextChange(oldContext, newContext) {
 // existing per-card fetch remains the fallback.
 const SUBJECT_ID_KEY_RE = /subject.*id/i;
 
-function extractSubjectIds(node, key = null, depth = 0) {
+function extractSubjectIds(node: unknown, key: string | null = null, depth = 0): number[] | null {
   if (depth > 6 || node === null || typeof node !== 'object') return null;
   if (Array.isArray(node)) {
     if (node.length && node.every(Number.isInteger) && (key === null || SUBJECT_ID_KEY_RE.test(key))) {
-      return node;
+      return node as number[];
     }
-    if (node.length && node.every(n => n && typeof n === 'object' && Number.isInteger(n.subject_id))) {
-      return node.map(n => n.subject_id);
+    if (node.length && node.every(n => n && typeof n === 'object' && Number.isInteger((n as { subject_id?: unknown }).subject_id))) {
+      return node.map(n => (n as { subject_id: number }).subject_id);
     }
     for (const item of node) {
       const found = extractSubjectIds(item, null, depth + 1);
@@ -189,11 +220,11 @@ function extractSubjectIds(node, key = null, depth = 0) {
 // content-script side, which owns the already-requested bookkeeping. The cap
 // only guards against extractSubjectIds misidentifying some giant unrelated
 // integer array, and sits well above any real session length.
-export function getQueuedSubjectIds(cap = 1000) {
+export function getQueuedSubjectIds(cap = 1000): number[] {
   for (const script of document.querySelectorAll('script[type="application/json"]')) {
-    let data;
+    let data: unknown;
     try {
-      data = JSON.parse(script.textContent);
+      data = JSON.parse(script.textContent ?? '');
     } catch {
       continue;
     }
@@ -203,37 +234,37 @@ export function getQueuedSubjectIds(cap = 1000) {
   return [];
 }
 
-export function clickNext() {
-  const button = document.querySelector(Selectors.Next);
+export function clickNext(): boolean {
+  const button = document.querySelector<HTMLButtonElement>(Selectors.Next);
   if (button) { button.click(); return true; }
   return false;
 }
 
-export function markWrong() {
+export function markWrong(): void {
   const incorrect = getLanguage() === 'en-US' ? 'aaa' : 'あああ';
   submitAnswer(incorrect);
 }
 
-export function inputAnswer(input) {
-  const userResponse = document.querySelector('#user-response');
+export function inputAnswer(input: string): void {
+  const userResponse = document.querySelector<HTMLInputElement>('#user-response');
   if (!userResponse) return;
   userResponse.value = input;
 }
 
-export function submitAnswer(input) {
+export function submitAnswer(input: string): boolean {
   inputAnswer(input);
   return clickNext();
 }
 
-function isNotAlreadyOpen() {
+function isNotAlreadyOpen(): boolean {
   const info = document.getElementById('information');
   if (!info) return true;
   return !Array.from(info.classList).some(c => c.includes('open'));
 }
 
-export function clickInfo() {
-  for (const item of document.querySelectorAll('#additional-content a')) {
-    if (item.textContent.includes('Item Info')) {
+export function clickInfo(): void {
+  for (const item of document.querySelectorAll<HTMLAnchorElement>('#additional-content a')) {
+    if ((item.textContent ?? '').includes('Item Info')) {
       if (isNotAlreadyOpen()) item.click();
       return;
     }
@@ -244,18 +275,18 @@ export function clickInfo() {
 // new values. This ignores unrelated mutations (animations, the `correct`
 // attribute, progress bars) that would otherwise reset a naive debounce and
 // prevent onChange from ever firing.
-export function createCardWatcher(onChange) {
+export function createCardWatcher(onChange: () => void): MutationObserver {
   // Same aria-label-aware read as getPrompt — a raw textContent read is empty
   // for image-only radicals, which made the watcher treat every mutation as a
   // transitional state and never fire onChange for those cards.
-  function watchedPrompt() {
+  function watchedPrompt(): string | null {
     const el = document.querySelector(Selectors.Prompt);
     return el ? readPromptText(el) : null;
   }
 
   let lastSeenPrompt = watchedPrompt();
   let lastSeenType = document.querySelector(Selectors.Type)?.textContent?.trim().toLowerCase();
-  let timer;
+  let timer: ReturnType<typeof setTimeout> | undefined;
 
   const observer = new MutationObserver(() => {
     const prompt = watchedPrompt();
@@ -271,7 +302,7 @@ export function createCardWatcher(onChange) {
   return observer;
 }
 
-export function didAnswerCorrectly(e) {
+export function didAnswerCorrectly(e: { detail?: { results?: { action?: unknown } } }): boolean {
   if (typeof e.detail?.results?.action !== 'string') {
     console.error('[kikoe] didAnswerCorrectly: unexpected event shape', e);
     return false;

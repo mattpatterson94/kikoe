@@ -1,4 +1,4 @@
-import { startSpeedEnhancer } from '../src/bunpro_speed.js';
+import { startSpeedEnhancer } from '../src/bunpro_speed';
 
 // vi.mock is hoisted to the top of the file, so we must define the mocks
 // with vi.hoisted so they're initialized before the factory runs.
@@ -7,7 +7,7 @@ const { clickNext, clickInfo } = vi.hoisted(() => ({
   clickInfo: vi.fn(),
 }));
 
-vi.mock('../src/bunpro.js', () => ({ clickNext, clickInfo }));
+vi.mock('../src/bunpro', () => ({ clickNext, clickInfo }));
 
 // Each enhancer leaves live MutationObservers on document.body — stop them
 // after each test so earlier instances can't react to later tests' DOM.

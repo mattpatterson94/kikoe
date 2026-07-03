@@ -85,7 +85,7 @@ const meaningCorrections: Record<string, string> = {
 // Built by the per-site adapters (wanikani/bunpro); answer sets may be empty
 // while subjects are still loading.
 export interface QuestionContext {
-  type: string;
+  type: string | null;
   readings?: string[];
   meanings?: string[];
 }

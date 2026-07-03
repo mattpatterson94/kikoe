@@ -4,7 +4,7 @@ import {
   clearTranscript,
   showIdleIndicator,
   setIdleIndicatorState,
-} from '../src/live_transcript.js';
+} from '../src/live_transcript';
 
 const defaultSettings = {
   transcript: true,

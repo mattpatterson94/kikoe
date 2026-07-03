@@ -3,7 +3,7 @@ import {
   inputAnswer, submitAnswer, markWrong, clickNext, clickInfo,
   reveal, gradeGood, gradeBad,
   createCardWatcher,
-} from '../src/bunpro.js';
+} from '../src/bunpro';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 

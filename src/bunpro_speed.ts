@@ -1,4 +1,4 @@
-// BunPro turbo mode / speed enhancements — mirrors speed.js.
+// BunPro turbo mode / speed enhancements — mirrors speed.ts.
 //
 // Watches #quiz-metadata-element's data-meta-is-correct / data-meta-is-post-attempt
 // attributes. Unlike WaniKani, data-meta-is-correct exists (as "false") before
@@ -14,25 +14,32 @@
 //   turbo           (bool)   – auto-advance to next card on correct answer
 //   speed_show_info (bool)   – auto-open the hint on wrong answer
 
-import { clickNext, clickInfo } from './bunpro.js';
+import { clickNext, clickInfo } from './bunpro';
 import { debugLog } from './logger';
+import type { Settings } from './settings';
 
 const RESULT_DELAY_MS = 100;
 
-export function startSpeedEnhancer(getSettingsFn) {
-  let currentMeta = null;
-  let attrObserver = null;
-  let lastResultKey = null;
+export interface BunproSpeedEnhancer {
+  scan(): void;
+  stop(): void;
+  _getContainer(): HTMLElement | null;
+}
 
-  function getCardId(meta) {
+export function startSpeedEnhancer(getSettingsFn: () => Settings): BunproSpeedEnhancer {
+  let currentMeta: HTMLElement | null = null;
+  let attrObserver: MutationObserver | null = null;
+  let lastResultKey: string | null = null;
+
+  function getCardId(meta: HTMLElement): number | string | null {
     try {
-      return JSON.parse(meta.dataset.metaInfo ?? 'null')?.id ?? null;
+      return (JSON.parse(meta.dataset.metaInfo ?? 'null') as { id?: number | string } | null)?.id ?? null;
     } catch {
       return null;
     }
   }
 
-  function onResult(meta) {
+  function onResult(meta: HTMLElement): void {
     if (meta.dataset.metaIsPostAttempt !== 'true') return;
 
     const result = meta.dataset.metaIsCorrect;
@@ -57,7 +64,7 @@ export function startSpeedEnhancer(getSettingsFn) {
     }
   }
 
-  function attach(meta) {
+  function attach(meta: HTMLElement): void {
     if (meta === currentMeta) return;
     currentMeta = meta;
     attrObserver?.disconnect();
@@ -70,8 +77,8 @@ export function startSpeedEnhancer(getSettingsFn) {
     });
   }
 
-  function scan() {
-    const el = document.querySelector('#quiz-metadata-element');
+  function scan(): void {
+    const el = document.querySelector<HTMLElement>('#quiz-metadata-element');
     if (el) attach(el);
   }
 
@@ -80,7 +87,7 @@ export function startSpeedEnhancer(getSettingsFn) {
   pageObserver.observe(document.body, { childList: true, subtree: true });
   scan();
 
-  function stop() {
+  function stop(): void {
     pageObserver.disconnect();
     attrObserver?.disconnect();
   }

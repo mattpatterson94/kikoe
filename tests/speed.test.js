@@ -1,4 +1,4 @@
-import { startSpeedEnhancer } from '../src/speed.js';
+import { startSpeedEnhancer } from '../src/speed';
 
 // vi.mock is hoisted to the top of the file, so we must define the mocks
 // with vi.hoisted so they're initialized before the factory runs.
@@ -7,7 +7,7 @@ const { clickNext, clickInfo } = vi.hoisted(() => ({
   clickInfo: vi.fn(),
 }));
 
-vi.mock('../src/wanikani.js', () => ({ clickNext, clickInfo }));
+vi.mock('../src/wanikani', () => ({ clickNext, clickInfo }));
 
 beforeEach(() => {
   vi.useFakeTimers();
