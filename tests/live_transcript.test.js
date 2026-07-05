@@ -18,6 +18,7 @@ function settings(overrides = {}) {
 
 beforeEach(() => {
   document.body.innerHTML = '';
+  vi.restoreAllMocks();
   // Reset COUNTER between tests by re-importing is impractical with vitest;
   // instead, create a fresh container each test and accept that COUNTER
   // accumulates — tests rely on the *content* of the container, not IDs.
@@ -100,6 +101,38 @@ describe('logTranscript', () => {
     const container = document.getElementById('kikoe-transcript-container');
     expect(container.children[0].textContent).toContain('かい');
     expect(container.children[0].textContent).toContain('no match');
+  });
+
+  test('clicking a correction candidate asks for confirmation and dispatches the correction', () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    const handler = vi.fn();
+    document.addEventListener('kikoe:addCorrection', handler);
+
+    logTranscript(settings(), {
+      raw: 'gibberish',
+      reason: 'no-match',
+      correction: { heard: 'gibberish', intended: 'さむい' },
+    });
+    document.querySelector('.kikoe-chip-clickable').click();
+
+    expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining('gibberish'));
+    expect(handler).toHaveBeenCalledTimes(1);
+    expect(handler.mock.calls[0][0].detail).toEqual({ heard: 'gibberish', intended: 'さむい' });
+  });
+
+  test('does not dispatch a correction when confirmation is cancelled', () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(false);
+    const handler = vi.fn();
+    document.addEventListener('kikoe:addCorrection', handler);
+
+    logTranscript(settings(), {
+      raw: 'gibberish',
+      reason: 'no-match',
+      correction: { heard: 'gibberish', intended: 'さむい' },
+    });
+    document.querySelector('.kikoe-chip-clickable').click();
+
+    expect(handler).not.toHaveBeenCalled();
   });
 
   test('shows a "loading" hint for a not-loaded failure reason', () => {

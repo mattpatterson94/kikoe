@@ -12,6 +12,10 @@ export interface TranscriptInfo {
   matched?: string;
   reason?: string;
   type?: string;
+  correction?: {
+    heard: string;
+    intended: string;
+  };
 }
 
 function injectStyles(): void {
@@ -135,6 +139,13 @@ function injectStyles(): void {
     }
     .kikoe-idle-clickable {
       cursor: pointer;
+    }
+    .kikoe-chip-clickable {
+      cursor: pointer;
+    }
+    .kikoe-chip-clickable:hover,
+    .kikoe-chip-clickable:focus-visible {
+      transform: translateY(-1px) scale(1.02);
     }
     .kikoe-idle .kikoe-chip-dot {
       width: 6px;
@@ -306,6 +317,27 @@ function reasonHint(transcript: TranscriptInfo): string | null {
   return null;
 }
 
+function isCorrectionCandidate(transcript: TranscriptInfo): boolean {
+  return transcript.reason === 'no-match'
+    && typeof transcript.correction?.heard === 'string'
+    && typeof transcript.correction?.intended === 'string'
+    && !!transcript.correction.heard.trim()
+    && !!transcript.correction.intended.trim();
+}
+
+function requestCorrection(transcript: TranscriptInfo): void {
+  const heard = transcript.correction?.heard.trim();
+  const intended = transcript.correction?.intended.trim();
+  if (!heard || !intended) return;
+  const ok = window.confirm(
+    `Create a speech correction?\n\nHeard: ${heard}\nIntended answer: ${intended}`
+  );
+  if (!ok) return;
+  document.dispatchEvent(new CustomEvent('kikoe:addCorrection', {
+    detail: { heard, intended },
+  }));
+}
+
 export function logTranscript(settings: Settings, transcript: TranscriptInfo | string | null | undefined): void {
   if (!settings.transcript) return;
   const container = document.querySelector<HTMLElement>('div#kikoe-transcript-container');
@@ -339,6 +371,24 @@ export function logTranscript(settings: Settings, transcript: TranscriptInfo | s
   el.dataset.raw = transcript.raw;
   el.id = id;
   el.className = `kikoe-chip ${themeClass(settings)}${isError ? ' kikoe-chip-error' : ''}`;
+
+  if (isCorrectionCandidate(transcript)) {
+    const correction = transcript.correction;
+    if (!correction) return;
+    const onCorrectionRequest = () => requestCorrection(transcript);
+    el.classList.add('kikoe-chip-clickable');
+    el.setAttribute('role', 'button');
+    el.setAttribute('tabindex', '0');
+    el.setAttribute('title', 'Create speech correction');
+    el.setAttribute('aria-label', `Create correction from ${correction.heard} to ${correction.intended}`);
+    el.addEventListener('click', onCorrectionRequest);
+    el.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        onCorrectionRequest();
+      }
+    });
+  }
 
   const dot = document.createElement('span');
   dot.className = 'kikoe-chip-dot';

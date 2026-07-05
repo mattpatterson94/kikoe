@@ -56,6 +56,13 @@ interface SiteContext {
   revealed?: boolean;
 }
 
+type CorrectionTranscript = CheckResult['transcript'] & {
+  correction?: {
+    heard: string;
+    intended: string;
+  };
+};
+
 // The common surface app.ts needs from a site adapter. getQueuedSubjectIds
 // is WaniKani-only (prefetch); reveal/grade* are BunPro-only (Reveal & Grade
 // cards) — only bunpro's getContext ever reports mode 'reveal'.
@@ -321,6 +328,21 @@ async function startListener(dictionary: Dictionary): Promise<void> {
     return best;
   }
 
+  function intendedAnswerForCorrection(ctx: SiteContext): string | null {
+    if (ctx.type === 'reading') return ctx.readings?.[0] ?? null;
+    return ctx.meanings?.[0] ?? null;
+  }
+
+  function withCorrectionCandidate(ctx: SiteContext, transcript: CheckResult['transcript']): CorrectionTranscript {
+    if (transcript?.reason !== 'no-match') return transcript;
+    const intended = intendedAnswerForCorrection(ctx);
+    if (!transcript.raw || !intended) return transcript;
+    return {
+      ...transcript,
+      correction: { heard: transcript.raw, intended },
+    };
+  }
+
   // Ippatsu (一発) mode: one shot per question. A genuine miss ('no-match' —
   // a right-type answer that didn't match) is submitted as wrong via
   // site.markWrong() instead of waiting for a retry. Recognizer glitches
@@ -425,7 +447,7 @@ async function startListener(dictionary: Dictionary): Promise<void> {
       return;
     }
 
-    logTranscript(getSettings(), result.transcript);
+    logTranscript(getSettings(), withCorrectionCandidate(ctx, result.transcript));
 
     if (result.success && result.answer) {
       submitted = true;
