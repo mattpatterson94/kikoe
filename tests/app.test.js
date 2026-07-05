@@ -815,9 +815,9 @@ describe('startListener transcript failure reason hints', () => {
     return { ready, respond: (subjects) => respond(subjects) };
   }
 
-  async function loadReadingSubjects() {
+  async function loadReadingSubjects(settings = {}) {
     setReadingCardDOM();
-    stampConfig({ hasApiToken: true });
+    stampConfig({ hasApiToken: true, settings });
     const subjectRequest = interceptSubjectRequest();
     await importApp();
     await subjectRequest.ready;
@@ -837,6 +837,36 @@ describe('startListener transcript failure reason hints', () => {
     });
     return MockSpeechRecognition.instances[0];
   }
+
+  test('reading cards listen in Japanese by default', async () => {
+    const native = await loadReadingSubjects();
+    expect(native.lang).toBe('ja-JP');
+  });
+
+  test('reading cards listen in English when Romaji recognition is enabled', async () => {
+    const native = await loadReadingSubjects({ reading_recognition_mode: 'romaji' });
+    expect(native.lang).toBe('en-US');
+  });
+
+  test('the recognition mode chip toggles reading cards between Japanese and Romaji', async () => {
+    const native = await loadReadingSubjects();
+    const modeChanges = [];
+    document.addEventListener('kikoe:setReadingRecognitionMode', (e) => modeChanges.push(e.detail.mode));
+
+    const chip = document.getElementById('kikoe-recognition-mode-chip');
+    expect(chip.textContent).toBe('あ');
+    expect(native.lang).toBe('ja-JP');
+
+    chip.click();
+    expect(chip.textContent).toBe('R');
+    expect(native.lang).toBe('en-US');
+    expect(modeChanges).toEqual(['romaji']);
+
+    chip.click();
+    expect(chip.textContent).toBe('あ');
+    expect(native.lang).toBe('ja-JP');
+    expect(modeChanges).toEqual(['romaji', 'japanese']);
+  });
 
   test('speaking the meaning on a reading question shows a wrong-type hint', async () => {
     const native = await loadReadingSubjects();

@@ -12,7 +12,14 @@ import { startSpeedEnhancer as startBunproSpeedEnhancer } from './bunpro_speed';
 import { createTranscriptContainer, logTranscript, showIdleIndicator, setIdleIndicatorState } from './live_transcript';
 import { SHARED_COMMANDS, REVEAL_COMMANDS, GRADE_COMMANDS, HELP_COMMANDS, buildCommandTable, commandsForMode } from './commands';
 import type { HelpMode } from './commands';
-import { updateHelpChip, openHelpPanel, closeHelpPanel, isHelpPanelOpen, showHelpHint } from './help';
+import {
+  updateHelpChip,
+  updateRecognitionModeChip,
+  openHelpPanel,
+  closeHelpPanel,
+  isHelpPanelOpen,
+  showHelpHint,
+} from './help';
 import type { HelpView } from './help';
 import { loadDictionary } from './dict';
 import type { Dictionary } from './dict';
@@ -271,8 +278,16 @@ async function startListener(dictionary: Dictionary): Promise<void> {
       : 'standard';
     return {
       commands: commandsForMode(mode),
-      language: site.getLanguage().startsWith('ja') ? 'Japanese' : 'English',
+      language: getRecognitionLanguage().startsWith('ja') ? 'Japanese' : 'English',
     };
+  }
+
+  function getRecognitionLanguage(): string {
+    const ctx = site.getContext(subjects);
+    if (ctx?.type === 'reading' && getSettings().reading_recognition_mode === 'romaji') {
+      return 'en-US';
+    }
+    return site.getLanguage();
   }
 
   function toggleHelp(): void {
@@ -282,6 +297,17 @@ async function startListener(dictionary: Dictionary): Promise<void> {
       openHelpPanel(getSettings(), helpView(), () => setHelpOpen(false));
       setHelpOpen(true);
     }
+  }
+
+  function toggleReadingRecognitionMode(): void {
+    const current = getSettings();
+    const next = current.reading_recognition_mode === 'romaji' ? 'japanese' : 'romaji';
+    updateSettings({ ...current, reading_recognition_mode: next });
+    updateRecognitionModeChip(getSettings(), toggleReadingRecognitionMode);
+    setLanguage(recognition, getRecognitionLanguage());
+    document.dispatchEvent(new CustomEvent('kikoe:setReadingRecognitionMode', {
+      detail: { mode: next },
+    }));
   }
 
   function isPageActive(): boolean {
@@ -445,7 +471,7 @@ async function startListener(dictionary: Dictionary): Promise<void> {
     if (state) setIdleIndicatorState(state);
   }
 
-  const recognitionOrNull = createRecognition(() => site.getLanguage(), handleRecognitionResult, handleRecognitionError);
+  const recognitionOrNull = createRecognition(getRecognitionLanguage, handleRecognitionResult, handleRecognitionError);
 
   if (!recognitionOrNull) {
     // No Web Speech support (e.g. Firefox) — nothing below this point can
@@ -476,7 +502,7 @@ async function startListener(dictionary: Dictionary): Promise<void> {
         // refreshed — e.g. flipping between supported and unsupported cards.
         restoreIdleIndicator();
       }
-      setLanguage(recognition, site.getLanguage());
+      setLanguage(recognition, getRecognitionLanguage());
     }
   }
 
@@ -489,7 +515,12 @@ async function startListener(dictionary: Dictionary): Promise<void> {
   // The "?" chip next to the indicator; recreated/removed when the setting
   // changes. Saying "help" works regardless of the chip's visibility.
   updateHelpChip(getSettings(), toggleHelp);
-  document.addEventListener('kikoe:settingsChanged', () => updateHelpChip(getSettings(), toggleHelp));
+  updateRecognitionModeChip(getSettings(), toggleReadingRecognitionMode);
+  document.addEventListener('kikoe:settingsChanged', () => {
+    updateHelpChip(getSettings(), toggleHelp);
+    updateRecognitionModeChip(getSettings(), toggleReadingRecognitionMode);
+    setLanguage(recognition, getRecognitionLanguage());
+  });
 
   // One-time discovery nudge; content.ts persists the flag so it never
   // shows again once seen.

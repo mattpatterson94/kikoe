@@ -1,5 +1,6 @@
 import {
   updateHelpChip,
+  updateRecognitionModeChip,
   openHelpPanel,
   closeHelpPanel,
   isHelpPanelOpen,
@@ -12,6 +13,7 @@ const defaultSettings = {
   transcript_theme: 'system',
   transcript_position: 'top',
   show_help_button: true,
+  reading_recognition_mode: 'japanese',
 };
 
 function settings(overrides = {}) {
@@ -84,6 +86,42 @@ describe('updateHelpChip', () => {
       new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })
     );
     expect(onActivate).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ── updateRecognitionModeChip ────────────────────────────────────────────────
+
+describe('updateRecognitionModeChip', () => {
+  test('shows the Japanese mode glyph by default', () => {
+    updateRecognitionModeChip(settings(), vi.fn());
+    const chip = document.getElementById('kikoe-recognition-mode-chip');
+    expect(chip).not.toBeNull();
+    expect(chip.textContent).toBe('あ');
+    expect(chip.getAttribute('title')).toContain('Japanese');
+  });
+
+  test('shows the Romaji mode glyph when enabled', () => {
+    updateRecognitionModeChip(settings({ reading_recognition_mode: 'romaji' }), vi.fn());
+    const chip = document.getElementById('kikoe-recognition-mode-chip');
+    expect(chip.textContent).toBe('R');
+    expect(chip.getAttribute('title')).toContain('Romaji');
+  });
+
+  test('clicking the chip invokes the toggle callback', () => {
+    const onToggle = vi.fn();
+    updateRecognitionModeChip(settings(), onToggle);
+    document.getElementById('kikoe-recognition-mode-chip').click();
+    expect(onToggle).toHaveBeenCalledTimes(1);
+  });
+
+  test('sits after the help chip when both chips exist', () => {
+    updateHelpChip(settings(), vi.fn());
+    updateRecognitionModeChip(settings(), vi.fn());
+    const corner = document.getElementById('kikoe-corner');
+    expect([...corner.children].map((el) => el.id)).toEqual([
+      'kikoe-help-chip',
+      'kikoe-recognition-mode-chip',
+    ]);
   });
 });
 

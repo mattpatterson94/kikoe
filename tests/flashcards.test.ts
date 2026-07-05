@@ -318,6 +318,26 @@ describe('reading questions', () => {
     expect(tah.answer).toBe('た');
   });
 
+  test('converts romaji fallback for short readings', () => {
+    const zu = checkAnswer({ type: 'reading', prompt: '図', readings: ['ず'] }, makeTransformers(), 'zu');
+    expectSuccess(zu);
+    expect(zu.answer).toBe('ず');
+
+    const gen = checkAnswer({ type: 'reading', prompt: '元', readings: ['げん'] }, makeTransformers(), 'gen');
+    expectSuccess(gen);
+    expect(gen.answer).toBe('げん');
+  });
+
+  test('uses English recognition corrections for short readings', () => {
+    const zoo = checkAnswer({ type: 'reading', prompt: '図', readings: ['ず'] }, makeTransformers(), 'zoo');
+    expectSuccess(zoo);
+    expect(zoo.answer).toBe('ず');
+
+    const jen = checkAnswer({ type: 'reading', prompt: '元', readings: ['げん'] }, makeTransformers(), 'Jen');
+    expectSuccess(jen);
+    expect(jen.answer).toBe('げん');
+  });
+
   test('uses numeric speech correction for "go" heard as 5', () => {
     const r = checkAnswer({ type: 'reading', prompt: '五', readings: ['ご'] }, makeTransformers(), '5');
     expectSuccess(r);

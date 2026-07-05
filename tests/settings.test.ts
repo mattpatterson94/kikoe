@@ -36,7 +36,7 @@ describe('defaults', () => {
 
   test('all expected keys are present', () => {
     const keys = ['debug', 'customCorrections', 'turbo', 'speed_show_info',
-      'transcript', 'transcript_theme', 'transcript_position',
+      'reading_recognition_mode', 'transcript', 'transcript_theme', 'transcript_position',
       'show_help_button', 'help_hint_shown'];
     for (const k of keys) expect(defaults).toHaveProperty(k);
   });

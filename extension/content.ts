@@ -50,6 +50,12 @@ export function buildSafeConfig(base: string, settings: StoredSettings, hasApiTo
   return { base, settings: safeSettings, hasApiToken };
 }
 
+export function persistReadingRecognitionMode(mode: unknown): void {
+  if (mode === 'japanese' || mode === 'romaji') {
+    chrome.storage.sync.set({ reading_recognition_mode: mode });
+  }
+}
+
 export async function getApiToken(): Promise<string | null> {
   const synced = await chrome.storage.sync.get('apiToken') as { apiToken?: string };
   if (synced.apiToken) {
@@ -307,6 +313,11 @@ async function main(): Promise<void> {
   // never reappears (the page world can't write chrome.storage itself).
   document.addEventListener('kikoe:helpHintSeen', () => {
     chrome.storage.sync.set({ help_hint_shown: true });
+  });
+
+  document.addEventListener('kikoe:setReadingRecognitionMode', (e) => {
+    const mode = (e as CustomEvent<{ mode?: unknown }>).detail?.mode;
+    persistReadingRecognitionMode(mode);
   });
 
   if (site === 'wanikani') {

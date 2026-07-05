@@ -10,6 +10,7 @@ const defaults = {
   show_help_button: true,
   debug: false,
   customCorrections: [],
+  reading_recognition_mode: 'japanese',
 };
 
 // Keys read/written via a same-id form element. customCorrections is edited

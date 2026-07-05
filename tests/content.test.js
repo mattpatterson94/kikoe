@@ -1,4 +1,15 @@
-import { getSettings, buildSafeConfig, getApiToken, fetchSubjectsForPrompt, prefetchSubjects, takeNextPrefetchBatch, subjectCacheKey, CACHE_PREFIX, RADICALS_CACHE_KEY } from '../extension/content';
+import {
+  getSettings,
+  buildSafeConfig,
+  persistReadingRecognitionMode,
+  getApiToken,
+  fetchSubjectsForPrompt,
+  prefetchSubjects,
+  takeNextPrefetchBatch,
+  subjectCacheKey,
+  CACHE_PREFIX,
+  RADICALS_CACHE_KEY,
+} from '../extension/content';
 import { defaults } from '../src/settings';
 
 // ── Chrome API mock ───────────────────────────────────────────────────────────
@@ -98,6 +109,20 @@ describe('buildSafeConfig', () => {
     const config = buildSafeConfig('chrome-extension://id/', { ...defaults, apiToken: 'secret', turbo: true });
     expect(config.settings.turbo).toBe(true);
     expect(config.settings.transcript).toBe(defaults.transcript);
+  });
+});
+
+// ── persistReadingRecognitionMode ────────────────────────────────────────────
+
+describe('persistReadingRecognitionMode', () => {
+  test('stores a valid reading recognition mode', () => {
+    persistReadingRecognitionMode('romaji');
+    expect(chromeMock.storage.sync.set).toHaveBeenCalledWith({ reading_recognition_mode: 'romaji' });
+  });
+
+  test('ignores unknown modes', () => {
+    persistReadingRecognitionMode('pirate');
+    expect(chromeMock.storage.sync.set).not.toHaveBeenCalled();
   });
 });
 

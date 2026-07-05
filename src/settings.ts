@@ -10,6 +10,7 @@ export interface Correction {
 export interface Settings {
   debug: boolean;
   customCorrections: Correction[];
+  reading_recognition_mode: 'japanese' | 'romaji';
   turbo: boolean;
   speed_show_info: boolean;
   ippatsu_meaning: boolean;
@@ -26,6 +27,7 @@ export interface Settings {
 export const defaults: Settings = {
   debug: false,
   customCorrections: [],
+  reading_recognition_mode: 'japanese',
   turbo: true,
   speed_show_info: true,
   ippatsu_meaning: false,

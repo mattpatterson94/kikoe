@@ -151,6 +151,36 @@ export function updateHelpChip(settings: Settings, onActivate: () => void): void
   ensureCornerContainer().prepend(chip);
 }
 
+export function updateRecognitionModeChip(settings: Settings, onToggle: () => void): void {
+  let chip = document.getElementById('kikoe-recognition-mode-chip');
+  if (!chip) {
+    injectStyles();
+    chip = document.createElement('div');
+    chip.id = 'kikoe-recognition-mode-chip';
+    chip.className = `kikoe-chip ${themeClass(settings)} kikoe-idle kikoe-idle-clickable kikoe-help-chip`;
+    chip.setAttribute('role', 'button');
+    chip.setAttribute('tabindex', '0');
+    chip.setAttribute('aria-label', 'Toggle reading recognition mode');
+    chip.addEventListener('click', onToggle);
+    chip.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        onToggle();
+      }
+    });
+    const help = document.getElementById('kikoe-help-chip');
+    if (help?.parentElement) help.insertAdjacentElement('afterend', chip);
+    else ensureCornerContainer().prepend(chip);
+  }
+
+  chip.className = `kikoe-chip ${themeClass(settings)} kikoe-idle kikoe-idle-clickable kikoe-help-chip`;
+  const romaji = settings.reading_recognition_mode === 'romaji';
+  chip.textContent = romaji ? 'R' : 'あ';
+  chip.setAttribute('title', romaji
+    ? 'Reading recognition: Romaji. Click for Japanese.'
+    : 'Reading recognition: Japanese. Click for Romaji.');
+}
+
 export function isHelpPanelOpen(): boolean {
   return !!document.getElementById('kikoe-help-panel');
 }
@@ -173,6 +203,7 @@ function onDocumentClick(e: MouseEvent): void {
   const panel = document.getElementById('kikoe-help-panel');
   if (panel && panel.contains(target)) return;
   if (document.getElementById('kikoe-help-chip')?.contains(target)) return;
+  if (document.getElementById('kikoe-recognition-mode-chip')?.contains(target)) return;
   closeHelpPanel();
 }
 
