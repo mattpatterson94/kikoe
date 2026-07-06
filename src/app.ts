@@ -343,6 +343,22 @@ async function startListener(dictionary: Dictionary): Promise<void> {
     };
   }
 
+  function correctionMatchesContext(ctx: SiteContext | null | undefined, intended: string): boolean {
+    if (!ctx || ctx.mode === 'unsupported') return false;
+    if (ctx.type === 'reading') return !!ctx.readings?.includes(intended);
+    return !!ctx.meanings?.includes(intended);
+  }
+
+  document.addEventListener('kikoe:addCorrection', (e) => {
+    const detail = (e as CustomEvent<Partial<{ intended: string }>>).detail;
+    const intended = typeof detail?.intended === 'string' ? detail.intended.trim() : '';
+    if (!intended || submitted) return;
+    const ctx = site.getContext(subjects);
+    if (!correctionMatchesContext(ctx, intended)) return;
+    submitted = true;
+    site.submitAnswer(intended);
+  });
+
   // Ippatsu (一発) mode: one shot per question. A genuine miss ('no-match' —
   // a right-type answer that didn't match) is submitted as wrong via
   // site.markWrong() instead of waiting for a retry. Recognizer glitches
