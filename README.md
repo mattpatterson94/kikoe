@@ -18,6 +18,10 @@
 - In-page help: say "help" (or ヘルプ) or click the ? button next to the listening indicator for a cheat sheet of the commands that work on the current card
 - Automatic language switching between Japanese recognition for reading questions and English for meaning questions
 
+## Chrome Web Store Description Excerpt
+
+New in 0.8.0: one-click corrections make Kikoe easier to tune while you review. If speech recognition repeatedly hears the wrong phrase, the live transcript can show a no-match correction bubble for the current accepted answer. Click it, confirm the mapping, and Kikoe saves that correction and submits the intended answer immediately, without leaving your WaniKani or BunPro session.
+
 ## Requirements
 
 - A [WaniKani](https://www.wanikani.com) account and/or a [BunPro](https://bunpro.jp) account

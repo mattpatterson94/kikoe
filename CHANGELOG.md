@@ -5,6 +5,17 @@ All notable changes to Kikoe are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.0] - 2026-07-07
+
+### Added
+
+- One-click corrections from the live transcript: when Kikoe hears an answer
+  that does not match, the no-match bubble can offer a click-to-confirm
+  correction from what speech recognition heard to the current accepted
+  answer. Confirming saves the correction and immediately submits the
+  intended answer, so recurring recognition misses can be fixed without
+  leaving the review session. ([#61](https://github.com/mattpatterson94/kikoe/pull/61))
+
 ## [0.7.0] - 2026-07-03
 
 ### Added
@@ -171,6 +182,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Vitest test suite: 118 tests covering candidates, flashcards, settings,
   the content script, WaniKani helpers, and the speed enhancer.
 
-[Unreleased]: https://github.com/mattpatterson94/kikoe/compare/6553948...HEAD
+[Unreleased]: https://github.com/mattpatterson94/kikoe/compare/3d90bb9...HEAD
+[0.8.0]: https://github.com/mattpatterson94/kikoe/compare/0b34b21...3d90bb9
+[0.7.0]: https://github.com/mattpatterson94/kikoe/compare/6553948...0b34b21
 [0.6.0]: https://github.com/mattpatterson94/kikoe/compare/9e4218f...6553948
 [0.5.0]: https://github.com/mattpatterson94/kikoe/commit/9e4218f
