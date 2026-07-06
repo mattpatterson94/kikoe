@@ -45,6 +45,21 @@ export async function getSettings(): Promise<StoredSettings> {
   return { ...defaults, ...stored };
 }
 
+export async function addCustomCorrection({ heard, intended }: Partial<{ heard: string; intended: string }>): Promise<boolean> {
+  const cleanHeard = typeof heard === 'string' ? heard.trim() : '';
+  const cleanIntended = typeof intended === 'string' ? intended.trim() : '';
+  if (!cleanHeard || !cleanIntended) return false;
+
+  const stored = await chrome.storage.sync.get('customCorrections') as { customCorrections?: Partial<{ heard: string; intended: string }>[] };
+  const existing = Array.isArray(stored.customCorrections) ? stored.customCorrections : [];
+  const next = existing.filter((pair) => {
+    return pair?.heard?.trim().toLowerCase() !== cleanHeard.toLowerCase();
+  });
+  next.push({ heard: cleanHeard, intended: cleanIntended });
+  await chrome.storage.sync.set({ customCorrections: next });
+  return true;
+}
+
 export function buildSafeConfig(base: string, settings: StoredSettings, hasApiToken = false): SafeConfig {
   const { apiToken: _, ...safeSettings } = settings;
   return { base, settings: safeSettings, hasApiToken };
@@ -339,6 +354,14 @@ async function main(): Promise<void> {
       }
     });
   }
+
+  document.addEventListener('kikoe:addCorrection', async (e) => {
+    try {
+      await addCustomCorrection((e as CustomEvent<Partial<{ heard: string; intended: string }>>).detail || {});
+    } catch (err) {
+      console.error('[kikoe] failed to save correction:', err);
+    }
+  });
 
   let currentSettings = settings;
   chrome.storage.onChanged.addListener((changes, area) => {

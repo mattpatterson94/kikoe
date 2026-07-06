@@ -1,4 +1,4 @@
-import { getSettings, buildSafeConfig, getApiToken, fetchSubjectsForPrompt, prefetchSubjects, takeNextPrefetchBatch, subjectCacheKey, CACHE_PREFIX, RADICALS_CACHE_KEY } from '../extension/content';
+import { getSettings, buildSafeConfig, getApiToken, fetchSubjectsForPrompt, prefetchSubjects, takeNextPrefetchBatch, subjectCacheKey, addCustomCorrection, CACHE_PREFIX, RADICALS_CACHE_KEY } from '../extension/content';
 import { defaults } from '../src/settings';
 
 // ── Chrome API mock ───────────────────────────────────────────────────────────
@@ -98,6 +98,34 @@ describe('buildSafeConfig', () => {
     const config = buildSafeConfig('chrome-extension://id/', { ...defaults, apiToken: 'secret', turbo: true });
     expect(config.settings.turbo).toBe(true);
     expect(config.settings.transcript).toBe(defaults.transcript);
+  });
+});
+
+// ── addCustomCorrection ───────────────────────────────────────────────────────
+
+describe('addCustomCorrection', () => {
+  test('appends a cleaned custom correction', async () => {
+    await expect(addCustomCorrection({ heard: ' gibberish ', intended: ' さむい ' })).resolves.toBe(true);
+    expect(syncStore.customCorrections).toEqual([{ heard: 'gibberish', intended: 'さむい' }]);
+  });
+
+  test('replaces an existing correction with the same heard text', async () => {
+    syncStore.customCorrections = [
+      { heard: 'Gibberish', intended: '古い' },
+      { heard: 'other', intended: 'ほか' },
+    ];
+
+    await addCustomCorrection({ heard: 'gibberish', intended: 'さむい' });
+
+    expect(syncStore.customCorrections).toEqual([
+      { heard: 'other', intended: 'ほか' },
+      { heard: 'gibberish', intended: 'さむい' },
+    ]);
+  });
+
+  test('ignores blank correction data', async () => {
+    await expect(addCustomCorrection({ heard: ' ', intended: 'さむい' })).resolves.toBe(false);
+    expect(syncStore.customCorrections).toBeUndefined();
   });
 });
 

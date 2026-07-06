@@ -178,6 +178,10 @@ precedence over the built-in correction tables, and take effect on your next
 answer without reloading the review page. The intended value for a reading can
 be entered in kana or romaji.
 
+When the live transcript shows a `no match` bubble during a review, click the
+bubble to confirm and save a correction from what Kikoe heard to the current
+accepted answer.
+
 ### Advanced
 
 | Setting | Default | Description |

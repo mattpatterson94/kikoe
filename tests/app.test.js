@@ -858,6 +858,22 @@ describe('startListener transcript failure reason hints', () => {
       if (!container.textContent.includes('no match')) throw new Error('hint not shown yet');
     });
     expect(container.textContent).toContain('no match');
+    expect(container.querySelector('.kikoe-chip-clickable')).not.toBeNull();
+    expect(container.querySelector('[aria-label*="さむい"]')).not.toBeNull();
+  });
+
+  test('confirming a no-match correction submits the intended answer', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    const native = await loadReadingSubjects();
+    native.onresult({ resultIndex: 0, results: [finalResult('gibberish')] });
+
+    const container = document.getElementById('kikoe-transcript-container');
+    await vi.waitFor(() => {
+      if (!container.querySelector('.kikoe-chip-clickable')) throw new Error('correction bubble not shown yet');
+    });
+    container.querySelector('.kikoe-chip-clickable').click();
+
+    expect(document.getElementById('user-response').value).toBe('さむい');
   });
 
   test('the most informative reason wins across alternatives (wrong-type over no-match)', async () => {
