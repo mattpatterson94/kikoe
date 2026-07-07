@@ -4,18 +4,27 @@ set -euo pipefail
 DATA_VERSION="0.4.3"
 DATA_BASE="https://raw.githubusercontent.com/okonomichiyaki/wanikani-voice-input/${DATA_VERSION}"
 
-echo "→ Installing npm dependencies..."
-npm install --silent
+if command -v npm >/dev/null 2>&1; then
+  echo "→ Installing npm dependencies..."
+  npm install --silent
+elif [ -x node_modules/.bin/esbuild ]; then
+  echo "→ Using existing node_modules (npm not found)..."
+else
+  echo "npm is required to install dependencies before building." >&2
+  exit 1
+fi
+
+ESBUILD="node_modules/.bin/esbuild"
 
 echo "→ Bundling app (src/app.ts → bundle.js)..."
-npx esbuild src/app.ts \
+"$ESBUILD" src/app.ts \
   --bundle \
   --format=iife \
   --platform=browser \
   --outfile=bundle.js
 
 echo "→ Bundling content script (extension/content.ts → content.js)..."
-npx esbuild extension/content.ts \
+"$ESBUILD" extension/content.ts \
   --bundle \
   --format=iife \
   --platform=browser \
@@ -51,6 +60,19 @@ cp extension/options.js firefox/options.js
 cp data/jmdict.json firefox/data/jmdict.json
 cp data/kanjidic2.json firefox/data/kanjidic2.json
 
+echo "→ Assembling Safari Web Extension..."
+mkdir -p safari/data safari/icons
+cp extension/safari_manifest.json safari/manifest.json
+cp bundle.js safari/bundle.js
+cp content.js safari/content.js
+cp extension/injected.js safari/injected.js
+cp extension/background.js safari/background.js
+cp extension/options.html safari/options.html
+cp extension/options.js safari/options.js
+cp chrome/icons/*.png safari/icons/
+cp data/jmdict.json safari/data/jmdict.json
+cp data/kanjidic2.json safari/data/kanjidic2.json
+
 # Clean up root-level build artifacts
 rm -f bundle.js content.js
 
@@ -58,3 +80,4 @@ echo ""
 echo "Done."
 echo "  Chrome:  load chrome/ in chrome://extensions (Developer mode → Load unpacked)"
 echo "  Firefox: load firefox/manifest.json in about:debugging → This Firefox"
+echo "  Safari:  convert safari/ with Xcode's Safari Web Extension converter"
