@@ -30,6 +30,7 @@ import { Numerals } from './candidates/numerals';
 
 const EMPTY_FINAL_RESTART_THRESHOLD = 3;
 const RESTARTING_INDICATOR_MS = 900;
+const MATCHED_INTERIM_SUBMIT_MS = 900;
 
 // Maps a SpeechRecognition error type to the idle-indicator state that
 // explains it to the user. Errors with no entry here (e.g. 'aborted') keep
@@ -71,7 +72,7 @@ interface SiteAdapter {
   getContext(subjects?: WanikaniSubject[]): SiteContext | null;
   didContextChange(oldContext: SiteContext | null | undefined, newContext: SiteContext | null | undefined): boolean;
   clickNext(): boolean;
-  markWrong(): void;
+  markWrong(): boolean;
   submitAnswer(input: string): boolean;
   createCardWatcher(onChange: () => void): MutationObserver;
   getQueuedSubjectIds?(cap?: number): number[];
@@ -260,6 +261,7 @@ async function startListener(dictionary: Dictionary): Promise<void> {
   let pendingRaws: string[] | null = null;
   let emptyFinals = 0;
   let restartIndicatorTimer: ReturnType<typeof setTimeout> | undefined;
+  let matchedInterimTimer: ReturnType<typeof setTimeout> | undefined;
 
   // While the help panel is open the mic is paused: the panel displays the
   // words that trigger actions, so reading it aloud must not fire them.
@@ -349,14 +351,43 @@ async function startListener(dictionary: Dictionary): Promise<void> {
     return !!ctx.meanings?.includes(intended);
   }
 
+  function submitMatchedAnswer(answer: string): boolean {
+    if (!site.submitAnswer(answer)) return false;
+    submitted = true;
+    return true;
+  }
+
+  function submitWrongAnswer(): boolean {
+    if (!site.markWrong()) return false;
+    submitted = true;
+    return true;
+  }
+
+  function clearMatchedInterimTimer(): void {
+    clearTimeout(matchedInterimTimer);
+    matchedInterimTimer = undefined;
+  }
+
+  function scheduleMatchedInterimSubmit(ctx: SiteContext, raws: string[], result: Extract<CheckResult, { success: true }>): void {
+    clearMatchedInterimTimer();
+    matchedInterimTimer = setTimeout(() => {
+      if (submitted) return;
+      const latestContext = site.getContext(subjects);
+      if (site.didContextChange(ctx, latestContext)) return;
+      if (latestContext?.type !== 'reading') return;
+      logTranscript(getSettings(), result.transcript);
+      submitMatchedAnswer(result.answer);
+      debugLog('submitted matched interim after final result stalled', { raws, result });
+    }, MATCHED_INTERIM_SUBMIT_MS);
+  }
+
   document.addEventListener('kikoe:addCorrection', (e) => {
     const detail = (e as CustomEvent<Partial<{ intended: string }>>).detail;
     const intended = typeof detail?.intended === 'string' ? detail.intended.trim() : '';
     if (!intended || submitted) return;
     const ctx = site.getContext(subjects);
     if (!correctionMatchesContext(ctx, intended)) return;
-    submitted = true;
-    site.submitAnswer(intended);
+    submitMatchedAnswer(intended);
   });
 
   // Ippatsu (一発) mode: one shot per question. A genuine miss ('no-match' —
@@ -380,11 +411,9 @@ async function startListener(dictionary: Dictionary): Promise<void> {
     const result = checkAlternatives(context, pendingRaws);
     debugLog('retrying pending transcript', { pendingRaws, result });
     if (result?.success && result.answer) {
-      submitted = true;
-      site.submitAnswer(result.answer);
+      submitMatchedAnswer(result.answer);
     } else if (result?.transcript?.reason === 'no-match' && ippatsuEnabled(context.type)) {
-      submitted = true;
-      site.markWrong();
+      submitWrongAnswer();
     }
     pendingRaws = null;
   }
@@ -394,6 +423,7 @@ async function startListener(dictionary: Dictionary): Promise<void> {
     if (raws.length === 0) {
       if (final && ++emptyFinals >= EMPTY_FINAL_RESTART_THRESHOLD) {
         emptyFinals = 0;
+        clearMatchedInterimTimer();
         clearTimeout(restartIndicatorTimer);
         setIdleIndicatorState('restarting');
         recognition.restart();
@@ -408,8 +438,7 @@ async function startListener(dictionary: Dictionary): Promise<void> {
     const raw = raws[0];
     logTranscript(getSettings(), { raw });
 
-    // Only process on final results — interim results are shown for feedback only.
-    if (!final) return;
+    if (final) clearMatchedInterimTimer();
 
     // Reveal & Grade cards are command-only: match the state-appropriate
     // table first (reveal while the answer is hidden, good/bad once shown),
@@ -417,6 +446,24 @@ async function startListener(dictionary: Dictionary): Promise<void> {
     // The whole checkAnswer path below is skipped, so no answer-priority
     // concern applies to 'help' here.
     const ctx = site.getContext(subjects);
+
+    // Interim results are usually display-only, but short reading answers can
+    // get stuck there if Chrome shows a correct interim and never emits the
+    // final. Only auto-submit an interim when it already resolves to an
+    // accepted reading, and give the normal final-result path a short window
+    // to arrive first.
+    if (!final) {
+      if (!submitted && ctx?.type === 'reading') {
+        const interimResult = checkAlternatives(ctx, raws);
+        if (interimResult?.success && interimResult.answer) {
+          scheduleMatchedInterimSubmit(ctx, raws, interimResult);
+          return;
+        }
+      }
+      clearMatchedInterimTimer();
+      return;
+    }
+
     if (ctx?.mode === 'reveal') {
       const action = matchCommand(raws, ctx.revealed ? gradeCommands : revealCommands)
         ?? matchCommand(raws)
@@ -466,15 +513,13 @@ async function startListener(dictionary: Dictionary): Promise<void> {
     logTranscript(getSettings(), withCorrectionCandidate(ctx, result.transcript));
 
     if (result.success && result.answer) {
-      submitted = true;
-      site.submitAnswer(result.answer);
+      submitMatchedAnswer(result.answer);
     } else if (!ctx.readings?.length && !ctx.meanings?.length) {
       // Subjects not loaded yet — store transcript and retry once they arrive.
       pendingRaws = raws;
       debugLog('subjects not loaded, stored pending transcript:', raws);
     } else if (result.transcript.reason === 'no-match' && ippatsuEnabled(ctx.type)) {
-      submitted = true;
-      site.markWrong();
+      submitWrongAnswer();
     }
   }
 

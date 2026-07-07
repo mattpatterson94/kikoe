@@ -223,7 +223,7 @@ describe('markWrong', () => {
   test('submits a Japanese non-answer for cloze cards', () => {
     addMetadata({ 'data-meta-question-mode': 'cloze' });
     const { input, button } = addInput();
-    markWrong();
+    expect(markWrong()).toBe(true);
     expect(input.value).toBe('あああ');
     expect(button.clicked).toBe(true);
   });
@@ -231,7 +231,7 @@ describe('markWrong', () => {
   test('submits an English non-answer for translate cards', () => {
     addMetadata({ 'data-meta-question-mode': 'translate' });
     const { input } = addInput();
-    markWrong();
+    expect(markWrong()).toBe(true);
     expect(input.value).toBe('aaa');
   });
 });

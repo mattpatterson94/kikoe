@@ -167,9 +167,9 @@ export function submitAnswer(input: string): boolean {
   return false;
 }
 
-export function markWrong(): void {
+export function markWrong(): boolean {
   const incorrect = getLanguage() === 'en-US' ? 'aaa' : 'あああ';
-  submitAnswer(incorrect);
+  return submitAnswer(incorrect);
 }
 
 // Best-effort: only needed for accounts without BunPro's native Lightning
