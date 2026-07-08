@@ -20,7 +20,8 @@ xcrun safari-web-extension-converter safari/
 
 - The shared page bundle from `src/app.ts`.
 - The content-script bridge from `extension/content.ts`.
-- The existing options UI, background handler, dictionary data, and icons.
+- The existing options UI, background handler, dictionary data, and dedicated
+  high-resolution Safari app icons.
 - The same `webkitSpeechRecognition` path used by Chrome.
 
 ## Real-Device Checks
