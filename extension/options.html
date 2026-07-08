@@ -44,7 +44,7 @@
       color: var(--text);
       max-width: 600px;
       margin: 0 auto;
-      padding: 40px 20px 120px;
+      padding: calc(40px + env(safe-area-inset-top, 0px)) 20px calc(120px + env(safe-area-inset-bottom, 0px));
       line-height: 1.45;
     }
 
@@ -52,7 +52,8 @@
     header .logo {
       display: block;
       width: 220px;
-      height: 148px;
+      height: auto;
+      max-width: 100%;
     }
     .tagline {
       color: var(--text-soft);
@@ -109,7 +110,7 @@
       font-family: inherit;
       transition: border-color 0.15s, box-shadow 0.15s;
     }
-    input[type=text], input[type=password] { width: 240px; }
+    input[type=text], input[type=password] { width: min(240px, 100%); }
     input[type=number] { width: 84px; }
     select { width: 130px; }
     .token-control {
@@ -117,12 +118,14 @@
       flex-direction: column;
       align-items: flex-end;
       gap: 8px;
+      min-width: 0;
     }
     .token-actions {
       display: flex;
       flex-wrap: wrap;
       justify-content: flex-end;
       gap: 8px;
+      width: 100%;
     }
     .secondary {
       background: transparent;
@@ -250,7 +253,7 @@
       right: 0;
       background: var(--card);
       border-top: 1px solid var(--border);
-      padding: 14px 20px;
+      padding: 14px 20px calc(14px + env(safe-area-inset-bottom, 0px));
     }
     .save-bar .inner {
       max-width: 600px;
@@ -278,6 +281,71 @@
       box-shadow: 0 0 0 3px var(--accent-soft);
     }
     button:disabled { cursor: default; background: var(--ok); }
+
+    @media (max-width: 560px) {
+      body {
+        max-width: none;
+        padding-left: 20px;
+        padding-right: 20px;
+      }
+      header .logo {
+        width: min(72vw, 320px);
+      }
+      .tagline {
+        font-size: 0.95rem;
+        margin-bottom: 24px;
+      }
+      section.card {
+        border-radius: 10px;
+        padding: 6px 16px;
+        margin-bottom: 18px;
+      }
+      .field.token-field {
+        display: block;
+      }
+      .field.token-field label {
+        display: block;
+        margin-bottom: 12px;
+      }
+      .field.token-field .hint {
+        max-width: 26rem;
+      }
+      .token-control {
+        align-items: stretch;
+        width: 100%;
+      }
+      .token-actions {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: center;
+      }
+      .token-actions input[type=password] {
+        width: 100%;
+        min-width: 0;
+      }
+      .token-actions .secondary {
+        white-space: nowrap;
+      }
+      .status {
+        max-width: none;
+        text-align: left;
+      }
+      .save-bar .inner {
+        max-width: none;
+      }
+      #save {
+        width: min(100%, 260px);
+      }
+    }
+
+    @media (max-width: 360px) {
+      .token-actions {
+        grid-template-columns: 1fr;
+      }
+      .token-actions .secondary {
+        width: 100%;
+      }
+    }
   </style>
 </head>
 <body>
@@ -288,7 +356,7 @@
 
   <section class="card">
     <h2>WaniKani API</h2>
-    <div class="field">
+    <div class="field token-field">
       <label for="apiToken">
         API Token
         <span class="hint">Read-only token from <a href="https://www.wanikani.com/settings/personal_access_tokens" target="_blank">WaniKani settings</a>.</span>
