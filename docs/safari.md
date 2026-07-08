@@ -16,6 +16,17 @@ project and containing iOS/iPadOS/macOS app needed for Safari distribution.
 xcrun safari-web-extension-converter safari/
 ```
 
+After conversion, customize the generated containing app page:
+
+```bash
+npm run safari:customize-app -- Kikoe
+```
+
+The customized iOS app page includes setup steps and an **Open Settings**
+button. iOS only exposes a public URL for opening the app's Settings page, so
+the page still tells users to navigate to **Apps > Safari > Extensions > Kikoe**
+from there instead of relying on private Settings URLs.
+
 ## What This Reuses
 
 - The shared page bundle from `src/app.ts`.

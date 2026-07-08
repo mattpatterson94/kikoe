@@ -12,6 +12,7 @@
     "pack:firefox": "mkdir -p dist && cd firefox && zip -r ../dist/kikoe-firefox.zip .",
     "pack:safari": "mkdir -p dist && cd safari && zip -r ../dist/kikoe-safari-web-extension.zip .",
     "pack": "npm run pack:chrome && npm run pack:firefox && npm run pack:safari",
+    "safari:customize-app": "node scripts/customize-safari-app.js",
     "dev": "node dev.js",
     "dev:firefox": "node dev.js --firefox",
     "e2e:launch": "node tests/e2e/launch.js",

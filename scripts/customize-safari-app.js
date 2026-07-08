@@ -1,0 +1,294 @@
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+const appDir = process.argv[2] || 'Kikoe';
+
+const files = {
+  html: join(appDir, 'Shared (App)', 'Resources', 'Base.lproj', 'Main.html'),
+  css: join(appDir, 'Shared (App)', 'Resources', 'Style.css'),
+  js: join(appDir, 'Shared (App)', 'Resources', 'Script.js'),
+  viewController: join(appDir, 'Shared (App)', 'ViewController.swift'),
+};
+
+for (const file of Object.values(files)) {
+  if (!existsSync(file)) {
+    console.error(`Missing Safari app file: ${file}`);
+    process.exit(1);
+  }
+}
+
+writeFileSync(files.html, `<!DOCTYPE html>
+<html>
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'">
+    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+    <link rel="stylesheet" href="../Style.css">
+    <script src="../Script.js" defer></script>
+</head>
+<body>
+    <main>
+        <img class="logo" src="../Icon.png" width="180" height="180" alt="Kikoe Icon">
+        <h1>Kikoe</h1>
+        <p class="tagline">Voice answers for WaniKani &amp; BunPro</p>
+
+        <section class="platform-ios panel">
+            <h2>Enable in Safari</h2>
+            <ol>
+                <li>Open Settings.</li>
+                <li>Go to Apps &gt; Safari &gt; Extensions.</li>
+                <li>Turn on Kikoe and allow WaniKani and BunPro access.</li>
+            </ol>
+            <button class="open-settings">Open Settings</button>
+            <p class="note">On some iOS versions, Safari is listed directly in Settings instead of under Apps.</p>
+        </section>
+
+        <section class="platform-ios panel">
+            <h2>Microphone access</h2>
+            <p>After Kikoe is enabled, open a WaniKani or BunPro review page in Safari. Start a voice session and allow microphone access when Safari asks.</p>
+        </section>
+
+        <section class="platform-mac panel">
+            <h2>Safari extension</h2>
+            <p class="state-unknown">You can turn on Kikoe’s extension in Safari Extensions preferences.</p>
+            <p class="state-on">Kikoe’s extension is currently on. You can turn it off in Safari Extensions preferences.</p>
+            <p class="state-off">Kikoe’s extension is currently off. You can turn it on in Safari Extensions preferences.</p>
+            <button class="open-preferences">Quit and Open Safari Extensions Preferences...</button>
+        </section>
+    </main>
+</body>
+</html>
+`);
+
+writeFileSync(files.css, `* {
+    -webkit-user-select: none;
+    -webkit-user-drag: none;
+    box-sizing: border-box;
+}
+
+:root {
+    color-scheme: light dark;
+    --bg: #f1f0e2;
+    --card: #fbfaf2;
+    --text: #1c1b1a;
+    --text-soft: #6b6862;
+    --border: #ddd9c8;
+    --accent: #e0492f;
+    --accent-hover: #c93d26;
+    --accent-soft: rgba(224, 73, 47, 0.12);
+}
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        --bg: #171614;
+        --card: #201f1c;
+        --text: #ece9e4;
+        --text-soft: #9b978f;
+        --border: #33312d;
+        --accent: #f0603f;
+        --accent-hover: #ff7050;
+        --accent-soft: rgba(240, 96, 63, 0.16);
+    }
+}
+
+html {
+    min-height: 100%;
+    background: var(--bg);
+}
+
+body {
+    min-height: 100%;
+    margin: 0;
+    padding: calc(28px + env(safe-area-inset-top, 0px)) 22px calc(28px + env(safe-area-inset-bottom, 0px));
+    background: var(--bg);
+    color: var(--text);
+    font: -apple-system-body;
+}
+
+main {
+    width: min(100%, 520px);
+    margin: 0 auto;
+}
+
+.logo {
+    display: block;
+    width: min(46vw, 180px);
+    height: auto;
+    margin: 0 auto 10px;
+}
+
+h1 {
+    margin: 0;
+    font: -apple-system-title1;
+    font-weight: 700;
+    text-align: center;
+}
+
+.tagline {
+    margin: 6px auto 26px;
+    color: var(--text-soft);
+    font: -apple-system-subheadline;
+    text-align: center;
+}
+
+.panel {
+    margin: 0 0 16px;
+    padding: 18px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    text-align: left;
+}
+
+h2 {
+    margin: 0 0 12px;
+    color: var(--accent);
+    font: -apple-system-footnote;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+p,
+ol {
+    margin: 0;
+    color: var(--text-soft);
+    font: -apple-system-body;
+    line-height: 1.45;
+}
+
+ol {
+    padding-left: 1.25em;
+}
+
+li + li {
+    margin-top: 6px;
+}
+
+.note {
+    margin-top: 12px;
+    font: -apple-system-footnote;
+}
+
+button {
+    width: 100%;
+    margin-top: 16px;
+    padding: 12px 18px;
+    border: 0;
+    border-radius: 10px;
+    background: var(--accent);
+    color: #fff;
+    font: -apple-system-headline;
+}
+
+button:active {
+    background: var(--accent-hover);
+}
+
+body:not(.platform-mac, .platform-ios) :is(.platform-mac, .platform-ios) {
+    display: none;
+}
+
+body.platform-ios .platform-mac,
+body.platform-mac .platform-ios {
+    display: none;
+}
+
+body:not(.state-on, .state-off) :is(.state-on, .state-off) {
+    display: none;
+}
+
+body.state-on :is(.state-off, .state-unknown),
+body.state-off :is(.state-on, .state-unknown) {
+    display: none;
+}
+`);
+
+writeFileSync(files.js, `function show(platform, enabled, useSettingsInsteadOfPreferences) {
+    document.body.classList.add(\`platform-\${platform}\`);
+
+    if (useSettingsInsteadOfPreferences) {
+        document.getElementsByClassName('platform-mac state-on')[0].innerText = "Kikoe’s extension is currently on. You can turn it off in the Extensions section of Safari Settings.";
+        document.getElementsByClassName('platform-mac state-off')[0].innerText = "Kikoe’s extension is currently off. You can turn it on in the Extensions section of Safari Settings.";
+        document.getElementsByClassName('platform-mac state-unknown')[0].innerText = "You can turn on Kikoe’s extension in the Extensions section of Safari Settings.";
+        document.getElementsByClassName('platform-mac open-preferences')[0].innerText = "Quit and Open Safari Settings...";
+    }
+
+    if (typeof enabled === "boolean") {
+        document.body.classList.toggle("state-on", enabled);
+        document.body.classList.toggle("state-off", !enabled);
+    } else {
+        document.body.classList.remove("state-on");
+        document.body.classList.remove("state-off");
+    }
+}
+
+function postControllerMessage(message) {
+    webkit.messageHandlers.controller.postMessage(message);
+}
+
+document.querySelector("button.open-preferences")?.addEventListener("click", () => {
+    postControllerMessage("open-preferences");
+});
+
+document.querySelector("button.open-settings")?.addEventListener("click", () => {
+    postControllerMessage("open-settings");
+});
+`);
+
+let viewController = readFileSync(files.viewController, 'utf8');
+const oldHandler = `    func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
+#if os(macOS)
+        if (message.body as! String != "open-preferences") {
+            return
+        }
+
+        SFSafariApplication.showPreferencesForExtension(withIdentifier: extensionBundleIdentifier) { error in
+            guard error == nil else {
+                // Insert code to inform the user that something went wrong.
+                return
+            }
+
+            DispatchQueue.main.async {
+                NSApp.terminate(self)
+            }
+        }
+#endif
+    }`;
+const newHandler = `    func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
+        guard let message = message.body as? String else {
+            return
+        }
+
+#if os(iOS)
+        if message == "open-settings",
+           let url = URL(string: UIApplication.openSettingsURLString) {
+            UIApplication.shared.open(url)
+        }
+#elseif os(macOS)
+        if message != "open-preferences" {
+            return
+        }
+
+        SFSafariApplication.showPreferencesForExtension(withIdentifier: extensionBundleIdentifier) { error in
+            guard error == nil else {
+                // Insert code to inform the user that something went wrong.
+                return
+            }
+
+            DispatchQueue.main.async {
+                NSApp.terminate(self)
+            }
+        }
+#endif
+    }`;
+
+if (!viewController.includes(oldHandler) && !viewController.includes(newHandler)) {
+  console.error(`Could not find expected message handler in ${files.viewController}`);
+  process.exit(1);
+}
+
+viewController = viewController.replace(oldHandler, newHandler);
+writeFileSync(files.viewController, viewController);
+
+console.log(`Customized Safari containing app at ${appDir}`);
