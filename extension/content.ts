@@ -139,6 +139,9 @@ export async function maybeCaptureApiTokenFromPage(
     [API_TOKEN_DISCOVERY_REQUESTED_KEY]: false,
     [API_TOKEN_DISCOVERY_STATUS_KEY]: 'found',
   });
+  chrome.runtime.sendMessage({ type: 'kikoe:openOptions' }, () => {
+    void chrome.runtime.lastError;
+  });
 }
 
 async function fetchSubjectPage(url: string, apiToken: string | null): Promise<SubjectCollection> {

@@ -48,7 +48,12 @@ const chromeMock = {
     },
     onChanged: { addListener: vi.fn() },
   },
-  runtime: {},
+  runtime: {
+    lastError: undefined,
+    sendMessage: vi.fn((_message, callback) => {
+      if (callback) callback();
+    }),
+  },
 };
 
 beforeAll(() => {
@@ -203,6 +208,10 @@ describe('API token discovery', () => {
     expect(syncStore.apiToken).toBe(TOKEN);
     expect(localStore[API_TOKEN_DISCOVERY_REQUESTED_KEY]).toBe(false);
     expect(localStore[API_TOKEN_DISCOVERY_STATUS_KEY]).toBe('found');
+    expect(chromeMock.runtime.sendMessage).toHaveBeenCalledWith(
+      { type: 'kikoe:openOptions' },
+      expect.any(Function),
+    );
   });
 
   test('reports when a pending discovery finds no token', async () => {
