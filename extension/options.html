@@ -99,7 +99,7 @@
       margin-top: 2px;
     }
 
-    input[type=text], input[type=number], select {
+    input[type=text], input[type=password], input[type=number], select {
       background: var(--input-bg);
       color: var(--text);
       border: 1px solid var(--input-border);
@@ -109,9 +109,47 @@
       font-family: inherit;
       transition: border-color 0.15s, box-shadow 0.15s;
     }
-    input[type=text] { width: 240px; }
+    input[type=text], input[type=password] { width: 240px; }
     input[type=number] { width: 84px; }
     select { width: 130px; }
+    .token-control {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 8px;
+    }
+    .token-actions {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      gap: 8px;
+    }
+    .secondary {
+      background: transparent;
+      color: var(--accent);
+      border: 1px solid var(--input-border);
+      padding: 7px 12px;
+      font-size: 0.84rem;
+    }
+    .secondary:hover {
+      background: var(--accent-soft);
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+    .secondary:disabled {
+      background: transparent;
+      border-color: var(--input-border);
+      color: var(--text-soft);
+    }
+    .status {
+      min-height: 1.1em;
+      color: var(--text-soft);
+      font-size: 0.78rem;
+      text-align: right;
+      max-width: 330px;
+    }
+    .status.ok { color: var(--ok); }
+    .status.error { color: var(--accent); }
     input:focus-visible, select:focus-visible {
       outline: none;
       border-color: var(--accent);
@@ -255,7 +293,13 @@
         API Token
         <span class="hint">Read-only token from <a href="https://www.wanikani.com/settings/personal_access_tokens" target="_blank">WaniKani settings</a>.</span>
       </label>
-      <input type="password" id="apiToken" placeholder="paste token here" autocomplete="off">
+      <div class="token-control">
+        <div class="token-actions">
+          <input type="password" id="apiToken" placeholder="paste token here" autocomplete="off">
+          <button type="button" class="secondary" id="findApiToken">Find token</button>
+        </div>
+        <div class="status" id="tokenStatus" role="status" aria-live="polite"></div>
+      </div>
     </div>
   </section>
 
