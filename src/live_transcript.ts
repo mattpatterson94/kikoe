@@ -238,12 +238,12 @@ export function showIdleIndicator(settings: Settings, onToggle?: () => void): vo
     el.setAttribute('tabindex', '0');
     el.setAttribute('title', 'Toggle voice input');
     // In the no-token state the missing token is the problem, not the mic —
-    // route the click to the options page instead of the mute toggle. The
-    // content script forwards the event to the background script, the only
-    // context that can call runtime.openOptionsPage.
+    // route the click to WaniKani's token page instead of the mute toggle.
+    // The content script forwards the event to the background script, the only
+    // context that can open a new tab.
     const onActivate = () => {
       if (el.dataset.state === 'no-token') {
-        document.dispatchEvent(new CustomEvent('kikoe:openOptions'));
+        document.dispatchEvent(new CustomEvent('kikoe:openApiTokenPage'));
       } else {
         onToggle();
       }
@@ -282,7 +282,7 @@ export function setIdleIndicatorState(state: string): void {
     chip.classList.toggle('kikoe-chip-muted', state === 'muted');
     if (chip.classList.contains('kikoe-idle-clickable')) {
       chip.setAttribute('title', state === 'no-token'
-        ? 'Open Kikoe settings to add your API token'
+        ? 'Open WaniKani API token settings'
         : 'Toggle voice input');
     }
   }

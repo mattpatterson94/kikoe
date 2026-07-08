@@ -86,11 +86,14 @@ See [docs/safari.md](docs/safari.md) for the current spike notes and real-device
 
 ## First-time Setup
 
-1. Click the extension icon in your browser toolbar (or open the options page from the extensions menu).
-2. Paste your WaniKani **API Token** into the API Token field.
-   - Get one from [WaniKani → Settings → Personal Access Tokens](https://www.wanikani.com/settings/personal_access_tokens). A read-only token is sufficient.
-   - Skip this step if you only use BunPro, since no token is needed there.
-3. Click **Save settings**.
+1. Open a WaniKani review, lesson, or quiz page while signed in. Kikoe will
+   try to find an existing WaniKani API token from your
+   [Personal Access Tokens](https://www.wanikani.com/settings/personal_access_tokens)
+   page automatically.
+2. If the listening chip says **⚠ No API token**, click it to open WaniKani's
+   token page, create or copy a read-only token, then paste it into Kikoe's
+   options page.
+3. Skip the token step if you only use BunPro, since no token is needed there.
 4. When prompted, allow the browser to access your microphone.
 
 ## Using the Extension
@@ -249,7 +252,7 @@ src/
 extension/
   content.ts          # content script (loads bundle, manages API token / caching)
   injected.js         # page-context injected script
-  background.js       # background service worker (opens the options page)
+  background.js       # background service worker (opens options/token pages)
   options.html        # settings UI
   options.js          # settings UI logic
 chrome/               # assembled Chrome extension (output of build)

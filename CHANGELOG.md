@@ -5,6 +5,15 @@ All notable changes to Kikoe are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+### Changed
+
+- Kikoe once again tries to discover an existing WaniKani API token before
+  asking the user to paste one manually, this time from WaniKani's
+  `/settings/personal_access_tokens` page. If no token is available there,
+  the "⚠ No API token" chip opens that WaniKani token page directly.
+
 ## [0.8.0] - 2026-07-07
 
 ### Added

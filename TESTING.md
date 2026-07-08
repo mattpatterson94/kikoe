@@ -92,7 +92,7 @@ errors fire `onend` asynchronously (auto-restart and mute logic key off it);
   And backgrounding the tab (opening another tab counts) pauses the app and
   overwrites the indicator state — chip-click tests must `bringToFront()`
   first or the click routes to the mute toggle instead of, e.g., the
-  no-token options-page action.
+  no-token WaniKani token-page action.
 
 ## What to verify per release (tiered)
 

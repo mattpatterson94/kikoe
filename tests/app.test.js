@@ -452,7 +452,7 @@ describe('startListener mute/pause control', () => {
     expect(native.nativeStart.mock.calls.length).toBeGreaterThan(startsBefore);
   });
 
-  test('clicking the indicator with no API token asks for the options page instead of muting', async () => {
+  test('clicking the indicator with no API token asks for the API token page instead of muting', async () => {
     setReviewCardDOM();
     stampConfig({ hasApiToken: false });
     await importApp();
@@ -463,14 +463,14 @@ describe('startListener mute/pause control', () => {
       if (label.textContent !== '⚠ No API token') throw new Error('not in no-token state yet');
     });
 
-    const openOptions = vi.fn();
-    document.addEventListener('kikoe:openOptions', openOptions);
+    const openTokenPage = vi.fn();
+    document.addEventListener('kikoe:openApiTokenPage', openTokenPage);
     const native = MockSpeechRecognition.instances[0];
     const stopsBefore = native.nativeStop.mock.calls.length;
     indicator.click();
-    document.removeEventListener('kikoe:openOptions', openOptions);
+    document.removeEventListener('kikoe:openApiTokenPage', openTokenPage);
 
-    expect(openOptions).toHaveBeenCalledTimes(1);
+    expect(openTokenPage).toHaveBeenCalledTimes(1);
     expect(label.textContent).toBe('⚠ No API token');
     expect(native.nativeStop.mock.calls.length).toBe(stopsBefore);
   });
