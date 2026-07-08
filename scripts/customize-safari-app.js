@@ -68,26 +68,35 @@ writeFileSync(files.css, `* {
 
 :root {
     color-scheme: light dark;
-    --bg: #f1f0e2;
-    --card: #fbfaf2;
-    --text: #1c1b1a;
-    --text-soft: #6b6862;
-    --border: #ddd9c8;
-    --accent: #e0492f;
-    --accent-hover: #c93d26;
-    --accent-soft: rgba(224, 73, 47, 0.12);
+    --bg: #fbf3e4;
+    --card: #fff9ec;
+    --text: #11120f;
+    --text-soft: #55564d;
+    --border: #171713;
+    --border-soft: rgba(17, 18, 15, 0.18);
+    --accent: #6ab889;
+    --accent-hover: #4f9f6f;
+    --bg-corner: rgba(199, 230, 204, 0.95);
+    --bg-start: #fff9ec;
+    --bg-end: #eef5e9;
+    --logo-shadow: rgba(17, 18, 15, 0.12);
+    --button-text: #11120f;
+    --button-border: #11120f;
 }
 
 @media (prefers-color-scheme: dark) {
     :root {
-        --bg: #171614;
-        --card: #201f1c;
-        --text: #ece9e4;
-        --text-soft: #9b978f;
-        --border: #33312d;
-        --accent: #f0603f;
-        --accent-hover: #ff7050;
-        --accent-soft: rgba(240, 96, 63, 0.16);
+        --bg: #11110f;
+        --card: #1d1c19;
+        --text: #f5f1e5;
+        --text-soft: #a9a399;
+        --border: #3a3730;
+        --border-soft: rgba(245, 241, 229, 0.13);
+        --accent-hover: #7ecb9c;
+        --bg-corner: rgba(106, 184, 137, 0.24);
+        --bg-start: #151410;
+        --bg-end: #141713;
+        --logo-shadow: rgba(0, 0, 0, 0.28);
     }
 }
 
@@ -97,10 +106,13 @@ html {
 }
 
 body {
+    position: relative;
     min-height: 100%;
     margin: 0;
     padding: calc(28px + env(safe-area-inset-top, 0px)) 22px calc(28px + env(safe-area-inset-bottom, 0px));
-    background: var(--bg);
+    background:
+        radial-gradient(circle at 94% 0%, var(--bg-corner) 0 150px, transparent 152px),
+        linear-gradient(145deg, var(--bg-start) 0%, var(--bg) 70%, var(--bg-end) 100%);
     color: var(--text);
     font: -apple-system-body;
 }
@@ -115,6 +127,7 @@ main {
     width: min(46vw, 180px);
     height: auto;
     margin: 0 auto 10px;
+    filter: drop-shadow(0 10px 0 var(--logo-shadow));
 }
 
 h1 {
@@ -135,8 +148,8 @@ h1 {
     margin: 0 0 16px;
     padding: 18px;
     background: var(--card);
-    border: 1px solid var(--border);
-    border-radius: 14px;
+    border: 2px solid var(--border);
+    border-radius: 20px;
     text-align: left;
 }
 
@@ -145,7 +158,7 @@ h2 {
     color: var(--accent);
     font: -apple-system-footnote;
     font-weight: 700;
-    letter-spacing: 0.08em;
+    letter-spacing: 0.12em;
     text-transform: uppercase;
 }
 
@@ -174,10 +187,10 @@ button {
     width: 100%;
     margin-top: 16px;
     padding: 12px 18px;
-    border: 0;
-    border-radius: 10px;
+    border: 2px solid var(--button-border);
+    border-radius: 999px;
     background: var(--accent);
-    color: #fff;
+    color: var(--button-text);
     font: -apple-system-headline;
 }
 

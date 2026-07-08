@@ -1,0 +1,1155 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Kikoe App Store Screenshots</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #fbf3e4;
+      --panel: #fff9ec;
+      --panel-2: #f3ead8;
+      --ink: #11120f;
+      --muted: #4f5149;
+      --line: #151511;
+      --accent: #6ab889;
+      --green: #4b9f6d;
+      --mint: #c7e6cc;
+      --cream: #fff9ec;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      background: var(--bg);
+      overflow: hidden;
+    }
+
+    body {
+      display: grid;
+      place-items: stretch;
+    }
+
+    .shot {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at 91% 0%, rgba(199, 230, 204, 0.95) 0 15%, transparent 15.2%),
+        radial-gradient(circle at 8% 100%, rgba(199, 230, 204, 0.72) 0 18%, transparent 18.2%),
+        linear-gradient(145deg, #fff9ec 0%, #fbf3e4 64%, #eef5e9 100%);
+      overflow: hidden;
+    }
+
+    .shot::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(17, 18, 15, 0.045) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(17, 18, 15, 0.045) 1px, transparent 1px);
+      background-size: 72px 72px;
+      mask-image: linear-gradient(to bottom, rgba(0,0,0,0.5), transparent 76%);
+    }
+
+    .shot::after {
+      content: "";
+      position: absolute;
+      top: 8%;
+      left: 5%;
+      width: 84px;
+      height: 84px;
+      border-radius: 50%;
+      background: var(--mint);
+      box-shadow: 0 0 0 8px rgba(17, 18, 15, 0.06);
+      opacity: 0.78;
+    }
+
+    .content {
+      position: relative;
+      z-index: 1;
+      display: grid;
+      height: 100%;
+      padding: var(--pad);
+      gap: var(--gap);
+    }
+
+    .iphone .content {
+      --pad: 116px 92px 104px;
+      --gap: 64px;
+      grid-template-rows: auto 1fr;
+    }
+
+    .ipad .content {
+      --pad: 132px 148px 116px;
+      --gap: 78px;
+      grid-template-columns: 0.82fr 1.18fr;
+      align-items: center;
+    }
+
+    .ipad.desktop-shot .content {
+      grid-template-columns: 1fr;
+      grid-template-rows: auto auto;
+      align-content: center;
+      gap: 72px;
+    }
+
+    .ipad.desktop-shot .header {
+      max-width: 1280px;
+    }
+
+    .header {
+      display: grid;
+      gap: 28px;
+      align-content: start;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 24px;
+      color: var(--ink);
+      font-size: var(--brand-size);
+      font-weight: 700;
+      letter-spacing: 0;
+    }
+
+    .brand img {
+      width: var(--icon-size);
+      height: var(--icon-size);
+      border-radius: 24%;
+      box-shadow: 0 14px 40px rgba(17, 18, 15, 0.14);
+    }
+
+    .iphone .brand {
+      --brand-size: 38px;
+      --icon-size: 92px;
+    }
+
+    .ipad .brand {
+      --brand-size: 44px;
+      --icon-size: 104px;
+    }
+
+    h1 {
+      margin: 0;
+      max-width: 980px;
+      color: var(--ink);
+      font-size: var(--title-size);
+      line-height: 0.96;
+      font-weight: 850;
+      letter-spacing: 0;
+    }
+
+    .iphone h1 {
+      --title-size: 126px;
+    }
+
+    .ipad h1 {
+      --title-size: 128px;
+    }
+
+    .subhead {
+      max-width: 920px;
+      margin: 0;
+      color: var(--muted);
+      font-size: var(--subhead-size);
+      line-height: 1.22;
+      font-weight: 560;
+      letter-spacing: 0;
+    }
+
+    .iphone .subhead {
+      --subhead-size: 48px;
+    }
+
+    .ipad .subhead {
+      --subhead-size: 52px;
+    }
+
+    .device-wrap {
+      display: grid;
+      place-items: center;
+      min-width: 0;
+      min-height: 0;
+    }
+
+    .iphone .device-wrap {
+      align-items: end;
+    }
+
+    .phone {
+      position: relative;
+      width: min(900px, 90vw);
+      aspect-ratio: 430 / 932;
+      border: 16px solid #050505;
+      border-radius: 82px;
+      padding: 26px;
+      background: #050505;
+      box-shadow: 0 40px 110px rgba(17, 18, 15, 0.24);
+    }
+
+    .phone::before,
+    .phone::after {
+      content: "";
+      position: absolute;
+      background: #0a0a0a;
+      border-radius: 8px;
+    }
+
+    .phone::before {
+      left: -22px;
+      top: 170px;
+      width: 8px;
+      height: 72px;
+    }
+
+    .phone::after {
+      right: -23px;
+      top: 252px;
+      width: 9px;
+      height: 112px;
+    }
+
+    .iphone .phone {
+      width: 800px;
+    }
+
+    .ipad .phone {
+      width: 760px;
+    }
+
+    .phone.actual {
+      width: min(820px, 86vw);
+      aspect-ratio: 1206 / 2198;
+      border: 16px solid #050505;
+      border-radius: 74px;
+      padding: 26px;
+      background: #050505;
+    }
+
+    .ipad .phone.actual {
+      width: 720px;
+    }
+
+    .screen {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      border-radius: 56px;
+      background: var(--cream);
+      border: 2px solid rgba(17, 18, 15, 0.14);
+    }
+
+    .phone.actual .screen {
+      border-radius: 58px;
+      border: 2px solid rgba(255, 255, 255, 0.08);
+      background: #000;
+    }
+
+    .island {
+      position: absolute;
+      z-index: 20;
+      top: 22px;
+      left: 50%;
+      width: 132px;
+      height: 40px;
+      transform: translateX(-50%);
+      border-radius: 999px;
+      background: #050505;
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,0.04);
+    }
+
+    .browser-bar {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      height: 94px;
+      display: grid;
+      place-items: center;
+      background: rgba(255, 249, 236, 0.94);
+      border-top: 2px solid rgba(17, 18, 15, 0.14);
+    }
+
+    .address {
+      width: 62%;
+      height: 48px;
+      border-radius: 28px;
+      background: #f3ead8;
+      border: 2px solid rgba(17, 18, 15, 0.18);
+    }
+
+    .status {
+      position: absolute;
+      z-index: 19;
+      top: 34px;
+      left: 38px;
+      right: 38px;
+      display: flex;
+      justify-content: space-between;
+      color: var(--ink);
+      font-size: 24px;
+      font-weight: 740;
+    }
+
+    .capture-page {
+      position: absolute;
+      inset: 0;
+      background: #111;
+    }
+
+    .capture-page img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      object-position: center top;
+      display: block;
+    }
+
+    .actual-capture {
+      position: absolute;
+      inset: 0;
+      background: #111;
+    }
+
+    .actual-capture img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+
+    .phone.actual .actual-capture {
+      inset: 34px;
+      border-radius: 42px;
+      overflow: hidden;
+      background: #050505;
+    }
+
+    .phone.actual .actual-capture img {
+      height: 100%;
+      border-radius: 34px;
+      object-fit: cover;
+      object-position: center top;
+      background: #111;
+    }
+
+    .phone.actual.bunpro-phone {
+      aspect-ratio: 1206 / 2176;
+    }
+
+    .ipad .phone.actual.desktop-capture {
+      width: min(1560px, 100%);
+      aspect-ratio: 16 / 9;
+      border-radius: 48px;
+      padding: 22px;
+    }
+
+    .ipad .phone.tablet-panel {
+      width: min(1460px, 100%);
+      aspect-ratio: 16 / 10;
+      border-radius: 48px;
+      padding: 22px;
+    }
+
+    .ipad .phone.tablet-panel::before,
+    .ipad .phone.tablet-panel::after {
+      display: none;
+    }
+
+    .ipad .phone.tablet-panel .screen {
+      border-radius: 34px;
+    }
+
+    .ipad .phone.tablet-panel .settings-page {
+      padding: 64px;
+      grid-template-columns: 1fr 1fr;
+      align-content: start;
+      gap: 28px;
+    }
+
+    .ipad .phone.tablet-panel .settings-title {
+      grid-column: 1 / -1;
+      grid-template-columns: 128px 1fr;
+    }
+
+    .ipad .phone.tablet-panel .settings-title img {
+      width: 128px;
+      height: 128px;
+    }
+
+    .ipad .phone.tablet-panel .settings-title h2 {
+      font-size: 56px;
+    }
+
+    .ipad .phone.tablet-panel .settings-title p {
+      font-size: 28px;
+    }
+
+    .ipad .phone.tablet-panel .card {
+      min-height: 190px;
+      padding: 34px;
+    }
+
+    .ipad .phone.tablet-panel .app-page {
+      padding: 70px;
+      align-content: center;
+      text-align: left;
+      justify-items: stretch;
+      grid-template-columns: 0.8fr 1.2fr;
+      gap: 54px;
+    }
+
+    .ipad .phone.tablet-panel .app-page .mini-logo {
+      width: 220px;
+      margin: 0 0 30px;
+    }
+
+    .ipad .phone.tablet-panel .app-page h2 {
+      font-size: 72px;
+    }
+
+    .ipad .phone.tablet-panel .app-page p {
+      font-size: 30px;
+    }
+
+    .ipad .phone.tablet-panel .steps {
+      align-content: center;
+      margin: 0;
+    }
+
+    .ipad .phone.actual.desktop-capture .screen {
+      border-radius: 34px;
+    }
+
+    .ipad .phone.actual.desktop-capture .actual-capture {
+      inset: 24px;
+      border-radius: 24px;
+    }
+
+    .ipad .phone.actual.desktop-capture .actual-capture img {
+      border-radius: 18px;
+      object-fit: cover;
+    }
+
+    .capture-page.wanikani img {
+      object-position: 50% 0;
+    }
+
+    .capture-page.bunpro img {
+      object-position: 50% 0;
+    }
+
+    .capture-overlay {
+      position: absolute;
+      left: 28px;
+      right: 28px;
+      bottom: 118px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+      padding: 18px 22px;
+      border-radius: 26px;
+      background: rgba(255, 249, 236, 0.9);
+      border: 2px solid rgba(17, 18, 15, 0.14);
+      color: var(--ink);
+      font-size: 22px;
+      font-weight: 800;
+      box-shadow: 0 18px 60px rgba(0,0,0,0.34);
+    }
+
+    .capture-overlay span:last-child {
+      color: var(--green);
+    }
+
+    .wk-mobile {
+      position: absolute;
+      inset: 0;
+      background: #f7f7f7;
+      color: #3f3f46;
+      overflow: hidden;
+      font-family: "Helvetica Neue", Arial, sans-serif;
+    }
+
+    .wk-bar {
+      height: 54px;
+      padding: 18px 22px 0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: #e91e9b;
+      color: #fff;
+      font-size: 19px;
+      font-weight: 800;
+    }
+
+    .wk-kanji {
+      height: 312px;
+      display: grid;
+      place-items: center;
+      background: linear-gradient(#eb2aa0, #cc218d);
+      color: #fff;
+      font-size: 176px;
+      line-height: 1;
+      font-weight: 300;
+    }
+
+    .wk-question {
+      height: 72px;
+      display: grid;
+      place-items: center;
+      background: linear-gradient(#f4f4f4, #e6e6e6);
+      color: #444;
+      font-size: 31px;
+      box-shadow: inset 0 -2px 0 rgba(0,0,0,0.08);
+    }
+
+    .wk-question strong {
+      font-weight: 900;
+    }
+
+    .wk-response {
+      height: 74px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 42px;
+      background: #fff;
+      border-bottom: 2px solid #dedede;
+      color: #777;
+      font-size: 30px;
+      font-weight: 500;
+    }
+
+    .wk-response span:last-child {
+      color: #333;
+      font-size: 36px;
+    }
+
+    .wk-actions {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 6px;
+      padding: 10px;
+    }
+
+    .wk-action {
+      height: 54px;
+      display: grid;
+      place-items: center;
+      background: #fff;
+      border: 1px solid #ddd;
+      color: #aaa;
+      font-size: 22px;
+    }
+
+    .wk-empty {
+      height: 520px;
+      background: #f7f7f7;
+    }
+
+    .bp-mobile {
+      position: absolute;
+      inset: 0;
+      background: #2e2e2e;
+      color: #f5f5f5;
+      overflow: hidden;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    .bp-top {
+      height: 70px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 28px 30px 0;
+      background: #1e1e1e;
+      border-bottom: 2px solid rgba(255,255,255,0.06);
+      color: #d6d6d6;
+      font-size: 20px;
+      font-weight: 760;
+    }
+
+    .bp-icons {
+      display: flex;
+      gap: 20px;
+      opacity: 0.9;
+    }
+
+    .bp-stats {
+      display: flex;
+      gap: 16px;
+      align-items: center;
+    }
+
+    .bp-prompt {
+      min-height: 530px;
+      padding: 178px 34px 0;
+      text-align: center;
+    }
+
+    .bp-japanese {
+      font-size: 42px;
+      line-height: 1.26;
+      font-weight: 520;
+      letter-spacing: 0;
+      white-space: nowrap;
+      transform: translateX(-148px);
+      width: 860px;
+    }
+
+    .bp-japanese ruby {
+      ruby-position: over;
+    }
+
+    .bp-japanese rt {
+      font-size: 16px;
+    }
+
+    .bp-english {
+      margin-top: 22px;
+      font-size: 25px;
+      color: #f1f1f1;
+    }
+
+    .bp-english strong {
+      color: #e85672;
+      font-weight: 860;
+    }
+
+    .bp-answer {
+      position: absolute;
+      left: 44px;
+      right: 44px;
+      bottom: 150px;
+      height: 64px;
+      display: grid;
+      grid-template-columns: 54px 1fr 54px;
+      align-items: center;
+      border-radius: 14px;
+      background: #202020;
+      border: 1px solid rgba(255,255,255,0.16);
+      color: #9d9d9d;
+      font-size: 26px;
+      font-weight: 760;
+    }
+
+    .bp-submit {
+      color: #ef5368;
+      font-size: 32px;
+    }
+
+    .mini-logo {
+      width: 210px;
+      margin-bottom: 22px;
+      filter: drop-shadow(0 12px 28px rgba(0,0,0,0.32));
+    }
+
+    .app-page,
+    .settings-page,
+    .review-page {
+      height: 100%;
+      padding: 112px 36px 116px;
+      color: var(--ink);
+    }
+
+    .app-page {
+      display: grid;
+      align-content: center;
+      justify-items: center;
+      text-align: center;
+      gap: 26px;
+    }
+
+    .app-page h2 {
+      margin: 0;
+      font-size: 56px;
+      line-height: 1;
+      letter-spacing: 0;
+    }
+
+    .app-page p {
+      max-width: 560px;
+      margin: 0;
+      color: var(--muted);
+      font-size: 27px;
+      line-height: 1.34;
+      font-weight: 560;
+    }
+
+    .steps {
+      width: 100%;
+      display: grid;
+      gap: 18px;
+      margin-top: 10px;
+    }
+
+    .step {
+      display: grid;
+      grid-template-columns: 56px 1fr;
+      align-items: center;
+      gap: 18px;
+      padding: 22px;
+      border: 2px solid var(--line);
+      border-radius: 30px;
+      background: rgba(255, 249, 236, 0.94);
+      color: var(--ink);
+      font-size: 24px;
+      line-height: 1.22;
+      text-align: left;
+      font-weight: 700;
+    }
+
+    .num {
+      display: grid;
+      place-items: center;
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      background: var(--mint);
+      color: var(--ink);
+      border: 2px solid var(--ink);
+      font-size: 24px;
+      font-weight: 850;
+    }
+
+    .settings-page {
+      display: grid;
+      gap: 26px;
+      align-content: start;
+      background:
+        radial-gradient(circle at 92% 2%, rgba(199, 230, 204, 0.72) 0 120px, transparent 122px),
+        linear-gradient(145deg, #fff9ec 0%, #fbf3e4 100%);
+    }
+
+    .settings-title {
+      display: grid;
+      grid-template-columns: 116px 1fr;
+      gap: 22px;
+      align-items: center;
+    }
+
+    .settings-title img {
+      width: 116px;
+      height: 116px;
+      border-radius: 28px;
+    }
+
+    .settings-title h2 {
+      margin: 0;
+      font-size: 44px;
+      line-height: 1.05;
+    }
+
+    .settings-title p {
+      margin: 8px 0 0;
+      color: var(--muted);
+      font-size: 24px;
+    }
+
+    .card {
+      padding: 30px;
+      border-radius: 34px;
+      border: 2px solid var(--line);
+      background: rgba(255, 249, 236, 0.96);
+      color: var(--ink);
+    }
+
+    .label {
+      margin: 0 0 22px;
+      color: var(--green);
+      font-size: 22px;
+      font-weight: 850;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+    }
+
+    .field {
+      height: 60px;
+      border-radius: 22px;
+      background: #fffdf4;
+      border: 2px solid rgba(17, 18, 15, 0.22);
+      margin-bottom: 18px;
+      display: flex;
+      align-items: center;
+      padding: 0 22px;
+      color: var(--ink);
+      font-size: 26px;
+      letter-spacing: 0.08em;
+    }
+
+    .button-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 18px;
+      color: var(--green);
+      font-size: 22px;
+      font-weight: 700;
+    }
+
+    .button {
+      flex: 0 0 auto;
+      padding: 18px 26px;
+      border-radius: 24px;
+      border: 2px solid var(--ink);
+      color: var(--ink);
+      background: var(--mint);
+      font-size: 24px;
+      font-weight: 820;
+    }
+
+    .toggle-line {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 20px;
+      padding-top: 6px;
+      font-size: 27px;
+      font-weight: 800;
+    }
+
+    .toggle-text span {
+      display: block;
+      margin-top: 6px;
+      color: var(--muted);
+      font-size: 22px;
+      font-weight: 560;
+    }
+
+    .toggle {
+      width: 88px;
+      height: 50px;
+      border-radius: 30px;
+      background: var(--green);
+      padding: 5px;
+    }
+
+    .toggle::after {
+      content: "";
+      display: block;
+      width: 40px;
+      height: 40px;
+      margin-left: auto;
+      border-radius: 50%;
+      background: white;
+    }
+
+    .review-page {
+      display: grid;
+      align-content: start;
+      gap: 28px;
+      background:
+        linear-gradient(180deg, rgba(47, 42, 36, 0.96), rgba(20, 19, 17, 0.98)),
+        #201e1a;
+    }
+
+    .review-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      color: var(--muted);
+      font-size: 24px;
+      font-weight: 760;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 18px;
+      border-radius: 999px;
+      background: rgba(96, 216, 137, 0.12);
+      color: var(--green);
+      border: 2px solid rgba(96, 216, 137, 0.28);
+    }
+
+    .kanji-card {
+      display: grid;
+      place-items: center;
+      height: 340px;
+      border-radius: 36px;
+      background: #ef6550;
+      color: #181613;
+      font-size: 154px;
+      font-weight: 900;
+      box-shadow: inset 0 -10px 0 rgba(0,0,0,0.08);
+    }
+
+    .answer-card {
+      display: grid;
+      gap: 18px;
+      padding: 30px;
+      border-radius: 34px;
+      background: #f2ece4;
+      color: #151411;
+    }
+
+    .answer-card small {
+      color: #746d65;
+      font-size: 20px;
+      font-weight: 760;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+
+    .answer-card strong {
+      font-size: 48px;
+      line-height: 1;
+    }
+
+    .transcript {
+      margin-top: 4px;
+      display: grid;
+      gap: 14px;
+      color: #f2ece4;
+    }
+
+    .heard {
+      padding: 22px 26px;
+      border-radius: 28px;
+      border: 2px solid rgba(255,255,255,0.12);
+      background: rgba(255,255,255,0.07);
+      font-size: 28px;
+      font-weight: 760;
+    }
+
+    .controls {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 18px;
+    }
+
+    .control {
+      padding: 20px;
+      border-radius: 26px;
+      background: var(--panel-2);
+      border: 2px solid var(--line);
+      color: var(--ink);
+      text-align: center;
+      font-size: 23px;
+      font-weight: 780;
+    }
+
+    .callout {
+      position: absolute;
+      left: 44px;
+      right: 44px;
+      bottom: 128px;
+      padding: 22px 28px;
+      border-radius: 30px;
+      background: rgba(21, 20, 17, 0.9);
+      border: 2px solid rgba(255,255,255,0.12);
+      color: var(--ink);
+      font-size: 24px;
+      font-weight: 760;
+      box-shadow: 0 18px 60px rgba(0,0,0,0.34);
+    }
+
+    .caption-tag {
+      display: inline-flex;
+      width: fit-content;
+      padding: 16px 24px;
+      border-radius: 999px;
+      color: var(--ink);
+      background: var(--mint);
+      border: 3px solid var(--ink);
+      font-size: var(--tag-size);
+      font-weight: 800;
+    }
+
+    .iphone .caption-tag {
+      --tag-size: 32px;
+    }
+
+    .ipad .caption-tag {
+      --tag-size: 34px;
+    }
+
+    @media (max-width: 1500px) {
+      .ipad .content {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="shot">
+    <section class="content">
+      <div class="header">
+        <div class="brand">
+          <img src="../../Kikoe/Shared%20(App)/Resources/Icon.png" alt="">
+          <span>Kikoe</span>
+        </div>
+        <span class="caption-tag" data-field="tag"></span>
+        <h1 data-field="title"></h1>
+        <p class="subhead" data-field="subtitle"></p>
+      </div>
+      <div class="device-wrap">
+        <div class="phone" data-phone>
+          <div class="screen">
+            <div class="island"></div>
+            <div class="status"><span>9:41</span><span>5G</span></div>
+            <div data-mockup></div>
+            <div class="browser-bar"><div class="address"></div></div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <template id="app-template">
+    <div class="app-page">
+      <img class="mini-logo" src="../../Kikoe/Shared%20(App)/Resources/Icon.png" alt="">
+      <h2>Kikoe</h2>
+      <p>Voice answers for WaniKani and BunPro in Safari.</p>
+      <div class="steps">
+        <div class="step"><span class="num">1</span><span>Enable the Safari extension</span></div>
+        <div class="step"><span class="num">2</span><span>Allow WaniKani and BunPro</span></div>
+        <div class="step"><span class="num">3</span><span>Open a review page</span></div>
+      </div>
+    </div>
+  </template>
+
+  <template id="settings-template">
+    <div class="settings-page">
+      <div class="settings-title">
+        <img src="../../Kikoe/Shared%20(App)/Resources/Icon.png" alt="">
+        <div>
+          <h2>Kikoe</h2>
+          <p>Voice answers for WaniKani and BunPro</p>
+        </div>
+      </div>
+      <div class="card">
+        <p class="label">WaniKani API</p>
+        <div class="field">••••••••••••••••••••</div>
+        <div class="button-row">
+          <span>Token found</span>
+          <span class="button">Find token</span>
+        </div>
+      </div>
+      <div class="card">
+        <p class="label">Microphone Access</p>
+        <p class="subhead" style="font-size:24px;line-height:1.35">Your browser asks for microphone access the first time Kikoe starts listening.</p>
+      </div>
+      <div class="card">
+        <p class="label">Turbo Mode</p>
+        <div class="toggle-line">
+          <div class="toggle-text">Turbo mode<span>Auto-advance on correct answer</span></div>
+          <div class="toggle"></div>
+        </div>
+      </div>
+    </div>
+  </template>
+
+  <template id="review-template">
+    <div class="review-page">
+      <div class="review-top">
+        <span>WaniKani Review</span>
+        <span class="pill">Listening</span>
+      </div>
+      <div class="kanji-card">聞</div>
+      <div class="answer-card">
+        <small>Meaning</small>
+        <strong>hear</strong>
+      </div>
+      <div class="transcript">
+        <div class="heard">Heard: "hear"</div>
+        <div class="controls">
+          <div class="control">Mute</div>
+          <div class="control">Turbo on</div>
+        </div>
+      </div>
+      <div class="callout">Answer by voice during reviews.</div>
+    </div>
+  </template>
+
+  <template id="wanikani-template">
+    <div class="actual-capture">
+      <img src="source-captures/iphone-wanikani.png" alt="">
+    </div>
+  </template>
+
+  <template id="bunpro-template">
+    <div class="actual-capture">
+      <img src="source-captures/iphone-bunpro.png" alt="">
+    </div>
+  </template>
+
+  <script>
+    const shots = {
+      1: {
+        tag: "WaniKani",
+        title: "Speak on WaniKani",
+        subtitle: "Kikoe listens during WaniKani reviews and submits supported answers.",
+        template: "wanikani-template"
+      },
+      2: {
+        tag: "BunPro",
+        title: "Use it on BunPro",
+        subtitle: "Answer BunPro review prompts by voice in Safari.",
+        template: "bunpro-template"
+      },
+      3: {
+        tag: "Setup",
+        title: "Review settings in one place",
+        subtitle: "Add a token, check microphone access, and set review options.",
+        template: "settings-template"
+      },
+      4: {
+        tag: "App guide",
+        title: "Enable Kikoe in Safari",
+        subtitle: "Follow the app steps, then open a WaniKani or BunPro review page.",
+        template: "app-template"
+      }
+    };
+
+    const params = new URLSearchParams(location.search);
+    const device = params.get("device") || "iphone";
+    const shot = shots[params.get("shot") || "1"];
+    document.querySelector(".shot").classList.add(device);
+
+    for (const [field, value] of Object.entries(shot)) {
+      const node = document.querySelector(`[data-field="${field}"]`);
+      if (node) node.textContent = value;
+    }
+
+    const template = document.getElementById(shot.template);
+    document.querySelector("[data-mockup]").append(template.content.cloneNode(true));
+    if (shot.template === "wanikani-template" || shot.template === "bunpro-template") {
+      document.querySelector("[data-phone]").classList.add("actual");
+      const isIpad = device === "ipad";
+      if (isIpad) {
+        document.querySelector("[data-phone]").classList.add("desktop-capture");
+        document.querySelector(".shot").classList.add("desktop-shot");
+      } else if (shot.template === "bunpro-template") {
+        document.querySelector("[data-phone]").classList.add("bunpro-phone");
+      }
+      document.querySelector(".island").remove();
+      document.querySelector(".status").remove();
+      document.querySelector(".browser-bar").remove();
+      document.querySelector(".actual-capture img").src = isIpad
+        ? (shot.template === "wanikani-template" ? "source-captures/desktop-wanikani.png" : "source-captures/desktop-bunpro.png")
+        : (shot.template === "wanikani-template" ? "processed/iphone-wanikani-crop.png" : "processed/iphone-bunpro-crop.png");
+    } else if (device === "ipad" && (shot.template === "settings-template" || shot.template === "app-template")) {
+      document.querySelector("[data-phone]").classList.add("tablet-panel");
+      document.querySelector(".shot").classList.add("desktop-shot");
+      document.querySelector(".island").remove();
+      document.querySelector(".status").remove();
+      document.querySelector(".browser-bar").remove();
+    }
+  </script>
+</body>
+</html>

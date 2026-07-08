@@ -1,0 +1,450 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Kikoe Desktop Store Screenshots</title>
+  <style>
+    :root {
+      --bg: #fbf3e4;
+      --ink: #11120f;
+      --muted: #4f5149;
+      --line: #151511;
+      --panel: #fff9ec;
+      --accent: #6ab889;
+      --green: #4b9f6d;
+      --mint: #c7e6cc;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      overflow: hidden;
+      background: var(--bg);
+    }
+
+    body {
+      color: var(--ink);
+    }
+
+    .shot {
+      width: 100vw;
+      height: 100vh;
+      padding: 52px 60px;
+      display: grid;
+      grid-template-columns: 390px 1fr;
+      gap: 48px;
+      align-items: center;
+      background:
+        radial-gradient(circle at 93% 0%, rgba(199, 230, 204, 0.92) 0 18%, transparent 18.2%),
+        radial-gradient(circle at 0% 100%, rgba(199, 230, 204, 0.58) 0 20%, transparent 20.2%),
+        linear-gradient(145deg, #fff9ec 0%, #fbf3e4 62%, #eef5e9 100%);
+      position: relative;
+    }
+
+    .shot::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(17, 18, 15, 0.045) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(17, 18, 15, 0.045) 1px, transparent 1px);
+      background-size: 48px 48px;
+      mask-image: linear-gradient(to right, rgba(0,0,0,0.5), transparent 76%);
+    }
+
+    .shot::after {
+      content: "";
+      position: absolute;
+      top: 54px;
+      left: 48px;
+      width: 54px;
+      height: 54px;
+      border-radius: 50%;
+      background: var(--mint);
+      box-shadow: 0 0 0 6px rgba(17, 18, 15, 0.06);
+    }
+
+    .copy,
+    .window {
+      position: relative;
+      z-index: 1;
+    }
+
+    .copy {
+      display: grid;
+      gap: 22px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      color: var(--ink);
+      font-size: 24px;
+      font-weight: 800;
+    }
+
+    .brand img {
+      width: 62px;
+      height: 62px;
+      border-radius: 16px;
+      box-shadow: 0 12px 34px rgba(17,18,15,0.13);
+    }
+
+    .tag {
+      width: fit-content;
+      padding: 10px 16px;
+      border-radius: 999px;
+      border: 2px solid var(--ink);
+      background: var(--mint);
+      color: var(--ink);
+      font-size: 18px;
+      font-weight: 850;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 64px;
+      line-height: 0.98;
+      letter-spacing: 0;
+      font-weight: 880;
+    }
+
+    p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 25px;
+      line-height: 1.26;
+      font-weight: 620;
+    }
+
+    .window {
+      height: 520px;
+      border-radius: 22px;
+      overflow: hidden;
+      background: var(--panel);
+      box-shadow: 0 32px 90px rgba(17,18,15,0.22);
+      border: 2px solid rgba(17,18,15,0.16);
+    }
+
+    .toolbar {
+      height: 46px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 0 16px;
+      background: #eee5d6;
+      border-bottom: 1px solid rgba(17,18,15,0.14);
+    }
+
+    .dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: #ff5f57;
+    }
+
+    .dot:nth-child(2) {
+      background: #febc2e;
+    }
+
+    .dot:nth-child(3) {
+      background: #28c840;
+    }
+
+    .address {
+      flex: 1;
+      margin-left: 14px;
+      height: 28px;
+      border-radius: 999px;
+      background: #fff9ec;
+      color: var(--muted);
+      border: 1px solid rgba(17,18,15,0.12);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 15px;
+      font-weight: 700;
+    }
+
+    .frame {
+      height: calc(100% - 46px);
+      position: relative;
+      overflow: hidden;
+      background: #fff9ec;
+      padding: 16px;
+    }
+
+    .frame img {
+      width: 100%;
+      height: 100%;
+      border-radius: 14px;
+      object-fit: cover;
+      object-position: center center;
+      display: block;
+      box-shadow: none;
+    }
+
+    .overlay {
+      position: absolute;
+      right: 54px;
+      bottom: 50px;
+      display: inline-flex;
+      align-items: center;
+      gap: 14px;
+      padding: 14px 18px;
+      border-radius: 999px;
+      color: var(--ink);
+      background: rgba(21, 20, 17, 0.82);
+      border: 1px solid rgba(255,255,255,0.16);
+      font-size: 17px;
+      font-weight: 820;
+      box-shadow: 0 18px 70px rgba(0,0,0,0.38);
+    }
+
+    .overlay span:last-child {
+      color: var(--green);
+    }
+
+    .desktop-settings,
+    .desktop-guide {
+      height: 100%;
+      padding: 42px;
+      background:
+        radial-gradient(circle at 94% 0%, rgba(199, 230, 204, 0.62) 0 110px, transparent 112px),
+        linear-gradient(145deg, #fff9ec 0%, #fbf3e4 100%);
+      display: grid;
+      align-content: start;
+      gap: 24px;
+      color: var(--ink);
+    }
+
+    .desktop-settings h2,
+    .desktop-guide h2 {
+      margin: 0;
+      font-size: 38px;
+      line-height: 1;
+    }
+
+    .settings-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+    }
+
+    .card {
+      min-height: 156px;
+      padding: 24px;
+      border-radius: 16px;
+      border: 1px solid var(--line);
+      background: rgba(255, 249, 236, 0.96);
+      color: var(--ink);
+    }
+
+    .label {
+      margin: 0 0 16px;
+      color: var(--accent);
+      font-size: 15px;
+      text-transform: uppercase;
+      font-weight: 880;
+      letter-spacing: 0.14em;
+    }
+
+    .field {
+      height: 48px;
+      border-radius: 12px;
+      border: 1px solid rgba(17,18,15,0.22);
+      background: #fffdf4;
+      display: flex;
+      align-items: center;
+      padding: 0 16px;
+      color: var(--ink);
+      font-size: 22px;
+      letter-spacing: 0.08em;
+    }
+
+    .button {
+      display: inline-flex;
+      margin-top: 14px;
+      padding: 12px 18px;
+      border-radius: 12px;
+      border: 2px solid var(--ink);
+      color: var(--ink);
+      background: var(--mint);
+      font-weight: 850;
+      font-size: 18px;
+    }
+
+    .steps {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 18px;
+      margin-top: 8px;
+    }
+
+    .step {
+      min-height: 230px;
+      padding: 26px;
+      border-radius: 18px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+    }
+
+    .num {
+      width: 44px;
+      height: 44px;
+      display: grid;
+      place-items: center;
+      border-radius: 50%;
+      background: var(--mint);
+      color: var(--ink);
+      border: 2px solid var(--ink);
+      font-weight: 880;
+      margin-bottom: 24px;
+    }
+
+    .step strong {
+      display: block;
+      font-size: 24px;
+      line-height: 1.1;
+      margin-bottom: 12px;
+    }
+
+    .step span {
+      color: var(--muted);
+      font-size: 18px;
+      line-height: 1.28;
+      font-weight: 610;
+    }
+  </style>
+</head>
+<body>
+  <main class="shot">
+    <section class="copy">
+      <div class="brand">
+        <img src="../../Kikoe/Shared%20(App)/Resources/Icon.png" alt="">
+        <span>Kikoe</span>
+      </div>
+      <div class="tag" data-field="tag"></div>
+      <h1 data-field="title"></h1>
+      <p data-field="subtitle"></p>
+    </section>
+    <section class="window">
+      <div class="toolbar">
+        <span class="dot"></span>
+        <span class="dot"></span>
+        <span class="dot"></span>
+        <div class="address" data-field="address"></div>
+      </div>
+      <div class="frame" data-frame></div>
+    </section>
+  </main>
+
+  <template id="wk-template">
+    <img src="source-captures/desktop-wanikani.png" alt="">
+  </template>
+
+  <template id="bp-template">
+    <img src="source-captures/desktop-bunpro.png" alt="">
+  </template>
+
+  <template id="settings-template">
+    <div class="desktop-settings">
+      <h2>Kikoe settings</h2>
+      <p>Token, microphone guidance, and review options stay together.</p>
+      <div class="settings-grid">
+        <div class="card">
+          <p class="label">WaniKani API</p>
+          <div class="field">••••••••••••••••••••</div>
+          <span class="button">Find token</span>
+        </div>
+        <div class="card">
+          <p class="label">Microphone Access</p>
+          <p>Your browser asks for microphone access the first time Kikoe starts listening.</p>
+        </div>
+        <div class="card">
+          <p class="label">Turbo Mode</p>
+          <p>Auto-advance after correct answers.</p>
+        </div>
+        <div class="card">
+          <p class="label">Corrections</p>
+          <p>Save speech corrections from the review page.</p>
+        </div>
+      </div>
+    </div>
+  </template>
+
+  <template id="guide-template">
+    <div class="desktop-guide">
+      <h2>Use Kikoe during reviews</h2>
+      <p>Enable the extension, open a review page, and speak your answer.</p>
+      <div class="steps">
+        <div class="step">
+          <div class="num">1</div>
+          <strong>Enable the extension</strong>
+          <span>Turn Kikoe on in your browser’s extension settings.</span>
+        </div>
+        <div class="step">
+          <div class="num">2</div>
+          <strong>Open reviews</strong>
+          <span>Use a supported WaniKani or BunPro review page.</span>
+        </div>
+        <div class="step">
+          <div class="num">3</div>
+          <strong>Speak answers</strong>
+          <span>Allow microphone access when the browser asks.</span>
+        </div>
+      </div>
+    </div>
+  </template>
+
+  <script>
+    const shots = {
+      1: {
+        tag: "WaniKani",
+        title: "Speak on WaniKani",
+        subtitle: "Kikoe listens during WaniKani reviews and submits supported answers.",
+        address: "wanikani.com",
+        template: "wk-template"
+      },
+      2: {
+        tag: "BunPro",
+        title: "Use it on BunPro",
+        subtitle: "Answer BunPro review prompts by voice in your browser.",
+        address: "bunpro.jp",
+        template: "bp-template"
+      },
+      3: {
+        tag: "Settings",
+        title: "Review options in one place",
+        subtitle: "Add a token, check microphone access, and set review behavior.",
+        address: "Kikoe settings",
+        template: "settings-template"
+      },
+      4: {
+        tag: "Setup",
+        title: "Turn it on and review",
+        subtitle: "Kikoe runs on supported WaniKani and BunPro review pages.",
+        address: "Kikoe",
+        template: "guide-template"
+      }
+    };
+
+    const params = new URLSearchParams(location.search);
+    const shot = shots[params.get("shot") || "1"];
+    for (const [field, value] of Object.entries(shot)) {
+      const node = document.querySelector(`[data-field="${field}"]`);
+      if (node) node.textContent = value;
+    }
+    document.querySelector("[data-frame]").append(document.getElementById(shot.template).content.cloneNode(true));
+  </script>
+</body>
+</html>
