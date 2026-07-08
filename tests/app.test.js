@@ -933,6 +933,12 @@ describe('startListener ippatsu mode (one-shot auto-submit on a miss)', () => {
     return alternatives;
   }
 
+  function interimResult(...transcripts) {
+    const alternatives = transcripts.map(t => ({ transcript: t }));
+    alternatives.isFinal = false;
+    return alternatives;
+  }
+
   function interceptSubjectRequest() {
     let respond;
     const ready = new Promise((resolve) => {
@@ -1021,6 +1027,42 @@ describe('startListener ippatsu mode (one-shot auto-submit on a miss)', () => {
     native.onresult({ resultIndex: 0, results: [finalResult('さむい')] });
 
     expect(document.getElementById('user-response').value).toBe('さむい');
+  });
+
+  test('a matched reading interim submits if no final result arrives', async () => {
+    const native = await loadCard('Reading', {});
+    vi.useFakeTimers();
+    try {
+      native.onresult({ resultIndex: 0, results: [interimResult('さむい')] });
+
+      expect(document.getElementById('user-response').value).toBe('');
+      vi.advanceTimersByTime(899);
+      expect(document.getElementById('user-response').value).toBe('');
+
+      vi.advanceTimersByTime(1);
+      expect(document.getElementById('user-response').value).toBe('さむい');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test('a failed submit does not block the next valid utterance', async () => {
+    const native = await loadCard('Reading', { ippatsu_reading: true });
+    document.querySelector('.quiz-input__submit-button').remove();
+
+    native.onresult({ resultIndex: 0, results: [finalResult('さむい')] });
+    expect(document.getElementById('user-response').value).toBe('さむい');
+
+    const retryButton = document.createElement('button');
+    retryButton.className = 'quiz-input__submit-button';
+    const clickSpy = vi.spyOn(retryButton, 'click');
+    document.body.append(retryButton);
+    document.getElementById('user-response').value = '';
+
+    native.onresult({ resultIndex: 0, results: [finalResult('さむい')] });
+
+    expect(document.getElementById('user-response').value).toBe('さむい');
+    expect(clickSpy).toHaveBeenCalled();
   });
 
   test('speech after an auto-submitted miss is ignored until the card changes', async () => {
