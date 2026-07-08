@@ -26,7 +26,7 @@ New in 0.8.0: one-click corrections make Kikoe easier to tune while you review. 
 
 - A [WaniKani](https://www.wanikani.com) account and/or a [BunPro](https://bunpro.jp) account
 - For WaniKani: an API token (read-only is sufficient). BunPro needs no token, since the accepted answers are already on the review page.
-- Chrome/Chromium (Manifest V3) or Firefox 109+ (Manifest V2)
+- Chrome/Chromium (Manifest V3), Firefox 109+ (Manifest V2), or Safari Web Extension tooling for the mobile Safari spike
 - Node.js and npm (to build from source)
 - Microphone access granted to the browser
 
@@ -38,14 +38,15 @@ cd kikoe
 npm run build
 ```
 
-`npm run build` downloads dictionary data (~12 MB, cached after the first run) and assembles the unpacked extension in the `chrome/` and `firefox/` directories.
+`npm run build` downloads dictionary data (~12 MB, cached after the first run) and assembles the unpacked extension in the `chrome/`, `firefox/`, and `safari/` directories.
 
 To also produce distributable zip files:
 
 ```bash
-npm run pack        # builds both
+npm run pack        # builds all browser zips
 npm run pack:chrome # chrome only → dist/kikoe-chrome.zip
 npm run pack:firefox # firefox only → dist/kikoe-firefox.zip
+npm run pack:safari # safari only → dist/kikoe-safari-web-extension.zip
 ```
 
 ## Installation
@@ -67,6 +68,21 @@ npm run pack:firefox # firefox only → dist/kikoe-firefox.zip
 5. The extension is now active for this session. Proceed to [First-time setup](#first-time-setup).
 
 > **Note:** Firefox only supports temporary add-on loading in development. The extension will be removed when Firefox restarts. For a permanent install, you would need to submit the extension to AMO or sign it manually with `web-ext`.
+
+### Safari Web Extension
+
+1. Run `npm run build`.
+2. Convert the generated `safari/` extension with Apple's Safari Web Extension converter:
+
+   ```bash
+   xcrun safari-web-extension-converter safari/
+   ```
+
+3. Open the generated Xcode project, choose the iOS/iPadOS or macOS containing app target, and run it on a device or simulator.
+4. Enable the extension in Safari and grant site access for WaniKani and BunPro.
+5. Proceed to [First-time setup](#first-time-setup).
+
+See [docs/safari.md](docs/safari.md) for the current spike notes and real-device validation checklist.
 
 ## First-time Setup
 
@@ -238,6 +254,7 @@ extension/
   options.js          # settings UI logic
 chrome/               # assembled Chrome extension (output of build)
 firefox/              # assembled Firefox extension (output of build)
+safari/               # assembled Safari Web Extension (output of build)
 ```
 
 ## Troubleshooting

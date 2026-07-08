@@ -22,6 +22,17 @@ firefox/options.js
 firefox/data/
 firefox/vendor/
 
+safari/manifest.json
+safari/background.js
+safari/bundle.js
+safari/content.js
+safari/injected.js
+safari/options.html
+safari/options.js
+safari/data/
+safari/icons/
+safari/vendor/
+
 # Packaged zips
 dist/
 
