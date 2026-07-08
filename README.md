@@ -87,7 +87,7 @@ See [docs/safari.md](docs/safari.md) for the current spike notes and real-device
 ## First-time Setup
 
 1. Click the extension icon in your browser toolbar (or open the options page from the extensions menu).
-2. Paste your WaniKani **API Token** into the API Token field, or click **Find token** to ask Kikoe to look for one on your WaniKani token settings page.
+2. Paste your WaniKani **API Token** into the API Token field, or click **Find token** to open WaniKani's token settings page and let Kikoe fill in a visible token when the page loads.
    - Get one from [WaniKani -> Settings -> Personal Access Tokens](https://www.wanikani.com/settings/personal_access_tokens). A read-only token is sufficient.
    - Skip this step if you only use BunPro, since no token is needed there.
 3. Click **Save settings**.

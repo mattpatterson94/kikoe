@@ -13,7 +13,8 @@ const defaults = {
 };
 
 const apiTokenPageUrl = 'https://www.wanikani.com/settings/personal_access_tokens';
-const apiTokenPattern = /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/i;
+const apiTokenDiscoveryRequestedKey = 'kikoe_api_token_discovery_requested';
+const apiTokenDiscoveryStatusKey = 'kikoe_api_token_discovery_status';
 
 // Keys read/written via a same-id form element. customCorrections is edited
 // through the dynamic row list below instead.
@@ -27,38 +28,32 @@ function setTokenStatus(message, state = '') {
   status.className = `status${state ? ` ${state}` : ''}`;
 }
 
-function extractApiToken(html) {
-  const doc = new DOMParser().parseFromString(html, 'text/html');
-  for (const el of doc.querySelectorAll('input, textarea, code, samp, kbd, pre, span, td')) {
-    const inputValue = el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement ? el.value : '';
-    const val = inputValue || el.getAttribute('value') || el.textContent || '';
-    const match = val.match(apiTokenPattern);
-    if (match) return match[0];
-  }
-  return '';
-}
-
 async function findApiToken() {
   const button = get('findApiToken');
   button.disabled = true;
-  setTokenStatus('Checking WaniKani...');
+  setTokenStatus('Opening WaniKani token settings...');
   try {
-    const resp = await fetch(apiTokenPageUrl, { credentials: 'include' });
-    if (!resp.ok) {
-      setTokenStatus('Could not open WaniKani token settings. Sign in, then try again.', 'error');
-      return;
-    }
-    const token = extractApiToken(await resp.text());
-    if (!token) {
-      setTokenStatus('No token found. Create or copy a read-only token, then paste it here.', 'error');
-      return;
-    }
-    get('apiToken').value = token;
-    setTokenStatus('Token found. Save settings to use it.', 'ok');
+    await chrome.storage.local.set({
+      [apiTokenDiscoveryRequestedKey]: true,
+      [apiTokenDiscoveryStatusKey]: 'pending',
+    });
+    chrome.runtime.sendMessage({ type: 'kikoe:openApiTokenPage' }, () => {
+      if (chrome.runtime.lastError) window.open(apiTokenPageUrl, '_blank');
+    });
+    setTokenStatus('Sign in to WaniKani if needed. Kikoe will fill this in when the token page loads.');
   } catch {
-    setTokenStatus('Could not fetch the WaniKani token page. Paste the token manually.', 'error');
+    window.open(apiTokenPageUrl, '_blank');
+    setTokenStatus('WaniKani token settings opened. Copy a read-only token and paste it here.', 'error');
   } finally {
     button.disabled = false;
+  }
+}
+
+function handleTokenDiscoveryStatus(status) {
+  if (status === 'found') {
+    setTokenStatus('Token found. Save settings to use it.', 'ok');
+  } else if (status === 'not_found') {
+    setTokenStatus('No token found on the page. Create or copy a read-only token, then paste it here.', 'error');
   }
 }
 
@@ -124,6 +119,16 @@ get('addCorrection').addEventListener('click', () => {
 });
 
 get('findApiToken').addEventListener('click', findApiToken);
+
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === 'sync' && changes.apiToken?.newValue) {
+    get('apiToken').value = changes.apiToken.newValue;
+    setTokenStatus('Token found. Save settings to use it.', 'ok');
+  }
+  if (area === 'local' && changes[apiTokenDiscoveryStatusKey]?.newValue) {
+    handleTokenDiscoveryStatus(changes[apiTokenDiscoveryStatusKey].newValue);
+  }
+});
 
 // ── form load/save ────────────────────────────────────────────────────────────
 

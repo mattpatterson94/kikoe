@@ -10,6 +10,10 @@ import { debugLog, setDebugLogging } from '../src/logger';
 import type { WanikaniSubject } from '../src/wanikani';
 
 export const CACHE_PREFIX = 'kikoe_subj_';
+export const API_TOKEN_DISCOVERY_REQUESTED_KEY = 'kikoe_api_token_discovery_requested';
+export const API_TOKEN_DISCOVERY_STATUS_KEY = 'kikoe_api_token_discovery_status';
+export const API_TOKEN_PAGE_PATH = '/settings/personal_access_tokens';
+export const API_TOKEN_PATTERN = /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/i;
 
 // Stored settings may carry the manually-entered API token alongside the
 // Settings shape; buildSafeConfig strips it before anything reaches the page.
@@ -74,6 +78,67 @@ export async function getApiToken(): Promise<string | null> {
 
   console.warn('[kikoe] could not find API token — open extension options and paste or find your WaniKani v2 API token');
   return null;
+}
+
+export function extractApiTokenFromDocument(doc: Document): string {
+  const selectors = [
+    'input',
+    'textarea',
+    'code',
+    'samp',
+    'kbd',
+    'pre',
+    '[data-token]',
+    '[data-api-token]',
+    '[aria-label*="token" i]',
+    '[class*="token" i]',
+    '[id*="token" i]',
+  ].join(',');
+
+  for (const el of doc.querySelectorAll(selectors)) {
+    const values = [
+      el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement ? el.value : '',
+      el.getAttribute('value') || '',
+      el.getAttribute('data-token') || '',
+      el.getAttribute('data-api-token') || '',
+      el.getAttribute('aria-label') || '',
+      el.textContent || '',
+    ];
+    for (const value of values) {
+      const match = value.match(API_TOKEN_PATTERN);
+      if (match) return match[0];
+    }
+  }
+
+  return '';
+}
+
+export function isApiTokenPage(location: Pick<Location, 'hostname' | 'pathname'>): boolean {
+  return location.hostname === 'www.wanikani.com' && location.pathname === API_TOKEN_PAGE_PATH;
+}
+
+export async function maybeCaptureApiTokenFromPage(
+  doc: Document = document,
+  location: Pick<Location, 'hostname' | 'pathname'> = window.location,
+): Promise<void> {
+  if (!isApiTokenPage(location)) return;
+
+  const stored = await chrome.storage.local.get(API_TOKEN_DISCOVERY_REQUESTED_KEY) as Record<string, boolean | undefined>;
+  if (!stored[API_TOKEN_DISCOVERY_REQUESTED_KEY]) return;
+
+  const token = extractApiTokenFromDocument(doc);
+  if (!token) {
+    await chrome.storage.local.set({
+      [API_TOKEN_DISCOVERY_STATUS_KEY]: 'not_found',
+    });
+    return;
+  }
+
+  await chrome.storage.sync.set({ apiToken: token });
+  await chrome.storage.local.set({
+    [API_TOKEN_DISCOVERY_REQUESTED_KEY]: false,
+    [API_TOKEN_DISCOVERY_STATUS_KEY]: 'found',
+  });
 }
 
 async function fetchSubjectPage(url: string, apiToken: string | null): Promise<SubjectCollection> {
@@ -296,6 +361,11 @@ function injectScript(src: string): void {
 async function main(): Promise<void> {
   const site = detectSite(window.location.hostname);
   if (!site) return;
+
+  if (isApiTokenPage(window.location)) {
+    await maybeCaptureApiTokenFromPage();
+    return;
+  }
 
   const settings = await getSettings();
   setDebugLogging(settings.debug);

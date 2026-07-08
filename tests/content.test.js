@@ -1,4 +1,20 @@
-import { getSettings, buildSafeConfig, getApiToken, fetchSubjectsForPrompt, prefetchSubjects, takeNextPrefetchBatch, subjectCacheKey, addCustomCorrection, CACHE_PREFIX, RADICALS_CACHE_KEY } from '../extension/content';
+import {
+  getSettings,
+  buildSafeConfig,
+  getApiToken,
+  extractApiTokenFromDocument,
+  isApiTokenPage,
+  maybeCaptureApiTokenFromPage,
+  fetchSubjectsForPrompt,
+  prefetchSubjects,
+  takeNextPrefetchBatch,
+  subjectCacheKey,
+  addCustomCorrection,
+  API_TOKEN_DISCOVERY_REQUESTED_KEY,
+  API_TOKEN_DISCOVERY_STATUS_KEY,
+  CACHE_PREFIX,
+  RADICALS_CACHE_KEY,
+} from '../extension/content';
 import { defaults } from '../src/settings';
 
 // ── Chrome API mock ───────────────────────────────────────────────────────────
@@ -146,6 +162,61 @@ describe('getApiToken', () => {
     expect(await getApiToken()).toBeNull();
     expect(fetchSpy).not.toHaveBeenCalled();
     warnSpy.mockRestore();
+  });
+});
+
+// ── API token discovery ──────────────────────────────────────────────────────
+
+describe('API token discovery', () => {
+  const TOKEN = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
+
+  test('recognizes the WaniKani personal access tokens page', () => {
+    expect(isApiTokenPage({
+      hostname: 'www.wanikani.com',
+      pathname: '/settings/personal_access_tokens',
+    })).toBe(true);
+    expect(isApiTokenPage({
+      hostname: 'www.wanikani.com',
+      pathname: '/review/session',
+    })).toBe(false);
+  });
+
+  test('extracts a token from rendered token page controls', () => {
+    document.body.innerHTML = `
+      <main>
+        <input id="personal-access-token" value="${TOKEN}">
+      </main>
+    `;
+
+    expect(extractApiTokenFromDocument(document)).toBe(TOKEN);
+  });
+
+  test('stores a discovered token when discovery is pending', async () => {
+    localStore[API_TOKEN_DISCOVERY_REQUESTED_KEY] = true;
+    document.body.innerHTML = `<code>${TOKEN}</code>`;
+
+    await maybeCaptureApiTokenFromPage(document, {
+      hostname: 'www.wanikani.com',
+      pathname: '/settings/personal_access_tokens',
+    });
+
+    expect(syncStore.apiToken).toBe(TOKEN);
+    expect(localStore[API_TOKEN_DISCOVERY_REQUESTED_KEY]).toBe(false);
+    expect(localStore[API_TOKEN_DISCOVERY_STATUS_KEY]).toBe('found');
+  });
+
+  test('reports when a pending discovery finds no token', async () => {
+    localStore[API_TOKEN_DISCOVERY_REQUESTED_KEY] = true;
+    document.body.innerHTML = '<main>No tokens yet</main>';
+
+    await maybeCaptureApiTokenFromPage(document, {
+      hostname: 'www.wanikani.com',
+      pathname: '/settings/personal_access_tokens',
+    });
+
+    expect(syncStore.apiToken).toBeUndefined();
+    expect(localStore[API_TOKEN_DISCOVERY_REQUESTED_KEY]).toBe(true);
+    expect(localStore[API_TOKEN_DISCOVERY_STATUS_KEY]).toBe('not_found');
   });
 });
 
