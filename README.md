@@ -94,7 +94,12 @@ See [docs/safari.md](docs/safari.md) for the current spike notes and real-device
    token page, create or copy a read-only token, then paste it into Kikoe's
    options page.
 3. Skip the token step if you only use BunPro, since no token is needed there.
-4. When prompted, allow the browser to access your microphone.
+4. Open a WaniKani or BunPro review page.
+5. When Kikoe starts listening, allow the browser to access your microphone.
+
+On iPhone and iPad, Safari extension access and microphone access are separate.
+After enabling the extension in Safari settings, open a review page so Safari can
+show the microphone permission prompt.
 
 ## Using the Extension
 

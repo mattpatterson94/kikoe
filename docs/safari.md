@@ -32,9 +32,12 @@ The first iOS/iPadOS validation pass should verify:
 2. `content.js` injects `injected.js` and `bundle.js` into review pages.
 3. `chrome.storage.sync`, `chrome.storage.local`, `chrome.runtime.getURL`, and
    `chrome.runtime.openOptionsPage` work in Safari's extension runtime.
-4. Microphone permission can be granted from the injected Kikoe UI.
-5. `webkitSpeechRecognition` emits interim/final results on iPhone or iPad.
-6. WaniKani API-token storage and subject prefetching work after reload.
+4. The options page or containing app clearly tells users that Safari extension
+   access and microphone access are separate setup steps.
+5. Microphone permission can be granted from the injected Kikoe UI after opening
+   a review page.
+6. `webkitSpeechRecognition` emits interim/final results on iPhone or iPad.
+7. WaniKani API-token storage and subject prefetching work after reload.
 
 ## Known Open Questions
 
