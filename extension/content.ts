@@ -1,7 +1,7 @@
 // Runs in the ISOLATED content-script world.
-// Manages settings (chrome.storage.sync), reads the WaniKani API token
-// entered on the options page, fetches + caches subjects, and injects the
-// bridge + app bundle into the page context.
+// Manages settings (chrome.storage.sync), reads or discovers the WaniKani API
+// token, fetches + caches subjects, and injects the bridge + app bundle into
+// the page context.
 
 import { defaults, encodeConfig } from '../src/settings';
 import type { Settings } from '../src/settings';
@@ -10,6 +10,8 @@ import { debugLog, setDebugLogging } from '../src/logger';
 import type { WanikaniSubject } from '../src/wanikani';
 
 export const CACHE_PREFIX = 'kikoe_subj_';
+export const API_TOKEN_PAGE_URL = 'https://www.wanikani.com/settings/personal_access_tokens';
+export const DISCOVERED_API_TOKEN_KEY = 'kikoe_apiToken';
 
 // Stored settings may carry the manually-entered API token alongside the
 // Settings shape; buildSafeConfig strips it before anything reaches the page.
@@ -65,6 +67,30 @@ export function buildSafeConfig(base: string, settings: StoredSettings, hasApiTo
   return { base, settings: safeSettings, hasApiToken };
 }
 
+// Fetch WaniKani's token-management page and extract a visible/readable v2 API
+// token when the user is already signed in. Tokens are UUID-formatted; searching
+// scoped form/code/text nodes avoids accidentally treating arbitrary markup IDs
+// as tokens.
+export async function scrapeApiToken(): Promise<string | null> {
+  try {
+    const resp = await fetch(API_TOKEN_PAGE_URL);
+    if (!resp.ok) return null;
+    const html = await resp.text();
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    const uuidRe = /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/i;
+    for (const el of doc.querySelectorAll('input, textarea, code, samp, kbd, pre, span, td')) {
+      const inputValue = el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement ? el.value : '';
+      const val = inputValue || el.getAttribute('value') || el.textContent || '';
+      const match = val.match(uuidRe);
+      if (match) return match[0];
+    }
+    return null;
+  } catch (err) {
+    console.error('[kikoe] failed to discover API token:', err);
+    return null;
+  }
+}
+
 export async function getApiToken(): Promise<string | null> {
   const synced = await chrome.storage.sync.get('apiToken') as { apiToken?: string };
   if (synced.apiToken) {
@@ -72,7 +98,21 @@ export async function getApiToken(): Promise<string | null> {
     return synced.apiToken;
   }
 
-  console.warn('[kikoe] could not find API token — open extension options and paste your WaniKani v2 API token');
+  const cached = await chrome.storage.local.get(DISCOVERED_API_TOKEN_KEY) as Record<string, string | undefined>;
+  if (cached[DISCOVERED_API_TOKEN_KEY]) {
+    debugLog('using cached discovered API token');
+    return cached[DISCOVERED_API_TOKEN_KEY];
+  }
+
+  debugLog('attempting to discover API token from WaniKani personal access tokens page');
+  const token = await scrapeApiToken();
+  if (token) {
+    await chrome.storage.local.set({ [DISCOVERED_API_TOKEN_KEY]: token });
+    debugLog('auto-discovered API token');
+    return token;
+  }
+
+  console.warn(`[kikoe] could not find API token — create or copy one from ${API_TOKEN_PAGE_URL}`);
   return null;
 }
 
@@ -313,9 +353,12 @@ async function main(): Promise<void> {
   injectScript(base + 'bundle.js');
 
   // The app (page world) can't reach extension APIs — forward its request to
-  // the background script, the only context that can open the options page.
+  // the background script, the only context that can open extension pages/tabs.
   document.addEventListener('kikoe:openOptions', () => {
     chrome.runtime.sendMessage({ type: 'kikoe:openOptions' });
+  });
+  document.addEventListener('kikoe:openApiTokenPage', () => {
+    chrome.runtime.sendMessage({ type: 'kikoe:openApiTokenPage' });
   });
 
   // The one-time help-discovery hint was shown — persist the flag so it

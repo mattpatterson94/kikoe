@@ -1,4 +1,4 @@
-import { getSettings, buildSafeConfig, getApiToken, fetchSubjectsForPrompt, prefetchSubjects, takeNextPrefetchBatch, subjectCacheKey, addCustomCorrection, CACHE_PREFIX, RADICALS_CACHE_KEY } from '../extension/content';
+import { getSettings, buildSafeConfig, getApiToken, scrapeApiToken, fetchSubjectsForPrompt, prefetchSubjects, takeNextPrefetchBatch, subjectCacheKey, addCustomCorrection, CACHE_PREFIX, RADICALS_CACHE_KEY, API_TOKEN_PAGE_URL, DISCOVERED_API_TOKEN_KEY } from '../extension/content';
 import { defaults } from '../src/settings';
 
 // ── Chrome API mock ───────────────────────────────────────────────────────────
@@ -139,13 +139,70 @@ describe('getApiToken', () => {
     expect(await getApiToken()).toBe(TOKEN);
   });
 
-  test('returns null when no token is stored, without any network fetch', async () => {
+  test('returns a cached discovered token before fetching', async () => {
+    localStore[DISCOVERED_API_TOKEN_KEY] = TOKEN;
     const fetchSpy = vi.fn();
     vi.stubGlobal('fetch', fetchSpy);
+    expect(await getApiToken()).toBe(TOKEN);
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  test('discovers and caches a token from the WaniKani token page', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => ({
+      ok: true,
+      text: async () => `<input type="text" value="${TOKEN}" readonly>`,
+    })));
+    expect(await getApiToken()).toBe(TOKEN);
+    expect(fetch).toHaveBeenCalledWith(API_TOKEN_PAGE_URL);
+    expect(localStore[DISCOVERED_API_TOKEN_KEY]).toBe(TOKEN);
+  });
+
+  test('returns null when no stored or discoverable token is available', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => ({
+      ok: true,
+      text: async () => '<p>No token here</p>',
+    })));
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     expect(await getApiToken()).toBeNull();
-    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(fetch).toHaveBeenCalledWith(API_TOKEN_PAGE_URL);
+    expect(localStore[DISCOVERED_API_TOKEN_KEY]).toBeUndefined();
     warnSpy.mockRestore();
+  });
+});
+
+// ── scrapeApiToken ───────────────────────────────────────────────────────────
+
+describe('scrapeApiToken', () => {
+  const TOKEN = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
+
+  test('extracts a UUID token from an input value', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => ({
+      ok: true,
+      text: async () => `<input type="text" value="${TOKEN}" readonly>`,
+    })));
+    expect(await scrapeApiToken()).toBe(TOKEN);
+    expect(fetch).toHaveBeenCalledWith(API_TOKEN_PAGE_URL);
+  });
+
+  test('extracts a UUID token from visible token text', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => ({
+      ok: true,
+      text: async () => `<code>Token: ${TOKEN}</code>`,
+    })));
+    expect(await scrapeApiToken()).toBe(TOKEN);
+  });
+
+  test('returns null when no UUID token is found', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => ({
+      ok: true,
+      text: async () => '<p>No token here</p>',
+    })));
+    expect(await scrapeApiToken()).toBeNull();
+  });
+
+  test('returns null on non-ok response', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: false, status: 404 })));
+    expect(await scrapeApiToken()).toBeNull();
   });
 });
 
