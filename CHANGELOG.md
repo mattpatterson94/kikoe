@@ -7,12 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## [0.9.0] - 2026-07-08
+
+### Added
+
+- Safari Web Extension packaging for iOS, iPadOS, and macOS, including
+  Safari-specific manifest output, high-resolution app icons, and documentation
+  for converting the generated `safari/` bundle into an Xcode project.
+- A customizable Safari containing-app onboarding page with setup guidance,
+  an Open Settings button on iOS, and microphone-access instructions.
+
 ### Changed
 
 - The options page now has an explicit "Find token" button that opens
   WaniKani's `/settings/personal_access_tokens` page and can populate the API
   token field from the rendered page. Kikoe no longer fetches that page
   silently during review startup.
+- Mobile settings layout now stacks token controls cleanly on narrow Safari
+  viewports.
+- Safari app and extension icons now use transparent PNG backgrounds so the
+  logo renders crisply in the app, splash screen, and extension settings.
+
+### Fixed
+
+- After Kikoe finds and saves a WaniKani API token, it now tries to reopen the
+  Kikoe settings page so users can save and continue setup.
+- WaniKani token discovery now reads the rendered token page instead of relying
+  on a background fetch that may not include the signed-in token UI.
+- Interim reading answers no longer stall when the first useful recognition
+  result arrives before the final transcript event.
 
 ## [0.8.0] - 2026-07-07
 
@@ -191,7 +214,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Vitest test suite: 118 tests covering candidates, flashcards, settings,
   the content script, WaniKani helpers, and the speed enhancer.
 
-[Unreleased]: https://github.com/mattpatterson94/kikoe/compare/3d90bb9...HEAD
+[Unreleased]: https://github.com/mattpatterson94/kikoe/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/mattpatterson94/kikoe/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/mattpatterson94/kikoe/compare/0b34b21...3d90bb9
 [0.7.0]: https://github.com/mattpatterson94/kikoe/compare/6553948...0b34b21
 [0.6.0]: https://github.com/mattpatterson94/kikoe/compare/9e4218f...6553948
