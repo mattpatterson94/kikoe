@@ -45,7 +45,7 @@ writeFileSync(files.html, `<!DOCTYPE html>
 
         <section class="platform-ios panel">
             <h2>Microphone access</h2>
-            <p>After Kikoe is enabled, open a WaniKani or BunPro review page in Safari. Start a voice session and allow microphone access when Safari asks.</p>
+            <p>Open a WaniKani or BunPro review page in Safari and start listening. When Safari asks for microphone access, choose Allow.</p>
         </section>
 
         <section class="platform-mac panel">

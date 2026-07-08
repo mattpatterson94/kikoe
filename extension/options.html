@@ -113,19 +113,37 @@
     input[type=text], input[type=password] { width: min(240px, 100%); }
     input[type=number] { width: 84px; }
     select { width: 130px; }
+    .field.token-field {
+      display: block;
+    }
+    .field.token-field label {
+      display: block;
+      max-width: none;
+      margin-bottom: 12px;
+      padding-top: 0;
+    }
     .token-control {
       display: flex;
       flex-direction: column;
-      align-items: flex-end;
-      gap: 8px;
-      min-width: 0;
-    }
-    .token-actions {
-      display: flex;
-      flex-wrap: wrap;
-      justify-content: flex-end;
+      align-items: stretch;
       gap: 8px;
       width: 100%;
+      min-width: 0;
+      max-width: 560px;
+    }
+    .token-actions {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 8px;
+      width: 100%;
+    }
+    .token-actions input[type=password] {
+      width: 100%;
+      min-width: 0;
+    }
+    .token-actions .secondary {
+      white-space: nowrap;
     }
     .secondary {
       background: transparent;
@@ -148,8 +166,8 @@
       min-height: 1.1em;
       color: var(--text-soft);
       font-size: 0.78rem;
-      text-align: right;
-      max-width: 330px;
+      text-align: left;
+      max-width: none;
     }
     .status.ok { color: var(--ok); }
     .status.error { color: var(--accent); }
@@ -306,6 +324,8 @@
       .field.token-field label {
         display: block;
         margin-bottom: 12px;
+        max-width: none;
+        padding-top: 0;
       }
       .field.token-field .hint {
         max-width: 26rem;
@@ -313,6 +333,7 @@
       .token-control {
         align-items: stretch;
         width: 100%;
+        max-width: none;
       }
       .token-actions {
         display: grid;
@@ -374,9 +395,8 @@
   <section class="card">
     <h2>Microphone Access</h2>
     <p class="setup-note">
-      After saving settings, open a WaniKani or BunPro review page and start a
-      voice session. Your browser asks for microphone access the first time
-      Kikoe starts listening. Allow access so answers can be heard.
+      Open a WaniKani or BunPro review page and start listening. When your
+      browser asks for microphone access, choose Allow.
     </p>
   </section>
 

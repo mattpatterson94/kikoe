@@ -4,7 +4,14 @@
 // page-world UI are forwarded here (see content.ts).
 const API_TOKEN_PAGE_URL = 'https://www.wanikani.com/settings/personal_access_tokens';
 
+function openOptionsPage() {
+  chrome.runtime.openOptionsPage();
+}
+
 chrome.runtime.onMessage.addListener((message) => {
-  if (message?.type === 'kikoe:openOptions') chrome.runtime.openOptionsPage();
+  if (message?.type === 'kikoe:openOptions') openOptionsPage();
   if (message?.type === 'kikoe:openApiTokenPage') chrome.tabs.create({ url: API_TOKEN_PAGE_URL });
 });
+
+const extensionAction = chrome.action || chrome.browserAction;
+extensionAction?.onClicked?.addListener(openOptionsPage);
