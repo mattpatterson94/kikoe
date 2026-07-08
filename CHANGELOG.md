@@ -9,10 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Kikoe once again tries to discover an existing WaniKani API token before
-  asking the user to paste one manually, this time from WaniKani's
-  `/settings/personal_access_tokens` page. If no token is available there,
-  the "⚠ No API token" chip opens that WaniKani token page directly.
+- The options page now has an explicit "Find token" button that can populate
+  the WaniKani API token field from WaniKani's
+  `/settings/personal_access_tokens` page. Kikoe no longer fetches that page
+  silently during review startup.
 
 ## [0.8.0] - 2026-07-07
 

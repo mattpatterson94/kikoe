@@ -12,11 +12,55 @@ const defaults = {
   customCorrections: [],
 };
 
+const apiTokenPageUrl = 'https://www.wanikani.com/settings/personal_access_tokens';
+const apiTokenPattern = /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/i;
+
 // Keys read/written via a same-id form element. customCorrections is edited
 // through the dynamic row list below instead.
 const fields = Object.keys(defaults).filter((k) => k !== 'customCorrections');
 
 function get(id) { return document.getElementById(id); }
+
+function setTokenStatus(message, state = '') {
+  const status = get('tokenStatus');
+  status.textContent = message;
+  status.className = `status${state ? ` ${state}` : ''}`;
+}
+
+function extractApiToken(html) {
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  for (const el of doc.querySelectorAll('input, textarea, code, samp, kbd, pre, span, td')) {
+    const inputValue = el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement ? el.value : '';
+    const val = inputValue || el.getAttribute('value') || el.textContent || '';
+    const match = val.match(apiTokenPattern);
+    if (match) return match[0];
+  }
+  return '';
+}
+
+async function findApiToken() {
+  const button = get('findApiToken');
+  button.disabled = true;
+  setTokenStatus('Checking WaniKani...');
+  try {
+    const resp = await fetch(apiTokenPageUrl, { credentials: 'include' });
+    if (!resp.ok) {
+      setTokenStatus('Could not open WaniKani token settings. Sign in, then try again.', 'error');
+      return;
+    }
+    const token = extractApiToken(await resp.text());
+    if (!token) {
+      setTokenStatus('No token found. Create or copy a read-only token, then paste it here.', 'error');
+      return;
+    }
+    get('apiToken').value = token;
+    setTokenStatus('Token found. Save settings to use it.', 'ok');
+  } catch {
+    setTokenStatus('Could not fetch the WaniKani token page. Paste the token manually.', 'error');
+  } finally {
+    button.disabled = false;
+  }
+}
 
 // ── custom corrections editor ─────────────────────────────────────────────────
 
@@ -78,6 +122,8 @@ get('addCorrection').addEventListener('click', () => {
   refreshCorrectionsChrome();
   row.querySelector('.heard').focus();
 });
+
+get('findApiToken').addEventListener('click', findApiToken);
 
 // ── form load/save ────────────────────────────────────────────────────────────
 

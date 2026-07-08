@@ -12,11 +12,11 @@ Kikoe does not collect, sell, or share your data. No data is ever sent to the de
 
 ### WaniKani API token
 
-If you use Kikoe with WaniKani, Kikoe needs a WaniKani API token (a read-only token is sufficient). The extension first tries to find an existing token by fetching WaniKani's Personal Access Tokens page while you are signed in. If no token is available there, you can paste one manually on the extension's options page.
+If you use Kikoe with WaniKani, Kikoe needs a WaniKani API token (a read-only token is sufficient). You can paste one manually on the extension's options page, or click **Find token** there to ask Kikoe to look for an existing token on WaniKani's Personal Access Tokens page while you are signed in.
 
 - The token is stored locally in your browser using the browser's extension storage (`chrome.storage`).
 - It is sent only to WaniKani's official API (`api.wanikani.com`) to fetch the accepted readings and meanings for the items in your reviews, so your spoken answers can be verified.
-- The Personal Access Tokens page is fetched only from WaniKani (`www.wanikani.com`) in your browser session, so Kikoe can read a token that WaniKani already shows to you.
+- The Personal Access Tokens page is fetched only when you click **Find token**, only from WaniKani (`www.wanikani.com`) in your browser session, so Kikoe can read a token that WaniKani already shows to you.
 - It is never sent anywhere else, and the developer never has access to it.
 
 You can remove the token at any time from the options page, or by uninstalling the extension, which deletes all stored data.
