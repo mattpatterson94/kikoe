@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## [0.9.1] - 2026-07-08
+
+### Changed
+
+- The WaniKani API token controls now sit on their own row on the settings
+  page, keeping the desktop layout compact and easier to scan.
+- Microphone setup copy is shorter and no longer implies settings must be
+  saved before the browser can request microphone access.
+
+### Fixed
+
+- Clicking Kikoe from the browser extensions menu now opens the Kikoe settings
+  page.
+
 ## [0.9.0] - 2026-07-08
 
 ### Added
@@ -214,7 +228,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Vitest test suite: 118 tests covering candidates, flashcards, settings,
   the content script, WaniKani helpers, and the speed enhancer.
 
-[Unreleased]: https://github.com/mattpatterson94/kikoe/compare/v0.9.0...HEAD
+[Unreleased]: https://github.com/mattpatterson94/kikoe/compare/v0.9.1...HEAD
+[0.9.1]: https://github.com/mattpatterson94/kikoe/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/mattpatterson94/kikoe/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/mattpatterson94/kikoe/compare/0b34b21...3d90bb9
 [0.7.0]: https://github.com/mattpatterson94/kikoe/compare/6553948...0b34b21
