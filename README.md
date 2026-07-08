@@ -86,15 +86,17 @@ See [docs/safari.md](docs/safari.md) for the current spike notes and real-device
 
 ## First-time Setup
 
-1. Open a WaniKani review, lesson, or quiz page while signed in. Kikoe will
-   try to find an existing WaniKani API token from your
-   [Personal Access Tokens](https://www.wanikani.com/settings/personal_access_tokens)
-   page automatically.
-2. If the listening chip says **⚠ No API token**, click it to open WaniKani's
-   token page, create or copy a read-only token, then paste it into Kikoe's
-   options page.
-3. Skip the token step if you only use BunPro, since no token is needed there.
-4. When prompted, allow the browser to access your microphone.
+1. Click the extension icon in your browser toolbar (or open the options page from the extensions menu).
+2. Paste your WaniKani **API Token** into the API Token field, or click **Find token** to ask Kikoe to look for one on your WaniKani token settings page.
+   - Get one from [WaniKani -> Settings -> Personal Access Tokens](https://www.wanikani.com/settings/personal_access_tokens). A read-only token is sufficient.
+   - Skip this step if you only use BunPro, since no token is needed there.
+3. Click **Save settings**.
+4. Open a WaniKani or BunPro review page.
+5. When Kikoe starts listening, allow the browser to access your microphone.
+
+On iPhone and iPad, Safari extension access and microphone access are separate.
+After enabling the extension in Safari settings, open a review page so Safari can
+show the microphone permission prompt.
 
 ## Using the Extension
 

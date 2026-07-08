@@ -61,6 +61,7 @@ cp data/jmdict.json firefox/data/jmdict.json
 cp data/kanjidic2.json firefox/data/kanjidic2.json
 
 echo "→ Assembling Safari Web Extension..."
+rm -rf safari/icons
 mkdir -p safari/data safari/icons
 cp extension/safari_manifest.json safari/manifest.json
 cp bundle.js safari/bundle.js
@@ -69,7 +70,7 @@ cp extension/injected.js safari/injected.js
 cp extension/background.js safari/background.js
 cp extension/options.html safari/options.html
 cp extension/options.js safari/options.js
-cp chrome/icons/*.png safari/icons/
+cp extension/safari-icons/*.png safari/icons/
 cp data/jmdict.json safari/data/jmdict.json
 cp data/kanjidic2.json safari/data/kanjidic2.json
 
