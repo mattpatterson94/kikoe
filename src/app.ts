@@ -365,6 +365,18 @@ async function startListener(dictionary: Dictionary): Promise<void> {
     return true;
   }
 
+  // Reading recognition may arrive as romaji or an English-looking engine
+  // guess even when it resolves to a valid kana answer. Keep that raw value
+  // available to the matcher and correction flow, but successful feedback
+  // should show the canonical Japanese answer the user actually submitted.
+  function logCheckResult(ctx: SiteContext, result: CheckResult): void {
+    if (ctx.type === 'reading' && result.success && result.answer) {
+      logTranscript(getSettings(), { raw: result.answer });
+      return;
+    }
+    logTranscript(getSettings(), withCorrectionCandidate(ctx, result.transcript));
+  }
+
   function clearMatchedInterimTimer(): void {
     clearTimeout(matchedInterimTimer);
     matchedInterimTimer = undefined;
@@ -382,7 +394,7 @@ async function startListener(dictionary: Dictionary): Promise<void> {
       const latestContext = site.getContext(subjects);
       if (site.didContextChange(ctx, latestContext)) return;
       if (latestContext?.type !== 'reading') return;
-      logTranscript(getSettings(), result.transcript);
+      logCheckResult(ctx, result);
       if (submitMatchedAnswer(result.answer)) {
         // BunPro Lightning Mode can advance before Chrome emits the final for
         // this utterance. Remember it across the card change so that late
@@ -423,6 +435,7 @@ async function startListener(dictionary: Dictionary): Promise<void> {
     const result = checkAlternatives(context, pendingRaws);
     debugLog('retrying pending transcript', { pendingRaws, result });
     if (result?.success && result.answer) {
+      logCheckResult(context, result);
       submitMatchedAnswer(result.answer);
     } else if (result?.transcript?.reason === 'no-match' && ippatsuEnabled(context.type)) {
       submitWrongAnswer();
@@ -463,7 +476,6 @@ async function startListener(dictionary: Dictionary): Promise<void> {
     // reconnecting indicator left over from a prior error.
     restoreIdleIndicator();
     const raw = raws[0];
-    logTranscript(getSettings(), { raw });
 
     if (final) clearMatchedInterimTimer();
 
@@ -486,6 +498,11 @@ async function startListener(dictionary: Dictionary): Promise<void> {
       return;
     }
 
+    // Reading results are logged after matching so a successful romaji or
+    // English-looking recognition guess never flashes in the UI. Failures
+    // still show the raw guess below, where it can drive correction creation.
+    if (ctx?.type !== 'reading') logTranscript(getSettings(), { raw });
+
     // Interim results are usually display-only, but short reading answers can
     // get stuck there if Chrome shows a correct interim and never emits the
     // final. Only auto-submit an interim when it already resolves to an
@@ -495,6 +512,7 @@ async function startListener(dictionary: Dictionary): Promise<void> {
       if (!submitted && ctx?.type === 'reading') {
         const interimResult = checkAlternatives(ctx, raws);
         if (interimResult?.success && interimResult.answer) {
+          logCheckResult(ctx, interimResult);
           scheduleMatchedInterimSubmit(ctx, raws, resultId, interimResult);
           return;
         }
@@ -549,7 +567,7 @@ async function startListener(dictionary: Dictionary): Promise<void> {
       return;
     }
 
-    logTranscript(getSettings(), withCorrectionCandidate(ctx, result.transcript));
+    logCheckResult(ctx, result);
 
     if (result.success && result.answer) {
       submitMatchedAnswer(result.answer);
@@ -589,6 +607,10 @@ async function startListener(dictionary: Dictionary): Promise<void> {
       submitted = false;
       pendingRaws = null;
       context = newContext;
+      // Change the speech model before waiting for WaniKani subject data.
+      // Otherwise the recognizer can spend that loading window interpreting
+      // a new Japanese reading card with the previous English card's model.
+      setLanguage(recognition, site.getLanguage());
       if (usesSubjects && newContext?.prompt && newContext?.category) {
         subjects = await loadSubjects(newContext.prompt, newContext.category);
         context = site.getContext(subjects);
@@ -607,7 +629,6 @@ async function startListener(dictionary: Dictionary): Promise<void> {
       } else {
         retryPendingTranscript();
       }
-      setLanguage(recognition, site.getLanguage());
     }
   }
 
