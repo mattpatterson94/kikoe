@@ -196,7 +196,7 @@ describe('API token discovery', () => {
     expect(extractApiTokenFromDocument(document)).toBe(TOKEN);
   });
 
-  test('stores a discovered token when discovery is pending', async () => {
+  test('automatically saves a discovered token when discovery is pending', async () => {
     localStore[API_TOKEN_DISCOVERY_REQUESTED_KEY] = true;
     document.body.innerHTML = `<code>${TOKEN}</code>`;
 
@@ -205,6 +205,7 @@ describe('API token discovery', () => {
       pathname: '/settings/personal_access_tokens',
     });
 
+    expect(chromeMock.storage.sync.set).toHaveBeenCalledWith({ apiToken: TOKEN });
     expect(syncStore.apiToken).toBe(TOKEN);
     expect(localStore[API_TOKEN_DISCOVERY_REQUESTED_KEY]).toBe(false);
     expect(localStore[API_TOKEN_DISCOVERY_STATUS_KEY]).toBe('found');

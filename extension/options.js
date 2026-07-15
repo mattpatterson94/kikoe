@@ -51,7 +51,7 @@ async function findApiToken() {
 
 function handleTokenDiscoveryStatus(status) {
   if (status === 'found') {
-    setTokenStatus('Token found. Save settings to use it.', 'ok');
+    setTokenStatus('Token found and saved.', 'ok');
   } else if (status === 'not_found') {
     setTokenStatus('No token found on the page. Create or copy a read-only token, then paste it here.', 'error');
   }
@@ -123,7 +123,7 @@ get('findApiToken').addEventListener('click', findApiToken);
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area === 'sync' && changes.apiToken?.newValue) {
     get('apiToken').value = changes.apiToken.newValue;
-    setTokenStatus('Token found. Save settings to use it.', 'ok');
+    setTokenStatus('Token found and saved.', 'ok');
   }
   if (area === 'local' && changes[apiTokenDiscoveryStatusKey]?.newValue) {
     handleTokenDiscoveryStatus(changes[apiTokenDiscoveryStatusKey].newValue);
@@ -156,8 +156,14 @@ function populateForm(settings) {
 }
 
 async function load() {
-  const stored = await chrome.storage.sync.get(Object.keys(defaults));
+  const [stored, discovery] = await Promise.all([
+    chrome.storage.sync.get(Object.keys(defaults)),
+    chrome.storage.local.get(apiTokenDiscoveryStatusKey),
+  ]);
   populateForm({ ...defaults, ...stored });
+  if (stored.apiToken) {
+    handleTokenDiscoveryStatus(discovery[apiTokenDiscoveryStatusKey]);
+  }
 }
 
 get('save').addEventListener('click', async () => {

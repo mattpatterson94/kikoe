@@ -721,6 +721,55 @@ describe('startListener BunPro Reveal & Grade cards', () => {
       vi.useRealTimers();
     }
   });
+
+  test('a hiragana transcript submits BunPro\'s canonical katakana answer', async () => {
+    addMetadata({
+      'data-meta-input-mode': 'manual',
+      'data-meta-question-mode': 'cloze',
+      'data-meta-answers-array': JSON.stringify(['カタカナ']),
+    });
+    const input = document.createElement('input');
+    input.id = 'js-manual-input';
+    document.body.appendChild(input);
+    const submit = document.createElement('button');
+    submit.className = 'InputManual__button';
+    document.body.appendChild(submit);
+    const submitSpy = vi.spyOn(submit, 'click');
+    stampConfig({ hasApiToken: true });
+    await importApp();
+
+    const native = MockSpeechRecognition.instances[0];
+    native.onresult({ resultIndex: 0, results: [finalResult('かたかな')] });
+
+    expect(input.value).toBe('カタカナ');
+    expect(submitSpy).toHaveBeenCalled();
+  });
+
+  test('a saved correction submits BunPro\'s canonical katakana answer', async () => {
+    addMetadata({
+      'data-meta-input-mode': 'manual',
+      'data-meta-question-mode': 'cloze',
+      'data-meta-answers-array': JSON.stringify(['カタカナ']),
+    });
+    const input = document.createElement('input');
+    input.id = 'js-manual-input';
+    document.body.appendChild(input);
+    const submit = document.createElement('button');
+    submit.className = 'InputManual__button';
+    document.body.appendChild(submit);
+    const submitSpy = vi.spyOn(submit, 'click');
+    stampConfig({
+      hasApiToken: true,
+      settings: { customCorrections: [{ heard: 'car talker', intended: 'カタカナ' }] },
+    });
+    await importApp();
+
+    const native = MockSpeechRecognition.instances[0];
+    native.onresult({ resultIndex: 0, results: [finalResult('car talker')] });
+
+    expect(input.value).toBe('カタカナ');
+    expect(submitSpy).toHaveBeenCalled();
+  });
 });
 
 describe('startListener fuzzy meaning matching (WaniKani)', () => {
