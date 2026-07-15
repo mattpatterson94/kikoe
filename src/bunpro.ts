@@ -30,6 +30,7 @@ export interface BunproQuestionContext {
   prompt: string | null;
   category: string | null;
   type: string | null;
+  postAttempt: boolean;
   meanings: string[];
   readings: string[];
   items: never[];
@@ -135,15 +136,31 @@ export function getContext(): BunproContext | null {
   const meanings = type === 'meaning' ? answers : [];
   const category = (parseJson(meta.dataset.metaInfo) as MetaInfo | null)?.type ?? null;
 
-  return { page, prompt, category, type, meanings, readings, items: [] };
+  const postAttempt = meta.dataset.metaIsPostAttempt === 'true';
+  return { page, prompt, category, type, postAttempt, meanings, readings, items: [] };
 }
 
 // Structural type: reveal-mode contexts have no `type`, and app.js compares
 // across both shapes during transitions.
-type ContextIdentity = { prompt?: string | null; type?: string | null } | null | undefined;
+type ContextIdentity = {
+  prompt?: string | null;
+  type?: string | null;
+  mode?: string;
+  postAttempt?: boolean;
+} | null | undefined;
+
+function itemKey(prompt: string | null | undefined): string | null | undefined {
+  if (!prompt) return prompt;
+  const separator = prompt.lastIndexOf(':');
+  return separator === -1 ? prompt : prompt.slice(0, separator);
+}
 
 export function didContextChange(oldContext: ContextIdentity, newContext: ContextIdentity): boolean {
-  return (newContext?.prompt !== oldContext?.prompt) ||
+  const sameItemBeingGraded = newContext?.mode !== 'reveal' &&
+    newContext?.postAttempt === true &&
+    itemKey(newContext.prompt) === itemKey(oldContext?.prompt);
+  const promptChanged = newContext?.prompt !== oldContext?.prompt;
+  return (promptChanged && !sameItemBeingGraded) ||
          (newContext?.type !== oldContext?.type);
 }
 

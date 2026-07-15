@@ -104,6 +104,11 @@ describe('getContext', () => {
     expect(ctx.readings).toEqual([]);
   });
 
+  test('manual cards expose whether BunPro is grading the current attempt', () => {
+    addMetadata({ 'data-meta-is-post-attempt': 'true' });
+    expect(getContext().postAttempt).toBe(true);
+  });
+
   test('prompt combines item id and submission count', () => {
     addMetadata({ 'data-meta-total-submissions-count': '3' });
     expect(getContext().prompt).toBe('806:3');
@@ -180,6 +185,18 @@ describe('didContextChange', () => {
 
   test('same item with a new submission count → changed', () => {
     expect(didContextChange(base, { prompt: '806:1', type: 'reading' })).toBe(true);
+  });
+
+  test('submission count changing while the same manual card is graded is not a new card', () => {
+    expect(didContextChange(base, {
+      prompt: '806:1', type: 'reading', postAttempt: true,
+    })).toBe(false);
+  });
+
+  test('the same repeated item becomes a new card once its next attempt is ready', () => {
+    expect(didContextChange(base, {
+      prompt: '806:1', type: 'reading', postAttempt: false,
+    })).toBe(true);
   });
 
   test('null old context → changed', () => {
