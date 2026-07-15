@@ -46,6 +46,7 @@ cp extension/injected.js chrome/injected.js
 cp extension/background.js chrome/background.js
 cp extension/options.html chrome/options.html
 cp extension/options.js chrome/options.js
+cp extension/logo.svg chrome/logo.svg
 cp data/jmdict.json chrome/data/jmdict.json
 cp data/kanjidic2.json chrome/data/kanjidic2.json
 
@@ -57,6 +58,7 @@ cp extension/injected.js firefox/injected.js
 cp extension/background.js firefox/background.js
 cp extension/options.html firefox/options.html
 cp extension/options.js firefox/options.js
+cp extension/logo.svg firefox/logo.svg
 cp data/jmdict.json firefox/data/jmdict.json
 cp data/kanjidic2.json firefox/data/kanjidic2.json
 
@@ -70,6 +72,7 @@ cp extension/injected.js safari/injected.js
 cp extension/background.js safari/background.js
 cp extension/options.html safari/options.html
 cp extension/options.js safari/options.js
+cp extension/logo.svg safari/logo.svg
 cp extension/safari-icons/*.png safari/icons/
 cp data/jmdict.json safari/data/jmdict.json
 cp data/kanjidic2.json safari/data/kanjidic2.json
