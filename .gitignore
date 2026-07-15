@@ -8,6 +8,7 @@ chrome/background.js
 chrome/bundle.js
 chrome/content.js
 chrome/injected.js
+chrome/logo.svg
 chrome/options.html
 chrome/options.js
 chrome/data/
@@ -17,6 +18,7 @@ firefox/background.js
 firefox/bundle.js
 firefox/content.js
 firefox/injected.js
+firefox/logo.svg
 firefox/options.html
 firefox/options.js
 firefox/data/
@@ -27,6 +29,7 @@ safari/background.js
 safari/bundle.js
 safari/content.js
 safari/injected.js
+safari/logo.svg
 safari/options.html
 safari/options.js
 safari/data/

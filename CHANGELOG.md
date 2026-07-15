@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## [0.10.0] - 2026-07-16
+
+### Changed
+
+- The settings page is more compact on desktop and mobile, uses the canonical
+  Kikoe logo, and clearly confirms when a discovered WaniKani API token has
+  already been saved.
+
+### Fixed
+
+- BunPro reading answers now match regardless of whether the accepted answer
+  or speech result uses hiragana or katakana, while still submitting BunPro's
+  canonical spelling.
+- WaniKani reading cards now switch recognition to Japanese before subject
+  data finishes loading, and successful reading feedback shows the canonical
+  Japanese answer instead of a raw English or romaji recognition guess.
+- Late final speech results from an already-submitted BunPro answer no longer
+  get treated as a mismatch on the next card.
+- Consecutive WaniKani and BunPro cards can accept the same spoken answer
+  without confusing it with a duplicate result from the previous card.
+- Answers and voice commands spoken during the brief transition between cards
+  are replayed once the new card context is ready instead of being dropped.
+
 ## [0.9.1] - 2026-07-08
 
 ### Changed
