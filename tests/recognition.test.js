@@ -85,7 +85,7 @@ describe('createRecognition', () => {
       results: [makeResult(['かい', '会', '回'], true)],
     });
 
-    expect(callback).toHaveBeenCalledWith(['かい', '会', '回'], true);
+    expect(callback).toHaveBeenCalledWith(['かい', '会', '回'], true, '0:0');
   });
 
   test('passes a single alternative for an interim result', () => {
@@ -98,7 +98,7 @@ describe('createRecognition', () => {
       results: [makeResult(['かい'], false)],
     });
 
-    expect(callback).toHaveBeenCalledWith(['かい'], false);
+    expect(callback).toHaveBeenCalledWith(['かい'], false, '0:0');
   });
 
   test('trims whitespace from every alternative', () => {
@@ -111,7 +111,7 @@ describe('createRecognition', () => {
       results: [makeResult([' かい ', ' 回 '], true)],
     });
 
-    expect(callback).toHaveBeenCalledWith(['かい', '回'], true);
+    expect(callback).toHaveBeenCalledWith(['かい', '回'], true, '0:0');
   });
 
   test('processes only results from resultIndex onward', () => {
@@ -125,7 +125,31 @@ describe('createRecognition', () => {
     });
 
     expect(callback).toHaveBeenCalledTimes(1);
-    expect(callback).toHaveBeenCalledWith(['fresh'], true);
+    expect(callback).toHaveBeenCalledWith(['fresh'], true, '0:1');
+  });
+
+  test('identifies the same result across interim and final updates', () => {
+    const callback = vi.fn();
+    createRecognition('ja-JP', callback);
+    const native = recognitionInstances[0];
+
+    native.onresult({ resultIndex: 0, results: [makeResult(['かい'], false)] });
+    native.onresult({ resultIndex: 0, results: [makeResult(['かい'], true)] });
+
+    expect(callback.mock.calls[0][2]).toBe(callback.mock.calls[1][2]);
+  });
+
+  test('does not reuse result identities after recognition restarts', () => {
+    const callback = vi.fn();
+    const recognition = createRecognition('ja-JP', callback);
+    const native = recognitionInstances[0];
+
+    recognition.start();
+    native.onresult({ resultIndex: 0, results: [makeResult(['かい'], true)] });
+    recognition.onend();
+    native.onresult({ resultIndex: 0, results: [makeResult(['かい'], true)] });
+
+    expect(callback.mock.calls[0][2]).not.toBe(callback.mock.calls[1][2]);
   });
 
   // Regression: createRecognition returned null when webkitSpeechRecognition

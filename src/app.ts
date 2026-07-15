@@ -263,7 +263,7 @@ async function startListener(dictionary: Dictionary): Promise<void> {
   let emptyFinals = 0;
   let restartIndicatorTimer: ReturnType<typeof setTimeout> | undefined;
   let matchedInterimTimer: ReturnType<typeof setTimeout> | undefined;
-  let submittedInterimRaws: string[] | null = null;
+  let submittedInterimResultId: string | null = null;
 
   // While the help panel is open the mic is paused: the panel displays the
   // words that trigger actions, so reading it aloud must not fire them.
@@ -370,12 +370,12 @@ async function startListener(dictionary: Dictionary): Promise<void> {
     matchedInterimTimer = undefined;
   }
 
-  function sameUtterance(left: string[], right: string[]): boolean {
-    const normalized = new Set(left.map(normalizeCommand));
-    return right.some(raw => normalized.has(normalizeCommand(raw)));
-  }
-
-  function scheduleMatchedInterimSubmit(ctx: SiteContext, raws: string[], result: Extract<CheckResult, { success: true }>): void {
+  function scheduleMatchedInterimSubmit(
+    ctx: SiteContext,
+    raws: string[],
+    resultId: string,
+    result: Extract<CheckResult, { success: true }>,
+  ): void {
     clearMatchedInterimTimer();
     matchedInterimTimer = setTimeout(() => {
       if (submitted) return;
@@ -387,7 +387,7 @@ async function startListener(dictionary: Dictionary): Promise<void> {
         // BunPro Lightning Mode can advance before Chrome emits the final for
         // this utterance. Remember it across the card change so that late
         // final is not checked against the next question as a false miss.
-        submittedInterimRaws = raws;
+        submittedInterimResultId = resultId;
         debugLog('submitted matched interim after final result stalled', { raws, result });
       }
     }, MATCHED_INTERIM_SUBMIT_MS);
@@ -430,7 +430,7 @@ async function startListener(dictionary: Dictionary): Promise<void> {
     pendingRaws = null;
   }
 
-  function handleRecognitionResult(rawInputs: string[], final: boolean): void {
+  function handleRecognitionResult(rawInputs: string[], final: boolean, resultId: string): void {
     const raws = rawInputs.map(deduplicate).filter(r => r.trim());
     if (raws.length === 0) {
       if (final && ++emptyFinals >= EMPTY_FINAL_RESTART_THRESHOLD) {
@@ -445,18 +445,18 @@ async function startListener(dictionary: Dictionary): Promise<void> {
     }
     emptyFinals = 0;
 
-    if (final && submittedInterimRaws) {
-      const submittedRaws = submittedInterimRaws;
-      submittedInterimRaws = null;
+    if (final && submittedInterimResultId) {
+      const isSubmittedInterimFinal = resultId === submittedInterimResultId;
+      submittedInterimResultId = null;
       clearMatchedInterimTimer();
-      if (sameUtterance(submittedRaws, raws)) {
+      if (isSubmittedInterimFinal) {
         debugLog('ignored late final for an already-submitted interim', { raws });
         return;
       }
-    } else if (!final && submittedInterimRaws && !sameUtterance(submittedInterimRaws, raws)) {
-      // A different interim marks a new utterance; do not let the old guard
-      // consume a legitimate final on the next question.
-      submittedInterimRaws = null;
+    } else if (!final && submittedInterimResultId && submittedInterimResultId !== resultId) {
+      // A different recognition result is a new utterance even when its text
+      // is identical to the answer just submitted on the previous card.
+      submittedInterimResultId = null;
     }
 
     // A real result means recognition is alive — clear any mic-denied/no-mic/
@@ -474,6 +474,18 @@ async function startListener(dictionary: Dictionary): Promise<void> {
     // concern applies to 'help' here.
     const ctx = site.getContext(subjects);
 
+    // A final result can arrive after the next card is visible but before the
+    // debounced card watcher has reset `submitted`. Detect that transition at
+    // the recognition boundary and carry this utterance into the normal card
+    // refresh path instead of discarding it as speech from the previous card.
+    // This is especially noticeable when consecutive questions accept the
+    // same answer, because the user can answer the second one immediately.
+    if (final && site.didContextChange(context, ctx)) {
+      debugLog('answer arrived during card transition; refreshing card first', { raws });
+      void onCardChange({ inputs: rawInputs, resultId });
+      return;
+    }
+
     // Interim results are usually display-only, but short reading answers can
     // get stuck there if Chrome shows a correct interim and never emits the
     // final. Only auto-submit an interim when it already resolves to an
@@ -483,7 +495,7 @@ async function startListener(dictionary: Dictionary): Promise<void> {
       if (!submitted && ctx?.type === 'reading') {
         const interimResult = checkAlternatives(ctx, raws);
         if (interimResult?.success && interimResult.answer) {
-          scheduleMatchedInterimSubmit(ctx, raws, interimResult);
+          scheduleMatchedInterimSubmit(ctx, raws, resultId, interimResult);
           return;
         }
       }
@@ -569,7 +581,9 @@ async function startListener(dictionary: Dictionary): Promise<void> {
   const recognition = recognitionOrNull;
 
   // Refresh subjects + language and clear transcript when the card changes.
-  async function onCardChange(): Promise<void> {
+  async function onCardChange(
+    transitionResult: { inputs: string[]; resultId: string } | null = null,
+  ): Promise<void> {
     const newContext = site.getContext(subjects);
     if (site.didContextChange(context, newContext)) {
       submitted = false;
@@ -580,11 +594,18 @@ async function startListener(dictionary: Dictionary): Promise<void> {
         context = site.getContext(subjects);
         restoreIdleIndicator();
         prefetchUpcoming();
-        retryPendingTranscript();
       } else {
         // Sites without subject fetches (BunPro) still need the indicator
         // refreshed — e.g. flipping between supported and unsupported cards.
         restoreIdleIndicator();
+      }
+      if (transitionResult) {
+        // Re-enter the complete routing pipeline now that the new context is
+        // ready; transition speech may be a command or need normal feedback,
+        // not necessarily a directly-submittable answer.
+        handleRecognitionResult(transitionResult.inputs, true, transitionResult.resultId);
+      } else {
+        retryPendingTranscript();
       }
       setLanguage(recognition, site.getLanguage());
     }
