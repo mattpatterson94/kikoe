@@ -296,6 +296,67 @@ describe('startListener pending transcript retry on the initial card', () => {
     });
     expect(userResponse.value).toBe('below');
   });
+
+  test('switches to Japanese recognition before the next reading card subjects load', async () => {
+    setReviewCardDOM();
+    stampConfig({ hasApiToken: true });
+    const initialSubject = {
+      id: 1, object: 'kanji',
+      data: {
+        slug: '下', characters: '下',
+        meanings: [{ meaning: 'Below', accepted_answer: true }],
+        auxiliary_meanings: [],
+      },
+    };
+    // Other app tests leave real MutationObservers alive in jsdom. Answer
+    // every request for the initial prompt so a stale observer cannot consume
+    // the one-shot interceptor before this app instance receives its data.
+    const respondToInitialRequest = (e) => {
+      const { prompt, category } = e.detail;
+      if (prompt !== '下') return;
+      queueMicrotask(() => document.dispatchEvent(new CustomEvent('kikoe:subjectData', {
+        detail: { prompt, category, subjects: [initialSubject], error: null },
+      })));
+    };
+    document.addEventListener('kikoe:subjectRequest', respondToInitialRequest);
+
+    await importApp();
+
+    const native = MockSpeechRecognition.instances[0];
+    await vi.waitFor(() => {
+      if (native.lang !== 'en-US') throw new Error('initial language not ready');
+      if (document.getElementById('kikoe-idle-label')?.textContent !== 'Listening') {
+        throw new Error('initial subjects not loaded yet');
+      }
+    });
+
+    document.querySelector('.character-header__characters').textContent = '寒い';
+    document.querySelector('.quiz-input__question-category').textContent = 'Vocabulary';
+    document.querySelector('.quiz-input__question-type').textContent = 'Reading';
+
+    // Do not answer the next subject request: reaching ja-JP while that
+    // request is still pending proves the language changes before the wait.
+    await vi.waitFor(() => {
+      if (native.lang !== 'ja-JP') throw new Error('language not changed yet');
+    });
+
+    // Let the listener finish cleanly before the test DOM is torn down.
+    document.dispatchEvent(new CustomEvent('kikoe:subjectData', {
+      detail: {
+        prompt: '寒い', category: 'vocabulary', error: null,
+        subjects: [{
+          id: 2, object: 'vocabulary',
+          data: {
+            slug: '寒い', characters: '寒い',
+            readings: [{ reading: 'さむい', accepted_answer: true }],
+            meanings: [{ meaning: 'Cold', accepted_answer: true }],
+            auxiliary_meanings: [],
+          },
+        }],
+      },
+    }));
+    document.removeEventListener('kikoe:subjectRequest', respondToInitialRequest);
+  });
 });
 
 describe('startListener voice commands', () => {
@@ -1086,6 +1147,19 @@ describe('startListener transcript failure reason hints', () => {
     expect(container.textContent).toContain('no match');
     expect(container.querySelector('.kikoe-chip-clickable')).not.toBeNull();
     expect(container.querySelector('[aria-label*="さむい"]')).not.toBeNull();
+  });
+
+  test('a successful romaji reading displays only the canonical Japanese answer', async () => {
+    const native = await loadReadingSubjects();
+    native.onresult({ resultIndex: 0, results: [finalResult('samui')] });
+
+    const input = document.getElementById('user-response');
+    const container = document.getElementById('kikoe-transcript-container');
+    await vi.waitFor(() => {
+      if (input.value !== 'さむい') throw new Error('answer not submitted yet');
+    });
+    expect(container.textContent).toContain('さむい');
+    expect(container.textContent).not.toContain('samui');
   });
 
   test('confirming a no-match correction submits the intended answer', async () => {
