@@ -55,6 +55,7 @@ interface SiteContext {
   items?: WanikaniSubject[];
   mode?: string;
   revealed?: boolean;
+  postAttempt?: boolean;
 }
 
 type CorrectionTranscript = CheckResult['transcript'] & {
@@ -262,6 +263,7 @@ async function startListener(dictionary: Dictionary): Promise<void> {
   let emptyFinals = 0;
   let restartIndicatorTimer: ReturnType<typeof setTimeout> | undefined;
   let matchedInterimTimer: ReturnType<typeof setTimeout> | undefined;
+  let submittedInterimRaws: string[] | null = null;
 
   // While the help panel is open the mic is paused: the panel displays the
   // words that trigger actions, so reading it aloud must not fire them.
@@ -368,6 +370,11 @@ async function startListener(dictionary: Dictionary): Promise<void> {
     matchedInterimTimer = undefined;
   }
 
+  function sameUtterance(left: string[], right: string[]): boolean {
+    const normalized = new Set(left.map(normalizeCommand));
+    return right.some(raw => normalized.has(normalizeCommand(raw)));
+  }
+
   function scheduleMatchedInterimSubmit(ctx: SiteContext, raws: string[], result: Extract<CheckResult, { success: true }>): void {
     clearMatchedInterimTimer();
     matchedInterimTimer = setTimeout(() => {
@@ -376,8 +383,13 @@ async function startListener(dictionary: Dictionary): Promise<void> {
       if (site.didContextChange(ctx, latestContext)) return;
       if (latestContext?.type !== 'reading') return;
       logTranscript(getSettings(), result.transcript);
-      submitMatchedAnswer(result.answer);
-      debugLog('submitted matched interim after final result stalled', { raws, result });
+      if (submitMatchedAnswer(result.answer)) {
+        // BunPro Lightning Mode can advance before Chrome emits the final for
+        // this utterance. Remember it across the card change so that late
+        // final is not checked against the next question as a false miss.
+        submittedInterimRaws = raws;
+        debugLog('submitted matched interim after final result stalled', { raws, result });
+      }
     }, MATCHED_INTERIM_SUBMIT_MS);
   }
 
@@ -432,6 +444,21 @@ async function startListener(dictionary: Dictionary): Promise<void> {
       return;
     }
     emptyFinals = 0;
+
+    if (final && submittedInterimRaws) {
+      const submittedRaws = submittedInterimRaws;
+      submittedInterimRaws = null;
+      clearMatchedInterimTimer();
+      if (sameUtterance(submittedRaws, raws)) {
+        debugLog('ignored late final for an already-submitted interim', { raws });
+        return;
+      }
+    } else if (!final && submittedInterimRaws && !sameUtterance(submittedInterimRaws, raws)) {
+      // A different interim marks a new utterance; do not let the old guard
+      // consume a legitimate final on the next question.
+      submittedInterimRaws = null;
+    }
+
     // A real result means recognition is alive — clear any mic-denied/no-mic/
     // reconnecting indicator left over from a prior error.
     restoreIdleIndicator();

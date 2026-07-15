@@ -557,6 +557,12 @@ describe('startListener BunPro Reveal & Grade cards', () => {
     return alternatives;
   }
 
+  function interimResult(...transcripts) {
+    const alternatives = transcripts.map(t => ({ transcript: t }));
+    alternatives.isFinal = false;
+    return alternatives;
+  }
+
   test('a reveal card shows the Listening indicator, not unsupported', async () => {
     addMetadata();
     addButton('Show Answer');
@@ -671,6 +677,49 @@ describe('startListener BunPro Reveal & Grade cards', () => {
 
     expect(input.value).toBe('おとこ');
     expect(submitSpy).toHaveBeenCalled();
+  });
+
+  test('a late final for an interim-submitted answer does not show a mismatch on the next card', async () => {
+    const meta = addMetadata({
+      'data-meta-input-mode': 'manual',
+      'data-meta-question-mode': 'cloze',
+      'data-meta-answers-array': JSON.stringify(['おとこ']),
+    });
+    const input = document.createElement('input');
+    input.id = 'js-manual-input';
+    document.body.appendChild(input);
+    const submit = document.createElement('button');
+    submit.className = 'InputManual__button';
+    document.body.appendChild(submit);
+    stampConfig({ hasApiToken: true });
+    await importApp();
+
+    const native = MockSpeechRecognition.instances[0];
+    vi.useFakeTimers();
+    try {
+      native.onresult({ resultIndex: 0, results: [interimResult('おとこ')] });
+      vi.advanceTimersByTime(900);
+      expect(input.value).toBe('おとこ');
+
+      meta.setAttribute('data-meta-is-post-attempt', 'true');
+      meta.setAttribute('data-meta-total-submissions-count', '1');
+      await Promise.resolve();
+      vi.advanceTimersByTime(60);
+
+      meta.setAttribute('data-meta-is-post-attempt', 'false');
+      meta.setAttribute('data-meta-info', JSON.stringify({ id: 807, type: 'grammar' }));
+      meta.setAttribute('data-meta-answers-array', JSON.stringify(['おんな']));
+      await Promise.resolve();
+      vi.advanceTimersByTime(60);
+
+      native.onresult({ resultIndex: 0, results: [finalResult('おとこ')] });
+      expect(document.getElementById('kikoe-transcript-container').textContent).not.toContain('no match');
+
+      native.onresult({ resultIndex: 0, results: [finalResult('おんな')] });
+      expect(input.value).toBe('おんな');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 
