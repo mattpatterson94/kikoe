@@ -17,7 +17,7 @@ const FATAL_ERRORS = new Set<SpeechRecognitionErrorCode>([
 const NETWORK_BACKOFF_MS = 1000;
 const MAX_NETWORK_BACKOFF_MS = 8000;
 
-export type TranscriptCallback = (transcripts: string[], isFinal: boolean) => void;
+export type TranscriptCallback = (transcripts: string[], isFinal: boolean, resultId: string) => void;
 
 // The native recognizer, extended with pause/resume/restart controls that
 // manage the auto-restart behavior wired up in createRecognition.
@@ -50,6 +50,7 @@ export function createRecognition(
   recognition.lang = getLang();
   let shouldAutoRestart = true;
   let networkErrorStreak = 0;
+  let sessionId = 0;
   const start = recognition.start.bind(recognition);
   const stop = recognition.stop.bind(recognition);
 
@@ -57,6 +58,7 @@ export function createRecognition(
     recognition.lang = getLang();
     try {
       start();
+      sessionId++;
     } catch (err) {
       if (!(err instanceof Error) || err.name !== 'InvalidStateError') throw err;
     }
@@ -78,7 +80,7 @@ export function createRecognition(
       // Interim results are only ever given one alternative by the engine;
       // final results may carry up to maxAlternatives, ranked by confidence.
       const transcripts = Array.from(result, alt => alt.transcript.trim());
-      callback(transcripts, result.isFinal);
+      callback(transcripts, result.isFinal, `${sessionId}:${i}`);
     }
   };
 

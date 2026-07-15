@@ -243,6 +243,59 @@ describe('startListener pending transcript retry on the initial card', () => {
     native.onresult({ resultIndex: 0, results: [finalResult('under')] });
     expect(userResponse.value).toBe('below');
   });
+
+  test('submits the same answer on the next card before the card watcher debounce finishes', async () => {
+    setReviewCardDOM();
+    stampConfig({ hasApiToken: true });
+    const firstRequest = interceptSubjectRequest();
+
+    await importApp();
+    await firstRequest.ready;
+    firstRequest.respond([{
+      id: 1, object: 'kanji',
+      data: {
+        slug: '下', characters: '下',
+        meanings: [{ meaning: 'Below', accepted_answer: true }],
+        auxiliary_meanings: [],
+      },
+    }]);
+
+    const native = MockSpeechRecognition.instances[0];
+    const userResponse = document.getElementById('user-response');
+    const submitButton = document.querySelector('.quiz-input__submit-button');
+    const clickSpy = vi.spyOn(submitButton, 'click');
+    await vi.waitFor(() => {
+      if (document.getElementById('kikoe-idle-label')?.textContent !== 'Listening') {
+        throw new Error('subjects not loaded yet');
+      }
+    });
+
+    native.onresult({ resultIndex: 0, results: [finalResult('below')] });
+    expect(clickSpy).toHaveBeenCalledTimes(1);
+
+    // WaniKani has rendered the next prompt, but MutationObserver's 50 ms
+    // settling timer has not fired yet. The next card intentionally accepts
+    // the exact same spoken answer as the previous one.
+    userResponse.value = '';
+    const secondRequest = interceptSubjectRequest();
+    document.querySelector('.character-header__characters').textContent = '上';
+    native.onresult({ resultIndex: 0, results: [finalResult('below')] });
+
+    await secondRequest.ready;
+    secondRequest.respond([{
+      id: 2, object: 'kanji',
+      data: {
+        slug: '上', characters: '上',
+        meanings: [{ meaning: 'Below', accepted_answer: true }],
+        auxiliary_meanings: [],
+      },
+    }]);
+
+    await vi.waitFor(() => {
+      if (clickSpy.mock.calls.length !== 2) throw new Error('second answer not submitted yet');
+    });
+    expect(userResponse.value).toBe('below');
+  });
 });
 
 describe('startListener voice commands', () => {
@@ -679,6 +732,31 @@ describe('startListener BunPro Reveal & Grade cards', () => {
     expect(submitSpy).toHaveBeenCalled();
   });
 
+  test('routes a command normally when it arrives during a card transition', async () => {
+    const meta = addMetadata({
+      'data-meta-input-mode': 'manual',
+      'data-meta-question-mode': 'cloze',
+      'data-meta-answers-array': JSON.stringify(['おとこ']),
+    });
+    const input = document.createElement('input');
+    input.id = 'js-manual-input';
+    document.body.appendChild(input);
+    const submit = document.createElement('button');
+    submit.className = 'InputManual__button';
+    document.body.appendChild(submit);
+    stampConfig({ hasApiToken: true });
+    await importApp();
+
+    // The new card is visible, but the watcher has not run yet. Transition
+    // speech must re-enter normal command routing after the context refresh.
+    meta.setAttribute('data-meta-info', JSON.stringify({ id: 807, type: 'grammar' }));
+    const native = MockSpeechRecognition.instances[0];
+    native.onresult({ resultIndex: 0, results: [finalResult('pause')] });
+
+    expect(document.getElementById('kikoe-idle-label').textContent).toBe('Muted');
+    expect(input.value).toBe('');
+  });
+
   test('a late final for an interim-submitted answer does not show a mismatch on the next card', async () => {
     const meta = addMetadata({
       'data-meta-input-mode': 'manual',
@@ -717,6 +795,56 @@ describe('startListener BunPro Reveal & Grade cards', () => {
 
       native.onresult({ resultIndex: 0, results: [finalResult('おんな')] });
       expect(input.value).toBe('おんな');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test('the next card can submit the same answer as an interim-submitted answer', async () => {
+    const meta = addMetadata({
+      'data-meta-input-mode': 'manual',
+      'data-meta-question-mode': 'cloze',
+      'data-meta-answers-array': JSON.stringify(['おとこ']),
+    });
+    const input = document.createElement('input');
+    input.id = 'js-manual-input';
+    document.body.appendChild(input);
+    const submit = document.createElement('button');
+    submit.className = 'InputManual__button';
+    document.body.appendChild(submit);
+    const submitSpy = vi.spyOn(submit, 'click');
+    stampConfig({ hasApiToken: true });
+    await importApp();
+
+    const native = MockSpeechRecognition.instances[0];
+    vi.useFakeTimers();
+    try {
+      native.onresult({ resultIndex: 0, results: [interimResult('おとこ')] });
+      vi.advanceTimersByTime(900);
+      expect(submitSpy).toHaveBeenCalledTimes(1);
+
+      meta.setAttribute('data-meta-is-post-attempt', 'true');
+      meta.setAttribute('data-meta-total-submissions-count', '1');
+      await Promise.resolve();
+      vi.advanceTimersByTime(60);
+
+      meta.setAttribute('data-meta-is-post-attempt', 'false');
+      meta.setAttribute('data-meta-info', JSON.stringify({ id: 807, type: 'grammar' }));
+      await Promise.resolve();
+      vi.advanceTimersByTime(60);
+
+      input.value = '';
+      native.onresult({
+        resultIndex: 1,
+        results: [finalResult('おとこ'), interimResult('おとこ')],
+      });
+      native.onresult({
+        resultIndex: 1,
+        results: [finalResult('おとこ'), finalResult('おとこ')],
+      });
+
+      expect(input.value).toBe('おとこ');
+      expect(submitSpy).toHaveBeenCalledTimes(2);
     } finally {
       vi.useRealTimers();
     }
