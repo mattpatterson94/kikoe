@@ -211,6 +211,20 @@ describe('reading questions', () => {
     expect(r.answer).toBe('せんだい');
   });
 
+  test('REGRESSION: matches a BunPro katakana answer and preserves its canonical script', () => {
+    const ctx = { type: 'reading', prompt: 'bunpro:katakana', readings: ['カタカナ'] };
+    const r = checkAnswer(ctx, makeTransformers(), 'カタカナ');
+    expectSuccess(r);
+    expect(r.answer).toBe('カタカナ');
+  });
+
+  test('REGRESSION: matches hiragana speech against a BunPro katakana answer', () => {
+    const ctx = { type: 'reading', prompt: 'bunpro:katakana', readings: ['カタカナ'] };
+    const r = checkAnswer(ctx, makeTransformers(), 'かたかな');
+    expectSuccess(r);
+    expect(r.answer).toBe('カタカナ');
+  });
+
   // Bug reproduction: SR returns kanji (何月) for a compound JMdict doesn't
   // list, so no whole-word lookup can produce the kana reading.
   test('REGRESSION: converts kanji compounds missing from JMdict (何月 → なんがつ)', () => {
@@ -382,6 +396,14 @@ describe('custom corrections', () => {
     const r = checkAnswer(ctx, makeTransformers(), 'celery', { corrections });
     expectSuccess(r);
     expect(r.answer).toBe('しり');
+  });
+
+  test('REGRESSION: reading correction matches a BunPro katakana intended answer', () => {
+    const ctx = { type: 'reading', prompt: 'bunpro:katakana', readings: ['カタカナ'] };
+    const corrections = [{ heard: 'car talker', intended: 'カタカナ' }];
+    const r = checkAnswer(ctx, makeTransformers(), 'car talker', { corrections });
+    expectSuccess(r);
+    expect(r.answer).toBe('カタカナ');
   });
 
   test('reading: user entry takes precedence over the built-in homonym table', () => {

@@ -199,6 +199,17 @@ function kanaForms(kana: string): Set<string> {
   ]);
 }
 
+// Match readings independent of whether the site supplies them in hiragana or
+// katakana. WaniKani readings are normally hiragana, while BunPro can expose a
+// katakana answer verbatim. Return the site's canonical spelling so that the
+// submitted answer is exactly one it advertised as accepted.
+function matchingReading(kana: string, acceptedReadings: string[]): string | null {
+  const candidateForms = kanaForms(kana);
+  return acceptedReadings.find(accepted => (
+    [...kanaForms(accepted)].some(form => candidateForms.has(form))
+  )) ?? null;
+}
+
 // Whether any candidate resolves to one of the accepted readings — used to
 // detect a meaning-question answer that was actually the reading (or vice
 // versa), so the failure can be reported as "wrong type" instead of a bare
@@ -211,18 +222,14 @@ function matchesAnyReading(
   if (!acceptedReadings.length) return false;
   for (const c of candidates) {
     if (isKana(c.data)) {
-      for (const answer of kanaForms(c.data)) {
-        if (acceptedReadings.includes(answer)) return true;
-      }
+      if (matchingReading(c.data, acceptedReadings)) return true;
     }
     for (const intended of customLookup[c.data.toLowerCase()] || []) {
-      for (const answer of kanaForms(intended)) {
-        if (acceptedReadings.includes(answer)) return true;
-      }
+      if (matchingReading(intended, acceptedReadings)) return true;
     }
     const h = homonyms[c.data.toLowerCase()];
     const hReadings = Array.isArray(h) ? h : (h ? [h] : []);
-    if (hReadings.some(r => acceptedReadings.includes(r))) return true;
+    if (hReadings.some(r => matchingReading(r, acceptedReadings))) return true;
   }
   return false;
 }
@@ -314,46 +321,40 @@ export function checkAnswer(
   if (type === 'reading') {
     const acceptedReadings = (context.readings || []);
 
-    function matchesReading(kana: string): boolean {
-      if (acceptedReadings.length === 0) return false;
-      return acceptedReadings.includes(kana);
-    }
-
     for (const c of candidates) {
       // isKana is strict: only pure hiragana/katakana passes.
       // isJapanese would also match kanji, but toHiragana can't convert kanji
       // to kana — submitting kanji would always be rejected by WaniKani.
       if (isKana(c.data)) {
-        for (const answer of kanaForms(c.data)) {
-          if (matchesReading(answer)) {
-            return {
-              success: true,
-              answer,
-              transcript: { raw, matched: answer !== raw ? answer : undefined },
-            };
-          }
+        const answer = matchingReading(c.data, acceptedReadings);
+        if (answer) {
+          return {
+            success: true,
+            answer,
+            transcript: { raw, matched: answer !== raw ? answer : undefined },
+          };
         }
       }
       // User corrections first, so they can override the built-in homonyms.
       // kanaForms also converts a romaji intended value ("shiri" → しり).
       for (const intended of customLookup[c.data.toLowerCase()] || []) {
-        for (const answer of kanaForms(intended)) {
-          if (matchesReading(answer)) {
-            return { success: true, answer, transcript: { raw, matched: answer } };
-          }
+        const answer = matchingReading(intended, acceptedReadings);
+        if (answer) {
+          return { success: true, answer, transcript: { raw, matched: answer } };
         }
       }
       const h = homonyms[c.data.toLowerCase()];
       const readings = Array.isArray(h) ? h : (h ? [h] : []);
-      const matched = readings.find(matchesReading);
+      const matched = readings.map(reading => matchingReading(reading, acceptedReadings)).find(Boolean);
       if (matched) {
         return { success: true, answer: matched, transcript: { raw, matched } };
       }
     }
     // Fallback: try converting raw (works for romaji like "shita" → "した").
     for (const fallback of kanaForms(raw)) {
-      if (isKana(fallback) && matchesReading(fallback)) {
-        return { success: true, answer: fallback, transcript: { raw } };
+      const answer = isKana(fallback) ? matchingReading(fallback, acceptedReadings) : null;
+      if (answer) {
+        return { success: true, answer, transcript: { raw } };
       }
     }
     return {
