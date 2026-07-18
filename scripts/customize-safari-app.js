@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const appDir = process.argv[2] || 'Kikoe';
@@ -7,7 +7,6 @@ const files = {
   html: join(appDir, 'Shared (App)', 'Resources', 'Base.lproj', 'Main.html'),
   css: join(appDir, 'Shared (App)', 'Resources', 'Style.css'),
   js: join(appDir, 'Shared (App)', 'Resources', 'Script.js'),
-  viewController: join(appDir, 'Shared (App)', 'ViewController.swift'),
 };
 
 for (const file of Object.values(files)) {
@@ -39,7 +38,6 @@ writeFileSync(files.html, `<!DOCTYPE html>
                 <li>Go to Apps &gt; Safari &gt; Extensions.</li>
                 <li>Turn on Kikoe and allow WaniKani and BunPro access.</li>
             </ol>
-            <button class="open-settings">Open Settings</button>
             <p class="note">On some iOS versions, Safari is listed directly in Settings instead of under Apps.</p>
         </section>
 
@@ -243,65 +241,6 @@ function postControllerMessage(message) {
 document.querySelector("button.open-preferences")?.addEventListener("click", () => {
     postControllerMessage("open-preferences");
 });
-
-document.querySelector("button.open-settings")?.addEventListener("click", () => {
-    postControllerMessage("open-settings");
-});
 `);
-
-let viewController = readFileSync(files.viewController, 'utf8');
-const oldHandler = `    func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
-#if os(macOS)
-        if (message.body as! String != "open-preferences") {
-            return
-        }
-
-        SFSafariApplication.showPreferencesForExtension(withIdentifier: extensionBundleIdentifier) { error in
-            guard error == nil else {
-                // Insert code to inform the user that something went wrong.
-                return
-            }
-
-            DispatchQueue.main.async {
-                NSApp.terminate(self)
-            }
-        }
-#endif
-    }`;
-const newHandler = `    func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
-        guard let message = message.body as? String else {
-            return
-        }
-
-#if os(iOS)
-        if message == "open-settings",
-           let url = URL(string: UIApplication.openSettingsURLString) {
-            UIApplication.shared.open(url)
-        }
-#elseif os(macOS)
-        if message != "open-preferences" {
-            return
-        }
-
-        SFSafariApplication.showPreferencesForExtension(withIdentifier: extensionBundleIdentifier) { error in
-            guard error == nil else {
-                // Insert code to inform the user that something went wrong.
-                return
-            }
-
-            DispatchQueue.main.async {
-                NSApp.terminate(self)
-            }
-        }
-#endif
-    }`;
-
-if (!viewController.includes(oldHandler) && !viewController.includes(newHandler)) {
-  console.error(`Could not find expected message handler in ${files.viewController}`);
-  process.exit(1);
-}
-
-viewController = viewController.replace(oldHandler, newHandler);
-writeFileSync(files.viewController, viewController);
 
 console.log(`Customized Safari containing app at ${appDir}`);
