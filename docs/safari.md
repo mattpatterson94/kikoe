@@ -22,10 +22,13 @@ After conversion, customize the generated containing app page:
 npm run safari:customize-app -- Kikoe
 ```
 
-The customized iOS app page includes setup steps and an **Open Settings**
-button. iOS only exposes a public URL for opening the app's Settings page, so
-the page still tells users to navigate to **Apps > Safari > Extensions > Kikoe**
-from there instead of relying on private Settings URLs.
+The customized iOS app page includes setup steps telling users to navigate to
+**Apps > Safari > Extensions > Kikoe** themselves. There's no button for this —
+iOS only exposes a public URL for opening the app's *own* Settings page, not
+Safari's, so a button would just drop users on Kikoe's (empty) settings entry
+instead of anywhere useful. The macOS page keeps its **Quit and Open Safari
+Extensions Preferences...** button, which correctly opens Safari's Extensions
+pane via `SFSafariApplication.showPreferencesForExtension`.
 
 ## What This Reuses
 
