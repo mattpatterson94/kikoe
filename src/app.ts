@@ -32,6 +32,19 @@ const EMPTY_FINAL_RESTART_THRESHOLD = 3;
 const RESTARTING_INDICATOR_MS = 900;
 const MATCHED_INTERIM_SUBMIT_MS = 900;
 
+// window blur/focus exist as page-activity signals for the desktop case
+// visibilitychange misses: alt-tabbing to another app while the browser
+// window (and this tab) stays visible on screen. Touch-primary devices have
+// no such state — backgrounding is always a real visibilitychange there —
+// but dismissing the on-screen keyboard blurs whatever input triggered it,
+// which some of these browsers report as the window itself losing focus.
+// That falsely paused recognition every time the keyboard was dismissed
+// (see https://github.com/mattpatterson94/kikoe/issues/79), so blur is only
+// trusted as "the user left" on devices where a mouse/trackpad is primary.
+function isTouchPrimaryDevice(): boolean {
+  return typeof window.matchMedia === 'function' && window.matchMedia('(pointer: coarse)').matches;
+}
+
 // Maps a SpeechRecognition error type to the idle-indicator state that
 // explains it to the user. Errors with no entry here (e.g. 'aborted') keep
 // whatever indicator state is already showing — recognition.ts still logs them.
@@ -297,7 +310,7 @@ async function startListener(dictionary: Dictionary): Promise<void> {
 
   function isPageActive(): boolean {
     const hidden = document.hidden || document.visibilityState === 'hidden';
-    const blurred = typeof document.hasFocus === 'function' && !document.hasFocus();
+    const blurred = !isTouchPrimaryDevice() && typeof document.hasFocus === 'function' && !document.hasFocus();
     return !hidden && !blurred;
   }
 
