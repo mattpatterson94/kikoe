@@ -7,6 +7,7 @@ const Selectors = {
   Prompt: 'div.character-header__characters',
   Synonyms: '#quiz-user-synonyms script',
   Next: 'button.quiz-input__submit-button',
+  Input: '#user-response',
 };
 
 // Path segment matchers, anchored so lookalikes (e.g. "/preview", a
@@ -248,9 +249,29 @@ export function markWrong(): boolean {
 }
 
 export function inputAnswer(input: string): void {
-  const userResponse = document.querySelector<HTMLInputElement>('#user-response');
+  const userResponse = document.querySelector<HTMLInputElement>(Selectors.Input);
   if (!userResponse) return;
   userResponse.value = input;
+}
+
+// Whether the adapter can still see everything it needs to drive a card.
+//
+// Every read above goes through a WaniKani class name, and those churn — the
+// speed enhancer already carries a fallback selector and tolerates two
+// spellings of the result attribute for exactly this reason. When a rename
+// lands, getContext quietly returns nulls, nothing matches, and the
+// indicator goes on claiming to listen. This is what turns that silence into
+// something visible (see the health check in app.ts).
+//
+// Only pages that actually present a question are asserted: lesson *content*
+// has no input by design, and item pages are informational, so demanding one
+// there would report a healthy page as broken.
+export function canReadPage(): boolean {
+  const context = getContext();
+  if (!context) return false;
+  if (context.page !== 'review' && context.page !== 'quiz') return true;
+  if (!context.prompt || !context.type) return false;
+  return !!document.querySelector(Selectors.Input);
 }
 
 export function submitAnswer(input: string): boolean {

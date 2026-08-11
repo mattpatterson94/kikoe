@@ -2,7 +2,7 @@ import {
   getLanguage, getContext, didContextChange,
   inputAnswer, submitAnswer, markWrong, clickNext, clickInfo,
   reveal, gradeGood, gradeBad,
-  createCardWatcher,
+  createCardWatcher, canReadPage,
 } from '../src/bunpro';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -397,5 +397,58 @@ describe('createCardWatcher', () => {
     addMetadata({ 'data-meta-info': JSON.stringify({ id: 900, type: 'grammar_point' }) });
     await flushObserver();
     expect(onChange).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ── canReadPage ───────────────────────────────────────────────────────────────
+
+describe('canReadPage', () => {
+  test('true when a manual-input card renders its metadata and input', () => {
+    addMetadata();
+    addInput();
+    expect(canReadPage()).toBe(true);
+  });
+
+  // #quiz-metadata-element is the documented third-party surface; losing it
+  // means every read below it returns nothing.
+  test('false when the metadata element is absent', () => {
+    addInput();
+    expect(canReadPage()).toBe(false);
+  });
+
+  test('false when the manual input is missing', () => {
+    addMetadata();
+    expect(canReadPage()).toBe(false);
+  });
+
+  // BunPro swaps the input out once the card is graded, and there is nothing
+  // left to drive at that point anyway.
+  test('true for a graded card even without an input', () => {
+    addMetadata({ 'data-meta-is-post-attempt': 'true' });
+    expect(canReadPage()).toBe(true);
+  });
+
+  test('true on a Reveal & Grade card showing its reveal button', () => {
+    addMetadata({ 'data-meta-input-mode': 'reveal' });
+    addButton('Show Answer');
+    expect(canReadPage()).toBe(true);
+  });
+
+  test('false on a Reveal & Grade card with no reveal button', () => {
+    addMetadata({ 'data-meta-input-mode': 'reveal' });
+    expect(canReadPage()).toBe(false);
+  });
+
+  test('true on a revealed card showing both grade buttons', () => {
+    addMetadata({ 'data-meta-input-mode': 'reveal', 'data-meta-is-post-attempt': 'true' });
+    addButton('Good');
+    addButton('Bad');
+    expect(canReadPage()).toBe(true);
+  });
+
+  test('false on a revealed card missing a grade button', () => {
+    addMetadata({ 'data-meta-input-mode': 'reveal', 'data-meta-is-post-attempt': 'true' });
+    addButton('Good');
+    expect(canReadPage()).toBe(false);
   });
 });

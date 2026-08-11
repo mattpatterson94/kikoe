@@ -309,3 +309,13 @@ describe('showIdleIndicator click-to-toggle', () => {
     expect(() => document.getElementById('kikoe-idle').click()).not.toThrow();
   });
 });
+
+describe('setIdleIndicatorState cannot-read-page', () => {
+  test('labels an unreadable page and styles it as an error', () => {
+    showIdleIndicator(settings());
+    setIdleIndicatorState('cannot-read-page');
+
+    expect(document.getElementById('kikoe-idle-label').textContent).toMatch(/can't read this page/i);
+    expect(document.getElementById('kikoe-idle').classList.contains('kikoe-chip-error')).toBe(true);
+  });
+});

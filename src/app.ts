@@ -65,6 +65,15 @@ function isTouchPrimaryDevice(): boolean {
 // a real "attention elsewhere" blur (Split View, backgrounding) does not.
 const TOUCH_BLUR_GRACE_MS = 400;
 
+// How long the page has to stay unreadable before the indicator says so, and
+// how often that's re-evaluated. Card transitions routinely leave the DOM
+// half-built for a moment — the grace window is what keeps a normal advance
+// from flashing an error. Re-checking on a timer (rather than only on events)
+// is what lets the state clear itself again once the page recovers, since a
+// page nobody can read produces no events to recover on.
+const PAGE_HEALTH_GRACE_MS = 3000;
+const PAGE_HEALTH_CHECK_MS = 1000;
+
 // Maps a SpeechRecognition error type to the idle-indicator state that
 // explains it to the user. Errors with no entry here (e.g. 'aborted') keep
 // whatever indicator state is already showing — recognition.ts still logs them.
@@ -104,6 +113,7 @@ type CorrectionTranscript = CheckResult['transcript'] & {
 interface SiteAdapter {
   getLanguage(): string;
   getContext(subjects?: WanikaniSubject[]): SiteContext | null;
+  canReadPage(): boolean;
   didContextChange(oldContext: SiteContext | null | undefined, newContext: SiteContext | null | undefined): boolean;
   clickNext(): boolean;
   markWrong(): boolean;
@@ -202,13 +212,47 @@ async function startListener(dictionary: Dictionary): Promise<void> {
   // Listening" calls elsewhere (see #78 — those calls otherwise mask a
   // revoked permission until recognition itself gets around to failing).
   let micPermissionDenied = false;
+  // Set by the health check below once the adapter has been unable to read
+  // the page for longer than the grace window — a site redesign, most
+  // likely. Ranked above the context-derived states because when the page
+  // can't be read, whatever context says about it is meaningless.
+  let pageUnreadable = false;
 
   function restoreIdleIndicator(): void {
     if (micPermissionDenied) setIdleIndicatorState('mic-denied');
     else if (userMuted) setIdleIndicatorState('muted');
+    else if (pageUnreadable) setIdleIndicatorState('cannot-read-page');
     else if (context?.mode === 'unsupported') setIdleIndicatorState('unsupported');
     else if (subjectsLoadFailed) setIdleIndicatorState('error');
     else setIdleIndicatorState(_config.hasApiToken ? 'listening' : 'no-token');
+  }
+
+  // Watches whether the adapter can still see what it needs, and latches a
+  // visible state when it can't. Deliberately tolerant: a single failed read
+  // during a card transition means nothing, so the condition has to hold for
+  // PAGE_HEALTH_GRACE_MS before it's reported, and it clears the moment the
+  // page becomes readable again.
+  let unreadableSince: number | null = null;
+
+  function checkPageHealth(): void {
+    if (site.canReadPage()) {
+      unreadableSince = null;
+      if (pageUnreadable) {
+        pageUnreadable = false;
+        debugLog('page became readable again');
+        restoreIdleIndicator();
+      }
+      return;
+    }
+    if (unreadableSince === null) {
+      unreadableSince = Date.now();
+      return;
+    }
+    if (!pageUnreadable && Date.now() - unreadableSince >= PAGE_HEALTH_GRACE_MS) {
+      pageUnreadable = true;
+      console.error('[kikoe] cannot read this page — the site markup may have changed');
+      restoreIdleIndicator();
+    }
   }
 
   async function loadSubjects(prompt: string, category: string): Promise<WanikaniSubject[]> {
@@ -739,6 +783,8 @@ async function startListener(dictionary: Dictionary): Promise<void> {
   }
 
   site.createCardWatcher(onCardChange);
+
+  setInterval(checkPageHealth, PAGE_HEALTH_CHECK_MS);
 
   startSpeedEnhancer(getSettings);
 
