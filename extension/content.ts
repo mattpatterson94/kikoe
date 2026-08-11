@@ -195,6 +195,149 @@ export function subjectCacheKey(category: string, prompt: string): string {
   return CACHE_PREFIX + category + '_' + prompt;
 }
 
+// Cached subjects are wrapped rather than stored as bare arrays so that a
+// change to the pruned shape can invalidate everything instead of being read
+// as though it were current (that shape has changed before — see the "older
+// cached shapes have varied" note in src/wanikani.ts), and so entries whose
+// underlying WaniKani data may have moved on can be refreshed. User synonyms
+// in particular are edited on the site, not here, so a cache that never
+// expires serves stale meanings indefinitely.
+export const CACHE_SCHEMA_VERSION = 1;
+export const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
+// A self-imposed ceiling. The point is no longer the browser's 10 MB cap —
+// the manifest now requests unlimitedStorage, which is what stopped writes
+// failing outright — but keeping the store small enough that reads stay fast
+// and an abandoned session's prefetched queue doesn't linger forever.
+export const CACHE_BUDGET_BYTES = 4 * 1024 * 1024;
+// Evicting exactly to the budget would re-trigger on the very next write, so
+// clear extra headroom and make eviction occasional instead of constant.
+const CACHE_EVICT_TO_FRACTION = 0.8;
+
+interface SubjectCacheEntry {
+  v: number;
+  t: number;
+  s: WanikaniSubject[];
+}
+
+export function packSubjectCacheEntry(subjects: WanikaniSubject[], now = Date.now()): SubjectCacheEntry {
+  return { v: CACHE_SCHEMA_VERSION, t: now, s: subjects };
+}
+
+// Returns the cached subjects, or null when the entry can't be trusted:
+// wrong or missing version (which is also how the legacy bare-array shape
+// reads), expired, or empty. Empty is a miss on purpose — earlier versions
+// cached failed lookups, which permanently broke the affected card.
+export function readSubjectCacheEntry(raw: unknown, now = Date.now()): WanikaniSubject[] | null {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const entry = raw as Partial<SubjectCacheEntry>;
+  if (entry.v !== CACHE_SCHEMA_VERSION) return null;
+  if (typeof entry.t !== 'number' || now - entry.t > CACHE_TTL_MS) return null;
+  if (!Array.isArray(entry.s) || !entry.s.length) return null;
+  return entry.s;
+}
+
+// Cache reads never throw: a storage failure is a reason to do the work
+// again, never a reason to fail the caller.
+async function readSubjectCache(key: string): Promise<WanikaniSubject[] | null> {
+  try {
+    const stored = await chrome.storage.local.get(key) as Record<string, unknown>;
+    return readSubjectCacheEntry(stored[key]);
+  } catch (err) {
+    console.error('[kikoe] subject cache read failed:', err);
+    return null;
+  }
+}
+
+// Writes report success instead of throwing, because the two callers want
+// opposite things from a failure: the per-card path already holds the
+// subjects and must return them regardless, while the prefetch path exists
+// only to populate the cache and needs to know it achieved nothing so the
+// batch can be retried.
+async function writeSubjectCache(
+  entries: Record<string, WanikaniSubject[]>,
+  protect: string[] = [],
+): Promise<boolean> {
+  const updates: Record<string, SubjectCacheEntry> = {};
+  for (const [key, subjects] of Object.entries(entries)) {
+    if (subjects.length) updates[key] = packSubjectCacheEntry(subjects);
+  }
+  const keys = Object.keys(updates);
+  if (!keys.length) return true;
+
+  try {
+    await chrome.storage.local.set(updates);
+  } catch (err) {
+    console.error('[kikoe] subject cache write failed:', err);
+    return false;
+  }
+  // Eviction is housekeeping — it runs after the write has already
+  // succeeded, so its own failure must not report the write as failed.
+  try {
+    await evictSubjectCache([...protect, ...keys]);
+  } catch (err) {
+    console.error('[kikoe] subject cache eviction failed:', err);
+  }
+  return true;
+}
+
+// Chooses which cached subject entries to drop, given everything currently
+// in storage. Only CACHE_PREFIX keys are considered — the radical set is
+// expensive to rebuild (a full paginated fetch) and the token-discovery
+// flags aren't cache at all, so neither is ever evicted.
+export function planCacheEviction(
+  all: Record<string, unknown>,
+  protect: string[] = [],
+  budget = CACHE_BUDGET_BYTES,
+): string[] {
+  const protectedKeys = new Set(protect);
+  const evictable: { key: string; t: number; size: number }[] = [];
+  let total = 0;
+
+  for (const [key, value] of Object.entries(all)) {
+    if (!key.startsWith(CACHE_PREFIX)) continue;
+    const size = key.length + JSON.stringify(value ?? null).length;
+    total += size;
+    if (protectedKeys.has(key)) continue;
+    const entry = value as Partial<SubjectCacheEntry> | null;
+    const t = entry && typeof entry === 'object' && typeof entry.t === 'number' ? entry.t : 0;
+    evictable.push({ key, t, size });
+  }
+
+  if (total <= budget) return [];
+
+  // Oldest write first. Not strictly LRU: tracking real access order would
+  // mean a storage write on every cache *read*, which costs more than the
+  // imprecision does. Prefetch writes run ahead of use, so write order
+  // tracks use order closely in practice, and anything mis-evicted is one
+  // API call away.
+  evictable.sort((a, b) => a.t - b.t);
+  const target = budget * CACHE_EVICT_TO_FRACTION;
+  const doomed: string[] = [];
+  for (const entry of evictable) {
+    if (total <= target) break;
+    doomed.push(entry.key);
+    total -= entry.size;
+  }
+  return doomed;
+}
+
+// Enumerating the whole store is expensive, so the scan is gated behind
+// getBytesInUse, which is cheap. Where neither that nor remove() is
+// available, eviction simply doesn't run: the budget is housekeeping, not
+// correctness, and every entry is re-fetchable.
+async function evictSubjectCache(protect: string[] = []): Promise<void> {
+  const local = chrome.storage.local;
+  if (typeof local.getBytesInUse !== 'function' || typeof local.remove !== 'function') return;
+  if (await local.getBytesInUse(null) <= CACHE_BUDGET_BYTES) return;
+
+  const doomed = planCacheEviction(await local.get(null) as Record<string, unknown>, protect);
+  if (doomed.length) {
+    debugLog(`evicting ${doomed.length} cached subject entries`);
+    await local.remove(doomed);
+  }
+}
+
 // Image-only radicals display their lowercased, space-separated name instead
 // of characters (see getPrompt's aria-label fallback in src/wanikani.ts).
 function promptForSubject(subject: WanikaniSubject): string | null {
@@ -223,8 +366,8 @@ function pruneSubject(s: WanikaniSubject): WanikaniSubject {
 // slugs= filter can never find a radical by its displayed character. Fetch
 // the complete radical set once (~500, one page) and match locally.
 async function fetchAllRadicals(apiToken: string | null): Promise<WanikaniSubject[]> {
-  const cached = await chrome.storage.local.get(RADICALS_CACHE_KEY) as Record<string, WanikaniSubject[] | undefined>;
-  if (cached[RADICALS_CACHE_KEY]?.length) return cached[RADICALS_CACHE_KEY];
+  const cached = await readSubjectCache(RADICALS_CACHE_KEY);
+  if (cached) return cached;
 
   const radicals: WanikaniSubject[] = [];
   let url: string | null = 'https://api.wanikani.com/v2/subjects?types=radical';
@@ -233,7 +376,10 @@ async function fetchAllRadicals(apiToken: string | null): Promise<WanikaniSubjec
     radicals.push(...(json.data || []).map(pruneSubject));
     url = json.pages?.next_url || null;
   }
-  if (radicals.length) await chrome.storage.local.set({ [RADICALS_CACHE_KEY]: radicals });
+  // Best-effort, like every other cache write: a full paginated radical
+  // fetch is expensive to repeat, but far better than reporting the card as
+  // failed because the result couldn't be stored.
+  await writeSubjectCache({ [RADICALS_CACHE_KEY]: radicals });
   return radicals;
 }
 
@@ -255,11 +401,9 @@ export async function fetchSubjectsForPrompt(
 ): Promise<{ subjects: WanikaniSubject[]; error: string | null }> {
   if (!apiToken) return { subjects: [], error: null };
 
-  // An empty cache entry is treated as a miss — earlier versions cached
-  // failed/empty lookups, which permanently broke the affected card.
   const cacheKey = subjectCacheKey(category, prompt);
-  const cached = await chrome.storage.local.get(cacheKey) as Record<string, WanikaniSubject[] | undefined>;
-  if (cached[cacheKey]?.length) return { subjects: cached[cacheKey], error: null };
+  const cached = await readSubjectCache(cacheKey);
+  if (cached) return { subjects: cached, error: null };
 
   const slug = encodeURIComponent(prompt);
   const url = `https://api.wanikani.com/v2/subjects?slugs=${slug}&types=${category}`;
@@ -273,7 +417,11 @@ export async function fetchSubjectsForPrompt(
       const json = await fetchSubjectPage(url, apiToken);
       return json.data || [];
     }, { retries, backoffMs, onRetry });
-    if (subjects.length) await chrome.storage.local.set({ [cacheKey]: subjects });
+    // Caching is an optimization, and writeSubjectCache never throws — a
+    // storage failure must not cost the caller subjects the network already
+    // delivered. This previously returned an error with an empty array,
+    // leaving the card with no accepted answers at all.
+    await writeSubjectCache({ [cacheKey]: subjects });
     return { subjects, error: null };
   } catch (err) {
     return { subjects: [], error: (err as Error).message || 'subject fetch failed' };
@@ -342,13 +490,28 @@ export async function prefetchSubjects(
   }
 
   if (byKey.size) {
-    const existing = await chrome.storage.local.get([...byKey.keys()]) as Record<string, WanikaniSubject[] | undefined>;
+    // The storage work used to sit outside this function's error handling
+    // entirely, so a failure here rejected into the caller's un-awaited
+    // listener. That skipped the un-marking of the batch, which left those
+    // IDs marked as requested but never cached — a permanent cold gap in
+    // the queue for the rest of the session.
     const updates: Record<string, WanikaniSubject[]> = {};
-    for (const [key, fetched] of byKey) {
-      const prior: WanikaniSubject[] = existing[key] || [];
-      updates[key] = [...prior, ...fetched.filter((s) => !prior.some((p) => p.id === s.id))];
+    try {
+      const existing = await chrome.storage.local.get([...byKey.keys()]) as Record<string, unknown>;
+      for (const [key, fetched] of byKey) {
+        const prior = readSubjectCacheEntry(existing[key]) ?? [];
+        updates[key] = [...prior, ...fetched.filter((s) => !prior.some((p) => p.id === s.id))];
+      }
+    } catch (err) {
+      console.error('[kikoe] prefetch could not read existing cache entries:', err);
+      for (const [key, fetched] of byKey) updates[key] = fetched;
     }
-    await chrome.storage.local.set(updates);
+    // Unlike the per-card path, prefetching exists *only* to populate the
+    // cache — a failed write means this batch accomplished nothing, so
+    // report it and let the caller un-mark the IDs for a later retry.
+    if (!await writeSubjectCache(updates)) {
+      return { fetchedCount: 0, error: 'subject cache write failed' };
+    }
   }
 
   return { fetchedCount: subjects.length, error: null };
@@ -422,11 +585,19 @@ async function main(): Promise<void> {
       const { subjectIds } = (e as CustomEvent<{ subjectIds: number[] }>).detail;
       const batch = takeNextPrefetchBatch(subjectIds, requestedPrefetchIds);
       if (!batch.length) return;
-      if (!apiToken) apiToken = await getApiToken();
-      const { error } = await prefetchSubjects(batch, apiToken);
-      if (error) {
+      // Anything that escapes here strands the batch permanently, since the
+      // un-marking below is what lets a later card change retry it. The
+      // catch is belt-and-braces alongside prefetchSubjects' own handling.
+      try {
+        if (!apiToken) apiToken = await getApiToken();
+        const { error } = await prefetchSubjects(batch, apiToken);
+        if (error) {
+          batch.forEach((id) => requestedPrefetchIds.delete(id));
+          console.error('[kikoe] prefetch failed:', error);
+        }
+      } catch (err) {
         batch.forEach((id) => requestedPrefetchIds.delete(id));
-        console.error('[kikoe] prefetch failed:', error);
+        console.error('[kikoe] prefetch failed:', err);
       }
     });
   }

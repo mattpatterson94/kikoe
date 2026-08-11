@@ -14,8 +14,19 @@ import {
   API_TOKEN_DISCOVERY_STATUS_KEY,
   CACHE_PREFIX,
   RADICALS_CACHE_KEY,
+  CACHE_SCHEMA_VERSION,
+  CACHE_TTL_MS,
+  CACHE_BUDGET_BYTES,
+  packSubjectCacheEntry,
+  readSubjectCacheEntry,
+  planCacheEviction,
 } from '../extension/content';
 import { defaults } from '../src/settings';
+
+// Cached subjects are wrapped with a schema version and a fetch timestamp,
+// so tests seed and read through these rather than touching the raw shape.
+const cacheEntry = (subjects, age = 0) => packSubjectCacheEntry(subjects, Date.now() - age);
+const cached = (key) => readSubjectCacheEntry(localStore[key]);
 
 // ── Chrome API mock ───────────────────────────────────────────────────────────
 
@@ -36,7 +47,10 @@ const chromeMock = {
       set: vi.fn(async (obj) => { Object.assign(syncStore, obj); }),
     },
     local: {
+      // null/undefined means "everything", which is what the eviction scan
+      // asks for.
       get: vi.fn(async (keys) => {
+        if (keys === null || keys === undefined) return { ...localStore };
         const ks = Array.isArray(keys) ? keys : [keys];
         const result = {};
         for (const k of ks) {
@@ -45,6 +59,10 @@ const chromeMock = {
         return result;
       }),
       set: vi.fn(async (obj) => { Object.assign(localStore, obj); }),
+      remove: vi.fn(async (keys) => {
+        for (const k of Array.isArray(keys) ? keys : [keys]) delete localStore[k];
+      }),
+      getBytesInUse: vi.fn(async () => JSON.stringify(localStore).length),
     },
     onChanged: { addListener: vi.fn() },
   },
@@ -253,7 +271,7 @@ describe('fetchSubjectsForPrompt', () => {
 
   test('returns cached result without fetching again', async () => {
     const cacheKey = CACHE_PREFIX + 'kanji_下';
-    localStore[cacheKey] = [mockSubject];
+    localStore[cacheKey] = cacheEntry([mockSubject]);
     const fetchSpy = vi.fn();
     vi.stubGlobal('fetch', fetchSpy);
     const result = await fetchSubjectsForPrompt('下', 'kanji', TOKEN);
@@ -324,7 +342,7 @@ describe('fetchSubjectsForPrompt', () => {
   });
 
   test('treats a cached empty result as a miss and refetches', async () => {
-    localStore[CACHE_PREFIX + 'kanji_下'] = [];
+    localStore[CACHE_PREFIX + 'kanji_下'] = cacheEntry([]);
     vi.stubGlobal('fetch', vi.fn(async () => ({
       ok: true,
       json: async () => ({ data: [mockSubject] }),
@@ -397,8 +415,8 @@ describe('fetchSubjectsForPrompt for radicals', () => {
     stubRadicalApi();
     await fetchSubjectsForPrompt('一', 'radical', TOKEN);
     // Stored set is pruned — no bulky fields, both pages present.
-    expect(localStore[RADICALS_CACHE_KEY]).toHaveLength(2);
-    expect(localStore[RADICALS_CACHE_KEY][0].data.document_url).toBeUndefined();
+    expect(cached(RADICALS_CACHE_KEY)).toHaveLength(2);
+    expect(cached(RADICALS_CACHE_KEY)[0].data.document_url).toBeUndefined();
 
     const fetchSpy = vi.fn();
     vi.stubGlobal('fetch', fetchSpy);
@@ -423,7 +441,7 @@ describe('subjectCacheKey', () => {
     const mockSubject = { id: 1, object: 'kanji', data: { slug: '下', characters: '下', meanings: [] } };
     vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => ({ data: [mockSubject] }) })));
     await fetchSubjectsForPrompt('下', 'kanji', 'tok');
-    expect(localStore[subjectCacheKey('kanji', '下')]).toEqual([mockSubject]);
+    expect(cached(subjectCacheKey('kanji', '下'))).toEqual([mockSubject]);
   });
 });
 
@@ -473,38 +491,37 @@ describe('prefetchSubjects', () => {
   test('caches each subject under its category+prompt key, pruned', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => ({ data: [kanji] }) })));
     await prefetchSubjects([440], TOKEN);
-    const cached = localStore[subjectCacheKey('kanji', '下')];
-    expect(cached).toHaveLength(1);
-    expect(cached[0].id).toBe(440);
-    expect(cached[0].data.meanings).toEqual(kanji.data.meanings);
+    const entry = cached(subjectCacheKey('kanji', '下'));
+    expect(entry).toHaveLength(1);
+    expect(entry[0].id).toBe(440);
+    expect(entry[0].data.meanings).toEqual(kanji.data.meanings);
   });
 
   test('uses the API object type directly for kana_vocabulary', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => ({ data: [kanaVocab] }) })));
     await prefetchSubjects([900], TOKEN);
-    expect(localStore[subjectCacheKey('kana_vocabulary', 'ばか')]).toHaveLength(1);
+    expect(cached(subjectCacheKey('kana_vocabulary', 'ばか'))).toHaveLength(1);
   });
 
   test('falls back to the space-separated slug for image-only radicals', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => ({ data: [imageRadical] }) })));
     await prefetchSubjects([2], TOKEN);
-    expect(localStore[subjectCacheKey('radical', 'coat rack')]).toHaveLength(1);
+    expect(cached(subjectCacheKey('radical', 'coat rack'))).toHaveLength(1);
   });
 
   test('merges with subjects already cached under the same key instead of clobbering', async () => {
     const otherKanji = { id: 441, object: 'kanji', data: { slug: '下2', characters: '下', meanings: [] } };
-    localStore[subjectCacheKey('kanji', '下')] = [otherKanji];
+    localStore[subjectCacheKey('kanji', '下')] = cacheEntry([otherKanji]);
     vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => ({ data: [kanji] }) })));
     await prefetchSubjects([440], TOKEN);
-    const cached = localStore[subjectCacheKey('kanji', '下')];
-    expect(cached.map(s => s.id).sort()).toEqual([440, 441]);
+    expect(cached(subjectCacheKey('kanji', '下')).map(s => s.id).sort()).toEqual([440, 441]);
   });
 
   test('does not duplicate a subject already present under its key', async () => {
-    localStore[subjectCacheKey('kanji', '下')] = [{ id: 440, object: 'kanji', data: { slug: '下', characters: '下', meanings: [] } }];
+    localStore[subjectCacheKey('kanji', '下')] = cacheEntry([{ id: 440, object: 'kanji', data: { slug: '下', characters: '下', meanings: [] } }]);
     vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => ({ data: [kanji] }) })));
     await prefetchSubjects([440], TOKEN);
-    expect(localStore[subjectCacheKey('kanji', '下')]).toHaveLength(1);
+    expect(cached(subjectCacheKey('kanji', '下'))).toHaveLength(1);
   });
 
   test('retries a transient failure', async () => {
@@ -566,5 +583,184 @@ describe('takeNextPrefetchBatch', () => {
 
   test('handles a missing id list', () => {
     expect(takeNextPrefetchBatch(undefined, new Set())).toEqual([]);
+  });
+});
+
+// ── subject cache hygiene ─────────────────────────────────────────────────────
+
+describe('readSubjectCacheEntry', () => {
+  const subject = { id: 1, object: 'kanji', data: { slug: '下', characters: '下', meanings: [] } };
+
+  test('reads back a freshly packed entry', () => {
+    expect(readSubjectCacheEntry(packSubjectCacheEntry([subject]))).toEqual([subject]);
+  });
+
+  // The pre-versioning cache stored bare arrays. Reading one as though it
+  // were current is exactly what versioning exists to prevent.
+  test('treats the legacy bare-array shape as a miss', () => {
+    expect(readSubjectCacheEntry([subject])).toBeNull();
+  });
+
+  test('treats a mismatched schema version as a miss', () => {
+    const entry = { ...packSubjectCacheEntry([subject]), v: CACHE_SCHEMA_VERSION + 1 };
+    expect(readSubjectCacheEntry(entry)).toBeNull();
+  });
+
+  test('treats an entry past its TTL as a miss', () => {
+    expect(readSubjectCacheEntry(cacheEntry([subject], CACHE_TTL_MS + 1))).toBeNull();
+  });
+
+  test('keeps an entry just inside its TTL', () => {
+    expect(readSubjectCacheEntry(cacheEntry([subject], CACHE_TTL_MS - 1000))).toEqual([subject]);
+  });
+
+  test('treats an empty entry as a miss', () => {
+    expect(readSubjectCacheEntry(packSubjectCacheEntry([]))).toBeNull();
+  });
+
+  test('treats malformed values as a miss', () => {
+    for (const bad of [null, undefined, 'nope', 42, {}, { v: CACHE_SCHEMA_VERSION }]) {
+      expect(readSubjectCacheEntry(bad)).toBeNull();
+    }
+  });
+});
+
+describe('planCacheEviction', () => {
+  // Entries are made comfortably larger than the timestamp jitter between
+  // them, so the budgets below select a predictable number of them.
+  const bulky = (age) => cacheEntry([{ id: 1, object: 'kanji', data: { slug: 'x'.repeat(1000) } }], age);
+
+  test('evicts nothing while under budget', () => {
+    const all = { [CACHE_PREFIX + 'a']: bulky(0), [CACHE_PREFIX + 'b']: bulky(1000) };
+    expect(planCacheEviction(all, [], 1_000_000)).toEqual([]);
+  });
+
+  test('drops oldest entries first until under the low-water mark', () => {
+    const all = {
+      [CACHE_PREFIX + 'newest']: bulky(0),
+      [CACHE_PREFIX + 'oldest']: bulky(30_000),
+      [CACHE_PREFIX + 'middle']: bulky(10_000),
+    };
+    // Three entries of ~1 KB each; a 3 KB budget with a 2.4 KB low-water
+    // mark is cleared by dropping exactly one of them.
+    const doomed = planCacheEviction(all, [], 3000);
+    expect(doomed).toEqual([CACHE_PREFIX + 'oldest']);
+  });
+
+  test('never evicts a protected key even when it is the oldest', () => {
+    const all = {
+      [CACHE_PREFIX + 'current']: bulky(99_000),
+      [CACHE_PREFIX + 'other']: bulky(0),
+    };
+    const doomed = planCacheEviction(all, [CACHE_PREFIX + 'current'], 100);
+    expect(doomed).not.toContain(CACHE_PREFIX + 'current');
+  });
+
+  // The radical set costs a full paginated fetch to rebuild, and the token
+  // discovery flags aren't cache at all.
+  test('leaves non-subject-cache keys alone', () => {
+    const all = {
+      [RADICALS_CACHE_KEY]: bulky(99_000),
+      [API_TOKEN_DISCOVERY_STATUS_KEY]: 'found',
+      [CACHE_PREFIX + 'a']: bulky(0),
+    };
+    expect(planCacheEviction(all, [], 10)).toEqual([CACHE_PREFIX + 'a']);
+  });
+
+  test('tolerates entries with no usable timestamp', () => {
+    const all = {
+      [CACHE_PREFIX + 'legacy']: [{ id: 1 }],
+      [CACHE_PREFIX + 'current']: bulky(0),
+    };
+    // The legacy entry sorts oldest (no timestamp) and goes first.
+    expect(planCacheEviction(all, [], 10)[0]).toBe(CACHE_PREFIX + 'legacy');
+  });
+});
+
+describe('cache writes never cost the caller data', () => {
+  const TOKEN = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
+  const mockSubject = { id: 1, object: 'kanji', data: { slug: '下', characters: '下', meanings: [] } };
+
+  let errorSpy;
+  beforeEach(() => { errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {}); });
+  afterEach(() => { errorSpy.mockRestore(); });
+
+  // Regression: the write used to sit inside the fetch's try/catch, so a
+  // quota failure discarded subjects the API had already returned and the
+  // card was left with no accepted answers at all.
+  test('fetchSubjectsForPrompt returns fetched subjects when the cache write fails', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => ({ data: [mockSubject] }) })));
+    chromeMock.storage.local.set.mockRejectedValueOnce(new Error('QUOTA_BYTES quota exceeded'));
+
+    const result = await fetchSubjectsForPrompt('下', 'kanji', TOKEN);
+
+    expect(result.subjects).toEqual([mockSubject]);
+    expect(result.error).toBeNull();
+  });
+
+  test('fetchSubjectsForPrompt survives a failing cache read', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => ({ data: [mockSubject] }) })));
+    chromeMock.storage.local.get.mockRejectedValueOnce(new Error('storage unavailable'));
+
+    const result = await fetchSubjectsForPrompt('下', 'kanji', TOKEN);
+
+    expect(result.subjects).toEqual([mockSubject]);
+    expect(result.error).toBeNull();
+  });
+
+  // Regression: this used to reject out of the function entirely, which in
+  // the real listener skipped the un-marking of the batch and left those ids
+  // permanently marked as requested but never cached.
+  test('prefetchSubjects reports a write failure instead of rejecting', async () => {
+    const kanji = { id: 440, object: 'kanji', data: { slug: '下', characters: '下', meanings: [], readings: [] } };
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => ({ data: [kanji] }) })));
+    chromeMock.storage.local.set.mockRejectedValueOnce(new Error('QUOTA_BYTES quota exceeded'));
+
+    const result = await prefetchSubjects([440], TOKEN);
+
+    expect(result.error).toMatch(/cache write failed/);
+    expect(result.fetchedCount).toBe(0);
+  });
+
+  test('prefetchSubjects still caches when reading existing entries fails', async () => {
+    const kanji = { id: 440, object: 'kanji', data: { slug: '下', characters: '下', meanings: [], readings: [] } };
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => ({ data: [kanji] }) })));
+    chromeMock.storage.local.get.mockRejectedValueOnce(new Error('storage unavailable'));
+
+    const result = await prefetchSubjects([440], TOKEN);
+
+    expect(result.error).toBeNull();
+    expect(cached(subjectCacheKey('kanji', '下'))).toHaveLength(1);
+  });
+
+  test('a stale cached entry is refetched rather than served', async () => {
+    localStore[subjectCacheKey('kanji', '下')] = cacheEntry([mockSubject], CACHE_TTL_MS + 1);
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => ({ data: [mockSubject] }) })));
+
+    const result = await fetchSubjectsForPrompt('下', 'kanji', TOKEN);
+
+    expect(result.subjects).toEqual([mockSubject]);
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  test('eviction runs on write once storage exceeds the budget', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => ({ data: [mockSubject] }) })));
+    // Sit above the budget so the scan runs, with enough real bulk that the
+    // plan actually selects something.
+    const filler = (age) => cacheEntry(
+      [{ id: 9, object: 'kanji', data: { slug: 'x'.repeat(CACHE_BUDGET_BYTES / 3) } }],
+      age,
+    );
+    localStore[CACHE_PREFIX + 'old'] = filler(90_000);
+    localStore[CACHE_PREFIX + 'older'] = filler(99_000);
+    localStore[CACHE_PREFIX + 'newer'] = filler(1_000);
+
+    await fetchSubjectsForPrompt('下', 'kanji', TOKEN);
+
+    expect(chromeMock.storage.local.remove).toHaveBeenCalled();
+    const removed = chromeMock.storage.local.remove.mock.calls[0][0];
+    expect(removed).toContain(CACHE_PREFIX + 'older');
+    // The entry just written is protected from its own eviction pass.
+    expect(removed).not.toContain(subjectCacheKey('kanji', '下'));
   });
 });

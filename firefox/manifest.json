@@ -27,6 +27,7 @@
   },
   "permissions": [
     "storage",
+    "unlimitedStorage",
     "https://www.wanikani.com/*",
     "https://api.wanikani.com/*",
     "https://bunpro.jp/*",
