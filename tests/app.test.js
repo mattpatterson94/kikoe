@@ -127,6 +127,89 @@ describe('startListener recognition error handling', () => {
   });
 });
 
+describe('startListener proactive microphone permission check', () => {
+  // Same MockSpeechRecognition shape as the error-handling describe above —
+  // kept local so instance lists don't leak between describes.
+  class MockSpeechRecognition {
+    constructor() {
+      this.continuous = false;
+      this.interimResults = false;
+      this.maxAlternatives = 1;
+      this.lang = '';
+      this.nativeStart = vi.fn();
+      this.nativeStop = vi.fn();
+      this.start = this.nativeStart;
+      this.stop = this.nativeStop;
+      MockSpeechRecognition.instances.push(this);
+    }
+  }
+  MockSpeechRecognition.instances = [];
+
+  beforeEach(() => {
+    MockSpeechRecognition.instances = [];
+    vi.stubGlobal('webkitSpeechRecognition', MockSpeechRecognition);
+    // jsdom's document.hasFocus() defaults to false, which reads as a
+    // blurred/backgrounded tab to isPageActive() and short-circuits
+    // updateRecognitionForPageActivity straight to 'paused' — pin the tab as
+    // foregrounded so these tests exercise the permission-driven states.
+    vi.spyOn(document, 'hasFocus').mockReturnValue(true);
+  });
+
+  afterEach(() => {
+    delete navigator.permissions;
+    vi.restoreAllMocks();
+  });
+
+  test('flags an already-revoked permission before recognition ever errors', async () => {
+    const status = { state: 'denied', onchange: null };
+    navigator.permissions = { query: vi.fn(() => Promise.resolve(status)) };
+    stampConfig();
+
+    await importApp();
+
+    const label = document.getElementById('kikoe-idle-label');
+    await vi.waitFor(() => expect(label.textContent).toMatch(/microphone access denied/i));
+  });
+
+  test('a permission revoked mid-session overrides the optimistic "Listening" restore', async () => {
+    const status = { state: 'granted', onchange: null };
+    navigator.permissions = { query: vi.fn(() => Promise.resolve(status)) };
+    stampConfig({ hasApiToken: true });
+
+    await importApp();
+    const label = document.getElementById('kikoe-idle-label');
+    await vi.waitFor(() => expect(navigator.permissions.query).toHaveBeenCalled());
+
+    status.state = 'denied';
+    status.onchange();
+    expect(label.textContent).toMatch(/microphone access denied/i);
+
+    // A stray call to restoreIdleIndicator's caller (e.g. a late recognition
+    // result) must not overwrite the denial — see #78.
+    window.dispatchEvent(new Event('focus'));
+    expect(label.textContent).toMatch(/microphone access denied/i);
+  });
+
+  test('recovers and resumes recognition once permission is granted again', async () => {
+    const status = { state: 'denied', onchange: null };
+    navigator.permissions = { query: vi.fn(() => Promise.resolve(status)) };
+    stampConfig({ hasApiToken: true });
+
+    await importApp();
+    const label = document.getElementById('kikoe-idle-label');
+    await vi.waitFor(() => expect(label.textContent).toMatch(/microphone access denied/i));
+
+    const native = MockSpeechRecognition.instances[0];
+    const callsBeforeGrant = native.nativeStart.mock.calls.length;
+
+    status.state = 'granted';
+    status.onchange();
+
+    expect(label.textContent).toMatch(/listening/i);
+    expect(native.nativeStart.mock.calls.length).toBeGreaterThan(callsBeforeGrant);
+  });
+});
+
 describe('startListener pending transcript retry on the initial card', () => {
   // Same MockSpeechRecognition shape as above — kept local to this describe
   // block so its instance list doesn't leak between describes.
@@ -1446,6 +1529,65 @@ describe('startListener ippatsu mode (one-shot auto-submit on a miss)', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  // Waiting for the final result is the bulk of the delay between speaking and
+  // the card advancing, and meaning questions used to sit through all of it
+  // even when the interim already matched an accepted answer.
+  test('a matched meaning interim submits if no final result arrives', async () => {
+    const native = await loadCard('Meaning', {});
+    vi.useFakeTimers();
+    try {
+      native.onresult({ resultIndex: 0, results: [interimResult('Cold Hearted')] });
+
+      expect(document.getElementById('user-response').value).toBe('');
+
+      vi.advanceTimersByTime(900);
+      expect(document.getElementById('user-response').value).toBe('cold hearted');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  // The engine re-sending an in-progress result without revising it means the
+  // user has stopped talking, so there is nothing left for the wait to protect
+  // against.
+  test('a matched interim repeated unchanged submits without waiting', async () => {
+    const native = await loadCard('Reading', {});
+    native.onresult({ resultIndex: 0, results: [interimResult('さむい')] });
+    expect(document.getElementById('user-response').value).toBe('');
+
+    native.onresult({ resultIndex: 0, results: [interimResult('さむい')] });
+
+    expect(document.getElementById('user-response').value).toBe('さむい');
+  });
+
+  test('an interim that is still being revised keeps waiting', async () => {
+    const native = await loadCard('Reading', {});
+    native.onresult({ resultIndex: 0, results: [interimResult('さむい')] });
+    // A different transcript for the same result — the user is still speaking.
+    native.onresult({ resultIndex: 0, results: [interimResult('さむいです')] });
+
+    expect(document.getElementById('user-response').value).toBe('');
+  });
+
+  // Fuzzy matching is disabled for interims: a partial utterance can land
+  // within WaniKani's edit-distance tolerance while the user is mid-word.
+  test('a meaning interim that only matches fuzzily waits for the final', async () => {
+    const native = await loadCard('Meaning', {});
+    vi.useFakeTimers();
+    try {
+      native.onresult({ resultIndex: 0, results: [interimResult('cold harted')] });
+      vi.advanceTimersByTime(900);
+
+      expect(document.getElementById('user-response').value).toBe('');
+    } finally {
+      vi.useRealTimers();
+    }
+
+    // The final still submits it via the normal fuzzy-matching path.
+    native.onresult({ resultIndex: 0, results: [finalResult('cold harted')] });
+    expect(document.getElementById('user-response').value).toBe('cold hearted');
   });
 
   test('a failed submit does not block the next valid utterance', async () => {

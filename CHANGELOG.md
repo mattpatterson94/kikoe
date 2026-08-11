@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Changed
+
+- Answers submit as soon as the speech engine stops revising what it heard,
+  instead of always waiting out its end-of-speech detection. Meaning and name
+  questions now get this too — previously only reading questions could submit
+  from an in-progress result, and only after a fixed 900 ms wait.
+- Switching recognition between English and Japanese on a card change aborts
+  the old session instead of waiting for it to drain buffered audio from the
+  previous card, so the mic is live again sooner.
+- Upcoming WaniKani subjects are prefetched alongside the current card's fetch
+  rather than after it, so a card that misses the cache no longer delays the
+  cards behind it.
+
 ### Fixed
 
 - Dismissing the on-screen keyboard on iPad no longer pauses recognition.
