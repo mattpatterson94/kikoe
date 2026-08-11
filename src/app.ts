@@ -11,6 +11,7 @@ import { startSpeedEnhancer as startWanikaniSpeedEnhancer } from './speed';
 import { startSpeedEnhancer as startBunproSpeedEnhancer } from './bunpro_speed';
 import { createTranscriptContainer, logTranscript, showIdleIndicator, setIdleIndicatorState } from './live_transcript';
 import { acquireWakeLock, releaseWakeLock } from './wake_lock';
+import { watchMicPermission } from './mic_permission';
 import { SHARED_COMMANDS, REVEAL_COMMANDS, GRADE_COMMANDS, HELP_COMMANDS, buildCommandTable, commandsForMode } from './commands';
 import type { HelpMode } from './commands';
 import { updateHelpChip, openHelpPanel, closeHelpPanel, isHelpPanelOpen, showHelpHint } from './help';
@@ -31,6 +32,13 @@ import { Numerals } from './candidates/numerals';
 
 const EMPTY_FINAL_RESTART_THRESHOLD = 3;
 const RESTARTING_INDICATOR_MS = 900;
+
+// A matched interim isn't submitted the instant it matches: the user may still
+// be mid-utterance, and cutting them off would push the tail of their speech
+// onto the next card. The recognizer re-emitting an interim without revising
+// it is direct evidence that speech has stopped, so a repeat submits
+// immediately (see scheduleMatchedInterimSubmit) and this timeout is only the
+// backstop for engines that don't re-emit an unchanged interim.
 const MATCHED_INTERIM_SUBMIT_MS = 900;
 
 // Maps a SpeechRecognition error type to the idle-indicator state that
@@ -165,9 +173,15 @@ async function startListener(dictionary: Dictionary): Promise<void> {
   // separately from the page being hidden/blurred — see
   // updateRecognitionForPageActivity, which must not silently un-mute this.
   let userMuted = false;
+  // Set by watchMicPermission below. Checked first so a proactive permission
+  // read always wins over the optimistic "recognition resumed, so show
+  // Listening" calls elsewhere (see #78 — those calls otherwise mask a
+  // revoked permission until recognition itself gets around to failing).
+  let micPermissionDenied = false;
 
   function restoreIdleIndicator(): void {
-    if (userMuted) setIdleIndicatorState('muted');
+    if (micPermissionDenied) setIdleIndicatorState('mic-denied');
+    else if (userMuted) setIdleIndicatorState('muted');
     else if (context?.mode === 'unsupported') setIdleIndicatorState('unsupported');
     else if (subjectsLoadFailed) setIdleIndicatorState('error');
     else setIdleIndicatorState(_config.hasApiToken ? 'listening' : 'no-token');
@@ -265,6 +279,14 @@ async function startListener(dictionary: Dictionary): Promise<void> {
   let restartIndicatorTimer: ReturnType<typeof setTimeout> | undefined;
   let matchedInterimTimer: ReturnType<typeof setTimeout> | undefined;
   let submittedInterimResultId: string | null = null;
+  // The matched interim waiting on the backstop timer (or on the recognizer
+  // repeating it unchanged), kept so both paths submit the same answer.
+  let pendingInterimSubmit: {
+    ctx: SiteContext;
+    raws: string[];
+    resultId: string;
+    result: Extract<CheckResult, { success: true }>;
+  } | null = null;
 
   // While the help panel is open the mic is paused: the panel displays the
   // words that trigger actions, so reading it aloud must not fire them.
@@ -315,13 +337,17 @@ async function startListener(dictionary: Dictionary): Promise<void> {
   // utterances and common on'yomi are often autocorrected to an unrelated
   // real word in the top slot, but the correct reading is frequently still
   // present further down the list.
-  function checkAlternatives(ctx: SiteContext, raws: string[]): CheckResult | undefined {
+  function checkAlternatives(
+    ctx: SiteContext,
+    raws: string[],
+    { fuzzyMeaning = FUZZY_MEANING_MATCHING }: { fuzzyMeaning?: boolean } = {},
+  ): CheckResult | undefined {
     let best: CheckResult | undefined;
     // Read corrections at call time so entries saved in the options page
     // apply on the next utterance via the settings-changed event.
     const corrections = getSettings().customCorrections;
     for (const raw of raws) {
-      const result = checkAnswer(ctx, transformers, raw, { fuzzyMeaning: FUZZY_MEANING_MATCHING, corrections });
+      const result = checkAnswer(ctx, transformers, raw, { fuzzyMeaning, corrections });
       if (result.success && result.answer) return result;
       const priority = REASON_PRIORITY[result.transcript.reason ?? ''] ?? 0;
       if (!best || priority > (REASON_PRIORITY[best.transcript.reason ?? ''] ?? 0)) best = result;
@@ -381,6 +407,33 @@ async function startListener(dictionary: Dictionary): Promise<void> {
   function clearMatchedInterimTimer(): void {
     clearTimeout(matchedInterimTimer);
     matchedInterimTimer = undefined;
+    pendingInterimSubmit = null;
+  }
+
+  // Question types whose answer an interim result may be auto-submitted for.
+  // Command-only cards (BunPro's Reveal & Grade, context mode 'reveal') carry
+  // no type and are excluded, as is anything checkAnswer can't grade.
+  function isInterimSubmittable(type: string | null | undefined): boolean {
+    return type === 'reading' || type === 'meaning' || type === 'name';
+  }
+
+  function submitMatchedInterim(): void {
+    const pending = pendingInterimSubmit;
+    clearMatchedInterimTimer();
+    if (!pending || submitted) return;
+    const latestContext = site.getContext(subjects);
+    if (site.didContextChange(pending.ctx, latestContext)) return;
+    if (!isInterimSubmittable(latestContext?.type)) return;
+    logCheckResult(pending.ctx, pending.result);
+    if (submitMatchedAnswer(pending.result.answer)) {
+      // BunPro Lightning Mode can advance before Chrome emits the final for
+      // this utterance. Remember it across the card change so that late
+      // final is not checked against the next question as a false miss.
+      submittedInterimResultId = pending.resultId;
+      debugLog('submitted matched interim without waiting for the final result', {
+        raws: pending.raws, result: pending.result,
+      });
+    }
   }
 
   function scheduleMatchedInterimSubmit(
@@ -389,21 +442,19 @@ async function startListener(dictionary: Dictionary): Promise<void> {
     resultId: string,
     result: Extract<CheckResult, { success: true }>,
   ): void {
-    clearMatchedInterimTimer();
-    matchedInterimTimer = setTimeout(() => {
-      if (submitted) return;
-      const latestContext = site.getContext(subjects);
-      if (site.didContextChange(ctx, latestContext)) return;
-      if (latestContext?.type !== 'reading') return;
-      logCheckResult(ctx, result);
-      if (submitMatchedAnswer(result.answer)) {
-        // BunPro Lightning Mode can advance before Chrome emits the final for
-        // this utterance. Remember it across the card change so that late
-        // final is not checked against the next question as a false miss.
-        submittedInterimResultId = resultId;
-        debugLog('submitted matched interim after final result stalled', { raws, result });
-      }
-    }, MATCHED_INTERIM_SUBMIT_MS);
+    // The same in-progress result matching the same text again means the
+    // recognizer has stopped revising it — the user has finished speaking, so
+    // there's nothing left to wait for.
+    const settled = pendingInterimSubmit?.resultId === resultId &&
+      pendingInterimSubmit?.raws[0] === raws[0];
+    clearTimeout(matchedInterimTimer);
+    matchedInterimTimer = undefined;
+    pendingInterimSubmit = { ctx, raws, resultId, result };
+    if (settled) {
+      submitMatchedInterim();
+      return;
+    }
+    matchedInterimTimer = setTimeout(submitMatchedInterim, MATCHED_INTERIM_SUBMIT_MS);
   }
 
   document.addEventListener('kikoe:addCorrection', (e) => {
@@ -504,14 +555,22 @@ async function startListener(dictionary: Dictionary): Promise<void> {
     // still show the raw guess below, where it can drive correction creation.
     if (ctx?.type !== 'reading') logTranscript(getSettings(), { raw });
 
-    // Interim results are usually display-only, but short reading answers can
-    // get stuck there if Chrome shows a correct interim and never emits the
-    // final. Only auto-submit an interim when it already resolves to an
-    // accepted reading, and give the normal final-result path a short window
-    // to arrive first.
+    // Interim results are usually display-only, but the engine only finalizes
+    // a result after about a second of trailing silence, so waiting for the
+    // final is the bulk of the delay between speaking and the card advancing —
+    // and short answers sometimes stall in the interim state and never
+    // finalize at all. Once an interim already resolves to an answer the site
+    // itself advertises as accepted, there is nothing further to learn from
+    // the final, so submit it (see scheduleMatchedInterimSubmit for the short
+    // wait that keeps a still-speaking user from being cut off).
+    //
+    // Fuzzy meaning matching is deliberately off here: a partial utterance can
+    // land within WaniKani's edit-distance tolerance of an accepted meaning
+    // while the user is still mid-word. Near-misses still submit via the
+    // normal final-result path below.
     if (!final) {
-      if (!submitted && ctx?.type === 'reading') {
-        const interimResult = checkAlternatives(ctx, raws);
+      if (!submitted && ctx && isInterimSubmittable(ctx.type)) {
+        const interimResult = checkAlternatives(ctx, raws, { fuzzyMeaning: false });
         if (interimResult?.success && interimResult.answer) {
           logCheckResult(ctx, interimResult);
           scheduleMatchedInterimSubmit(ctx, raws, resultId, interimResult);
@@ -613,10 +672,13 @@ async function startListener(dictionary: Dictionary): Promise<void> {
       // a new Japanese reading card with the previous English card's model.
       setLanguage(recognition, site.getLanguage());
       if (usesSubjects && newContext?.prompt && newContext?.category) {
+        // Warm the upcoming queue alongside this card's fetch rather than
+        // after it: the queue IDs come from the DOM, so a card that misses the
+        // cache no longer holds up the cards behind it too.
+        prefetchUpcoming();
         subjects = await loadSubjects(newContext.prompt, newContext.category);
         context = site.getContext(subjects);
         restoreIdleIndicator();
-        prefetchUpcoming();
       } else {
         // Sites without subject fetches (BunPro) still need the indicator
         // refreshed — e.g. flipping between supported and unsupported cards.
@@ -698,6 +760,19 @@ async function startListener(dictionary: Dictionary): Promise<void> {
   window.addEventListener('focus', updateRecognitionForPageActivity);
   window.addEventListener('blur', updateRecognitionForPageActivity);
   updateRecognitionForPageActivity();
+
+  watchMicPermission((state) => {
+    const wasDenied = micPermissionDenied;
+    micPermissionDenied = state === 'denied';
+    if (micPermissionDenied) {
+      setIdleIndicatorState('mic-denied');
+    } else if (wasDenied) {
+      // Permission was just (re)granted. The earlier denial disabled
+      // recognition's auto-restart as a fatal error — nudge it back to life
+      // instead of leaving the indicator to claim "Listening" over nothing.
+      updateRecognitionForPageActivity();
+    }
+  });
 
   // Recognition is listening as of the call above. Now wait for the initial
   // card's subjects (already in flight since the top of this function) and
