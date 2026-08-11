@@ -40,6 +40,23 @@ const RESTARTING_INDICATOR_MS = 900;
 // backstop for engines that don't re-emit an unchanged interim.
 const MATCHED_INTERIM_SUBMIT_MS = 900;
 
+// window blur/focus exist as page-activity signals for the desktop case
+// visibilitychange misses: alt-tabbing to another app while the browser
+// window (and this tab) stays visible on screen. Touch-primary devices need
+// the same signal for the equivalent case (e.g. iPad Split View, where the
+// page stays fully visible while focus moves to the app alongside it) — but
+// dismissing the on-screen keyboard also blurs whatever input triggered it,
+// which some of these browsers report as the window itself losing focus,
+// and recovers on its own an instant later without a matching 'focus' event.
+// See https://github.com/mattpatterson94/kikoe/issues/79.
+function isTouchPrimaryDevice(): boolean {
+  return typeof window.matchMedia === 'function' && window.matchMedia('(pointer: coarse)').matches;
+}
+
+// A touch-primary keyboard-dismiss blur clears itself within this window;
+// a real "attention elsewhere" blur (Split View, backgrounding) does not.
+const TOUCH_BLUR_GRACE_MS = 400;
+
 // Maps a SpeechRecognition error type to the idle-indicator state that
 // explains it to the user. Errors with no entry here (e.g. 'aborted') keep
 // whatever indicator state is already showing — recognition.ts still logs them.
@@ -277,6 +294,7 @@ async function startListener(dictionary: Dictionary): Promise<void> {
   let emptyFinals = 0;
   let restartIndicatorTimer: ReturnType<typeof setTimeout> | undefined;
   let matchedInterimTimer: ReturnType<typeof setTimeout> | undefined;
+  let touchBlurGraceTimer: ReturnType<typeof setTimeout> | undefined;
   let submittedInterimResultId: string | null = null;
   // The matched interim waiting on the backstop timer (or on the recognizer
   // repeating it unchanged), kept so both paths submit the same answer.
@@ -719,6 +737,7 @@ async function startListener(dictionary: Dictionary): Promise<void> {
   // resumes on close, again without clobbering an explicit mute.
   function updateRecognitionForPageActivity(): void {
     clearTimeout(restartIndicatorTimer);
+    clearTimeout(touchBlurGraceTimer);
     emptyFinals = 0;
     if (userMuted) {
       recognition.pause();
@@ -732,6 +751,25 @@ async function startListener(dictionary: Dictionary): Promise<void> {
     }
   }
 
+  // On a touch-primary device, react to blur/focus after a short grace
+  // window instead of immediately: a keyboard-dismiss blur clears itself
+  // (via a 'focus' event or document.hasFocus() simply going true again)
+  // well within TOUCH_BLUR_GRACE_MS, so it never reaches
+  // updateRecognitionForPageActivity and never pauses the mic. A real
+  // "attention elsewhere" blur (Split View, backgrounding) is still blurred
+  // when the timer fires and pauses as normal. Desktop reacts immediately,
+  // as before — alt-tab there is a deliberate, sustained action with no
+  // equivalent flicker to debounce.
+  function handleWindowBlurOrFocus(): void {
+    clearTimeout(touchBlurGraceTimer);
+    const stillBlurred = typeof document.hasFocus === 'function' && !document.hasFocus();
+    if (isTouchPrimaryDevice() && stillBlurred) {
+      touchBlurGraceTimer = setTimeout(updateRecognitionForPageActivity, TOUCH_BLUR_GRACE_MS);
+    } else {
+      updateRecognitionForPageActivity();
+    }
+  }
+
   function setMuted(muted: boolean): void {
     if (userMuted === muted) return;
     userMuted = muted;
@@ -739,8 +777,8 @@ async function startListener(dictionary: Dictionary): Promise<void> {
   }
 
   document.addEventListener('visibilitychange', updateRecognitionForPageActivity);
-  window.addEventListener('focus', updateRecognitionForPageActivity);
-  window.addEventListener('blur', updateRecognitionForPageActivity);
+  window.addEventListener('focus', handleWindowBlurOrFocus);
+  window.addEventListener('blur', handleWindowBlurOrFocus);
   updateRecognitionForPageActivity();
 
   watchMicPermission((state) => {
