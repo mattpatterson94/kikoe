@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## [0.11.0] - 2026-08-11
+
 ### Added
 
 - Keep screen awake while listening (on by default, toggle in settings): uses
@@ -287,7 +289,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Vitest test suite: 118 tests covering candidates, flashcards, settings,
   the content script, WaniKani helpers, and the speed enhancer.
 
-[Unreleased]: https://github.com/mattpatterson94/kikoe/compare/v0.9.1...HEAD
+[Unreleased]: https://github.com/mattpatterson94/kikoe/compare/v0.11.0...HEAD
+[0.11.0]: https://github.com/mattpatterson94/kikoe/compare/v0.10.0...v0.11.0
+[0.10.0]: https://github.com/mattpatterson94/kikoe/compare/v0.9.1...v0.10.0
 [0.9.1]: https://github.com/mattpatterson94/kikoe/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/mattpatterson94/kikoe/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/mattpatterson94/kikoe/compare/0b34b21...3d90bb9

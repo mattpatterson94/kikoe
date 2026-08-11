@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
   "name": "Kikoe",
-  "version": "0.10.0",
+  "version": "0.11.0",
   "description": "Answer WaniKani and BunPro reviews and lessons with your voice using the Web Speech API",
   "icons": {
     "16": "icons/icon16.png",

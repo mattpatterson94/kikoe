@@ -1,6 +1,6 @@
 {
   "name": "kikoe",
-  "version": "0.10.0",
+  "version": "0.11.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -13,6 +13,8 @@
     "pack:safari": "mkdir -p dist && cd safari && zip -r ../dist/kikoe-safari-web-extension.zip .",
     "pack": "npm run pack:chrome && npm run pack:firefox && npm run pack:safari",
     "safari:customize-app": "node scripts/customize-safari-app.js",
+    "safari:app": "bash scripts/build-safari-app.sh",
+    "safari:app:export": "bash scripts/export-safari-app.sh",
     "dev": "node dev.js",
     "dev:firefox": "node dev.js --firefox",
     "e2e:launch": "node tests/e2e/launch.js",

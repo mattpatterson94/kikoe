@@ -22,6 +22,51 @@ After conversion, customize the generated containing app page:
 npm run safari:customize-app -- Kikoe
 ```
 
+## App Store Builds
+
+For an actual App Store submission, use the script instead of running those
+steps by hand — it does the build, conversion, customization, archiving, and
+export in one pass:
+
+```bash
+npm run safari:app -- <build-number>
+```
+
+The marketing version comes from `package.json`. Output lands in
+`dist/safari-app/ios/Kikoe.ipa` and `dist/safari-app/macos/Kikoe.pkg`, ready to
+drag into Transporter.
+
+The build number is a floor rather than an exact value: Xcode's export step asks
+App Store Connect whether that number is already taken and increments past it if
+so. Since App Store Connect tracks build numbers per platform, iOS and macOS
+routinely end up on different numbers. The export prints what each artifact
+actually got — trust that over what you passed in.
+
+The script also writes two Info.plist keys the converter omits.
+`LSApplicationCategoryType` (`public.app-category.education`, override with
+`MACOS_CATEGORY`) is mandatory for the Mac App Store — without it nothing fails
+locally and Transporter rejects the upload with a 409.
+`ITSAppUsesNonExemptEncryption` is set to false so App Store Connect stops
+asking the export compliance question on every submission; Kikoe only speaks
+HTTPS to the WaniKani API through OS frameworks, which is exempt.
+
+The script exists because the converter regenerates the Xcode project from
+scratch every run — `Kikoe/` is gitignored and never committed — so it always
+returns with `MARKETING_VERSION` 1.0, `CURRENT_PROJECT_VERSION` 1, and no
+development team. Reapplying those by hand is easy to forget and produces an
+upload that App Store Connect rejects as a duplicate build.
+
+Two certificates are required in the login keychain, both created from Xcode >
+Settings > Accounts > Manage Certificates: **Apple Distribution** (signs both
+apps) and **Mac Installer Distribution** (produces the macOS `.pkg`).
+
+To retry just the signing and packaging after fixing a certificate, skip
+straight to the export — the archives are already built:
+
+```bash
+npm run safari:app:export
+```
+
 The customized iOS app page includes setup steps telling users to navigate to
 **Apps > Safari > Extensions > Kikoe** themselves. There's no button for this —
 iOS only exposes a public URL for opening the app's *own* Settings page, not
