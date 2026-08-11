@@ -1,0 +1,128 @@
+name: Live site canary
+
+# Catches a WaniKani or BunPro redesign. The end-to-end specs run against
+# frozen fixtures and keep passing long after the real markup has moved on,
+# so this is the only lane that looks at the live sites.
+#
+# Deliberately not part of PR CI: it needs credentials, it talks to servers we
+# don't control, and it is allowed to be flaky. It never blocks a merge.
+
+on:
+  schedule:
+    - cron: '17 4 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  canary:
+    name: Adapter selectors on live sites
+    runs-on: ubuntu-latest
+    # Never on forks: the secret wouldn't exist and every run would fail.
+    if: github.repository == 'mattpatterson94/kikoe'
+    steps:
+      - uses: actions/checkout@v4
+
+      # Skips cleanly until someone sets the secret up, so committing this
+      # can't produce spurious failures on a repository that isn't configured
+      # for it yet. See the header of tests/e2e/canary.mjs for how to make one.
+      - name: Check for credentials
+        id: creds
+        env:
+          STATE: ${{ secrets.KIKOE_STORAGE_STATE }}
+        run: |
+          if [ -z "$STATE" ]; then
+            echo "KIKOE_STORAGE_STATE is not set — skipping."
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/setup-node@v4
+        if: steps.creds.outputs.configured == 'true'
+        with:
+          node-version: '22'
+          cache: npm
+
+      - run: npm ci
+        if: steps.creds.outputs.configured == 'true'
+
+      - run: npx playwright install --with-deps chromium
+        if: steps.creds.outputs.configured == 'true'
+
+      - name: Write storage state
+        if: steps.creds.outputs.configured == 'true'
+        env:
+          STATE: ${{ secrets.KIKOE_STORAGE_STATE }}
+        run: printf '%s' "$STATE" > "$RUNNER_TEMP/state.json"
+
+      # Live pages are flaky by nature, so a single failure means nothing.
+      # Only a failure that reproduces after a pause is worth reporting —
+      # this is the "require consecutive failures" rule, done within one run
+      # so it needs no stored state.
+      - name: Run canary
+        id: canary
+        if: steps.creds.outputs.configured == 'true'
+        continue-on-error: true
+        env:
+          KIKOE_STORAGE_STATE: ${{ runner.temp }}/state.json
+        run: |
+          set +e
+          OUT=$(node tests/e2e/canary.mjs 2>&1); CODE=$?
+          if [ $CODE -ne 0 ]; then
+            echo "First attempt failed (exit $CODE); retrying in 60s."
+            sleep 60
+            OUT=$(node tests/e2e/canary.mjs 2>&1); CODE=$?
+          fi
+          echo "$OUT"
+          {
+            echo 'report<<CANARY_EOF'
+            echo "$OUT"
+            echo 'CANARY_EOF'
+          } >> "$GITHUB_OUTPUT"
+          echo "code=$CODE" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Report a redesign
+        if: steps.creds.outputs.configured == 'true' && steps.canary.outputs.code == '1'
+        uses: actions/github-script@v7
+        env:
+          REPORT: ${{ steps.canary.outputs.report }}
+        with:
+          script: |
+            const title = 'Canary: adapter selectors no longer match the live site';
+            const existing = await github.rest.issues.listForRepo({
+              owner: context.repo.owner, repo: context.repo.repo,
+              state: 'open', labels: 'canary',
+            });
+            const body = [
+              'The nightly canary could not find elements the adapters depend on.',
+              'It failed twice, sixty seconds apart, so this is unlikely to be a blip.',
+              '',
+              '```', process.env.REPORT, '```',
+              '',
+              `[Run](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId})`,
+            ].join('\n');
+
+            // Comment on the open report rather than opening a second one.
+            if (existing.data.length) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner, repo: context.repo.repo,
+                issue_number: existing.data[0].number, body: `Still failing.\n\n${body}`,
+              });
+            } else {
+              await github.rest.issues.create({
+                owner: context.repo.owner, repo: context.repo.repo,
+                title, body, labels: ['canary'],
+              });
+            }
+
+      # Exit 2 is expired cookies, not a redesign — a maintenance chore, and
+      # reporting it as a site change would train everyone to ignore the
+      # canary.
+      - name: Flag stale credentials
+        if: steps.creds.outputs.configured == 'true' && steps.canary.outputs.code == '2'
+        run: |
+          echo "::warning::Canary could not log in — KIKOE_STORAGE_STATE has likely expired and needs regenerating."

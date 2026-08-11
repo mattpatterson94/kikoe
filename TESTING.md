@@ -4,6 +4,32 @@ How to test the extension in a real browser without a microphone, using the
 Playwright harness in `tests/e2e/`. First proven during the 0.7.0 pre-release
 pass (July 2026), which caught two release blockers unit tests could not see.
 
+## What runs automatically
+
+Three lanes, answering different questions:
+
+| Lane | Command | Runs | Catches |
+| --- | --- | --- | --- |
+| Unit | `npm test` | every PR | logic regressions, in jsdom |
+| End-to-end | `npm run test:e2e` | every PR | our regressions in the *built* extension, against frozen fixtures |
+| Canary | `.github/workflows/canary.yml` | nightly | a WaniKani or BunPro redesign |
+
+`npm run test:e2e` needs `npm run build` first, and a display — CI runs it
+under `xvfb-run`. It boots the real `chrome/` build in Chromium, serves
+`tests/fixtures/` at the real site URLs via request interception, routes
+`api.wanikani.com` so a spec can put any accepted answer on a card, and drives
+speech through the shim. No account, no network, no microphone.
+
+The **canary** is the only lane that looks at the live sites, because frozen
+fixtures keep passing long after the real markup has moved on. It is strictly
+read-only — it asserts the adapter selectors are present and stops, submitting
+nothing — and it opens an issue only after failing twice. It skips cleanly
+until `KIKOE_STORAGE_STATE` is configured; see the header of
+`tests/e2e/canary.mjs`.
+
+Fixtures are hand-built approximations, not captures. Replace them with real
+ones via `node tests/e2e/record-fixtures.mjs` — see `tests/fixtures/README.md`.
+
 ## The harness
 
 ```bash
@@ -116,13 +142,25 @@ requests for the sliding `ids=` batches instead.
 
 ## Known gaps / next steps for automation
 
-- Real-microphone recognition is never exercised — keep one human smoke pass
-  per release for mic capture + real Web Speech results.
-- Codify this playbook as scripted Playwright specs (the harness pieces are
-  already in place).
-- Intercept `api.wanikani.com` via Playwright routes to fabricate 50+ queues
-  and specific subjects (unlocks Tier 3 live coverage).
-- Firefox is untested by this harness (needs web-ext + RDP plumbing);
-  Firefox coverage is currently manual-only.
-- BunPro `translate` (meaning/en-US) cards never surfaced during cram/review
-  sampling — worth targeting a vocab/translate deck next time.
+Now automated (see the table at the top): page-detection positives and
+lookalike negatives, indicator states, the mute command, the adapter health
+check, the full voice loop on both sites, and `api.wanikani.com` interception
+for fabricating specific subjects.
+
+Still needing a human:
+
+- **Real-microphone recognition is never exercised.** Everything above drives
+  the fake-speech shim. Keep one human smoke pass per release for actual mic
+  capture and real Web Speech results — this is the single biggest thing the
+  automation cannot replace.
+- **Recorded fixtures.** The checked-in ones are hand-built approximations, so
+  they test our assumptions about the markup rather than the markup itself.
+  One logged-in `record-fixtures.mjs` run replaces them.
+- **Deep-queue (50+) prefetch** — the sliding `ids=` batching is now
+  interceptable, but no spec fabricates a long enough queue yet.
+- **Options page rendering** (light + dark) and the corrections CRUD
+  round-trip are still eyeball checks.
+- **Firefox** is untested by this harness and unsupported besides — see the
+  README.
+- **BunPro `translate`** (meaning/en-US) cards never surfaced during
+  cram/review sampling; the fixture covers `cloze` only.
