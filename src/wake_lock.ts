@@ -10,50 +10,86 @@ let sentinel: WakeLockSentinel | null = null;
 
 // updateRecognitionForPageActivity in app.ts fires from 'blur', 'focus', and
 // 'visibilitychange' listeners that can all run back-to-back in the same
-// tick (e.g. switching tabs), each calling acquireWakeLock() without
-// awaiting the previous call. Tracking the in-flight request here lets a
-// second call join it instead of racing its own request() past the
-// `sentinel` guard before the first one resolves.
-let inFlight: Promise<void> | null = null;
+// tick (e.g. switching tabs), each calling acquireWakeLock()/releaseWakeLock()
+// without awaiting the previous call. Two mechanisms make that safe:
+//
+// 1. `desired` records only the *latest* intent. Callers don't queue "do an
+//    acquire" / "do a release" — they set what state is wanted and ask for a
+//    sync, so a call overtaken by a later one before it runs just re-applies
+//    the newer intent instead of undoing it.
+// 2. `pending` serializes the actual work (the request()/release() calls) so
+//    only one is ever in flight, and each step reads `desired` at the moment
+//    it *runs* rather than trusting a value captured when it was queued —
+//    otherwise an acquire queued before a release, but resolving after it,
+//    could re-grant a lock the caller has since asked to release (or the
+//    reverse).
+let desired: 'held' | 'released' = 'released';
 
-export function acquireWakeLock(): Promise<void> {
-  if (sentinel || !navigator.wakeLock) return Promise.resolve();
-  if (inFlight) return inFlight;
+// null when idle (no step queued or running). Kept distinct from "resolved
+// promise" so a call arriving while idle can start its step synchronously —
+// chaining onto an already-settled promise via .then() would still defer to
+// a microtask, which is one tick too late for a caller that fires two calls
+// back-to-back and expects the first to have already reached its own first
+// await (e.g. the request() call landing) before the second runs.
+let pending: Promise<void> | null = null;
 
-  inFlight = (async () => {
-    try {
-      const acquired = await navigator.wakeLock.request('screen');
-      acquired.addEventListener('release', () => {
-        // A release firing for a sentinel that isn't the one currently
-        // tracked (e.g. it was superseded and later released independently)
-        // must not clobber the current lock's reference.
-        if (sentinel === acquired) sentinel = null;
-      });
-      sentinel = acquired;
-    } catch {
-      // Unsupported, denied, or the document isn't visible right now — voice
-      // review still works without it, so there's nothing to surface to the
-      // user.
-    } finally {
-      inFlight = null;
-    }
-  })();
-
-  return inFlight;
+function sync(): Promise<void> {
+  return desired === 'held' ? holdLock() : dropLock();
 }
 
-export async function releaseWakeLock(): Promise<void> {
-  // Let a concurrent acquire finish first, otherwise the lock it's about to
-  // assign to `sentinel` would be orphaned — never released — the moment
-  // after this function returns.
-  if (inFlight) await inFlight;
+async function holdLock(): Promise<void> {
+  // `.released` is authoritative and synchronous, unlike waiting for this
+  // sentinel's own 'release' listener to have run — the browser may auto-
+  // release a lock (e.g. the document just went hidden) before that
+  // listener fires relative to whatever queued this sync.
+  if ((sentinel && !sentinel.released) || !navigator.wakeLock) return;
+  try {
+    const acquired = await navigator.wakeLock.request('screen');
+    // The desired state may have flipped to 'released' while the request
+    // was in flight; honor the latest intent rather than the one that
+    // queued this step.
+    if (desired !== 'held') {
+      await acquired.release().catch(() => {});
+      return;
+    }
+    acquired.addEventListener('release', () => {
+      if (sentinel === acquired) sentinel = null;
+    });
+    sentinel = acquired;
+  } catch {
+    // Unsupported, denied, or the document isn't visible right now — voice
+    // review still works without it, so there's nothing to surface to the
+    // user.
+  }
+}
 
+async function dropLock(): Promise<void> {
   const current = sentinel;
   sentinel = null;
-  if (!current) return;
+  if (!current || current.released) return;
   try {
     await current.release();
   } catch {
     // Already released.
   }
+}
+
+function enqueue(): Promise<void> {
+  // Both success and failure continuations run `sync`, so one step
+  // throwing (it shouldn't — both branches catch internally) can't stall
+  // every later call permanently behind a rejected chain.
+  const step = pending ? pending.then(sync, sync) : sync();
+  pending = step;
+  step.finally(() => { if (pending === step) pending = null; });
+  return step;
+}
+
+export function acquireWakeLock(): Promise<void> {
+  desired = 'held';
+  return enqueue();
+}
+
+export function releaseWakeLock(): Promise<void> {
+  desired = 'released';
+  return enqueue();
 }

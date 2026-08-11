@@ -727,7 +727,7 @@ async function startListener(dictionary: Dictionary): Promise<void> {
   // re-evaluated on every activity change and settings update rather than
   // requested once.
   function syncWakeLock(): void {
-    if (!userMuted && isPageActive() && !helpOpen && getSettings().keep_screen_awake) {
+    if (!userMuted && !micPermissionDenied && isPageActive() && !helpOpen && getSettings().keep_screen_awake) {
       acquireWakeLock();
     } else {
       releaseWakeLock();
@@ -766,6 +766,9 @@ async function startListener(dictionary: Dictionary): Promise<void> {
     micPermissionDenied = state === 'denied';
     if (micPermissionDenied) {
       setIdleIndicatorState('mic-denied');
+      // Recognition isn't actually listening while permission is denied —
+      // don't force the screen to stay awake for a session that's stalled.
+      syncWakeLock();
     } else if (wasDenied) {
       // Permission was just (re)granted. The earlier denial disabled
       // recognition's auto-restart as a fatal error — nudge it back to life

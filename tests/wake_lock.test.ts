@@ -1,20 +1,29 @@
 import { acquireWakeLock, releaseWakeLock } from '../src/wake_lock';
 
+// Mirrors the real WakeLockSentinel: `.released` flips synchronously the
+// moment the lock is released — whether by an explicit release() call or,
+// via fireReleaseEvent(), the browser's own automatic release (e.g. the
+// document going hidden) — and the 'release' event fires alongside it.
 function mockSentinel() {
+  let released = false;
   const releaseListeners: (() => void)[] = [];
   return {
-    released: false,
+    get released() { return released; },
     addEventListener: (type: string, listener: () => void) => {
       if (type === 'release') releaseListeners.push(listener);
     },
-    release: vi.fn(async function (this: { released: boolean }) {
-      this.released = true;
+    release: vi.fn(async () => {
+      released = true;
       releaseListeners.forEach((l) => l());
     }),
-    // Fires the 'release' listener(s) directly, without going through
-    // release() — simulates the browser's own auto-release (e.g. the
-    // document going hidden) rather than an explicit releaseWakeLock() call.
-    fireReleaseEvent: () => releaseListeners.forEach((l) => l()),
+    fireReleaseEvent: () => {
+      released = true;
+      releaseListeners.forEach((l) => l());
+    },
+    // Flips `.released` the way the browser would on its own automatic
+    // release, without dispatching the 'release' event yet — lets a test
+    // exercise the gap between the two instead of assuming they're atomic.
+    markReleasedWithoutEvent: () => { released = true; },
   };
 }
 
@@ -73,12 +82,33 @@ describe('acquireWakeLock', () => {
     expect(request).toHaveBeenCalledTimes(2);
   });
 
+  test('re-requests when the browser auto-released the tracked sentinel before its event ran', async () => {
+    // Regression: the guard used to trust a non-null `sentinel` reference
+    // even if the browser had already released it (e.g. on the document
+    // going hidden) but that sentinel's own 'release' listener — which nulls
+    // the module's reference — hadn't been dispatched yet. Checking
+    // `.released` directly instead of relying on that listener having run
+    // catches this regardless of event-ordering.
+    const first = mockSentinel();
+    const second = mockSentinel();
+    const request = vi.fn()
+      .mockResolvedValueOnce(first)
+      .mockResolvedValueOnce(second);
+    // @ts-expect-error jsdom has no navigator.wakeLock by default
+    navigator.wakeLock = { request };
+
+    await acquireWakeLock();
+    first.markReleasedWithoutEvent();
+
+    await acquireWakeLock();
+
+    expect(request).toHaveBeenCalledTimes(2);
+  });
+
   test('two unawaited calls in the same tick only issue one request', async () => {
     // Regression: app.ts's blur/focus/visibilitychange listeners can all
     // fire in the same tick (e.g. switching tabs) and each call
-    // acquireWakeLock() without awaiting the previous call. Both used to
-    // pass the `if (sentinel) return` guard before the first request()
-    // settled, issuing two requests and losing track of one sentinel.
+    // acquireWakeLock() without awaiting the previous call.
     const sentinel = mockSentinel();
     let resolveRequest!: (value: unknown) => void;
     const request = vi.fn(() => new Promise((resolve) => { resolveRequest = resolve; }));
@@ -92,6 +122,30 @@ describe('acquireWakeLock', () => {
     await second;
 
     expect(request).toHaveBeenCalledTimes(1);
+  });
+
+  test('an acquire sandwiched around a still-pending release ends up held, not released', async () => {
+    // Regression: acquire (A1) starts request(), then release (R1) joins the
+    // same in-flight step, then acquire (A2) joins it too — all before the
+    // request settles. R1 must not clobber the lock A2 asked for once it
+    // resolves: the *last* call was an acquire, so the end state must be
+    // held.
+    const sentinel = mockSentinel();
+    let resolveRequest!: (value: unknown) => void;
+    const request = vi.fn(() => new Promise((resolve) => { resolveRequest = resolve; }));
+    // @ts-expect-error jsdom has no navigator.wakeLock by default
+    navigator.wakeLock = { request };
+
+    const a1 = acquireWakeLock();
+    const r1 = releaseWakeLock();
+    const a2 = acquireWakeLock();
+    resolveRequest(sentinel);
+    await Promise.all([a1, r1, a2]);
+
+    expect(sentinel.release).not.toHaveBeenCalled();
+    // A later release proves the module still thinks it's holding the lock.
+    await releaseWakeLock();
+    expect(sentinel.release).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -137,6 +191,27 @@ describe('releaseWakeLock', () => {
     resolveRequest(sentinel);
     await acquiring;
     await releasing;
+
+    expect(sentinel.release).toHaveBeenCalledTimes(1);
+  });
+
+  test('a release sandwiched around a still-pending acquire ends up released, not held', async () => {
+    // Mirror of the acquire-sandwich case above: release (R1) joins the
+    // in-flight step from acquire (A1), then acquire (A2) joins too, then a
+    // final release (R2) — the last call was a release, so once the request
+    // settles the newly granted lock must be released, not kept.
+    const sentinel = mockSentinel();
+    let resolveRequest!: (value: unknown) => void;
+    const request = vi.fn(() => new Promise((resolve) => { resolveRequest = resolve; }));
+    // @ts-expect-error jsdom has no navigator.wakeLock by default
+    navigator.wakeLock = { request };
+
+    const a1 = acquireWakeLock();
+    const r1 = releaseWakeLock();
+    const a2 = acquireWakeLock();
+    const r2 = releaseWakeLock();
+    resolveRequest(sentinel);
+    await Promise.all([a1, r1, a2, r2]);
 
     expect(sentinel.release).toHaveBeenCalledTimes(1);
   });
