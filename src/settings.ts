@@ -18,6 +18,7 @@ export interface Settings {
   transcript_theme: 'system' | 'light' | 'dark';
   transcript_position: 'top' | 'bottom';
   show_help_button: boolean;
+  keep_screen_awake: boolean;
   // Not user-facing: flipped to true (via content.ts) after the one-time
   // help-discovery hint has been shown, so it never reappears.
   help_hint_shown: boolean;
@@ -34,6 +35,7 @@ export const defaults: Settings = {
   transcript_theme: 'system',
   transcript_position: 'top',
   show_help_button: true,
+  keep_screen_awake: true,
   help_hint_shown: false,
 };
 
