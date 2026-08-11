@@ -10,6 +10,7 @@ import { debugLog } from './logger';
 import { startSpeedEnhancer as startWanikaniSpeedEnhancer } from './speed';
 import { startSpeedEnhancer as startBunproSpeedEnhancer } from './bunpro_speed';
 import { createTranscriptContainer, logTranscript, showIdleIndicator, setIdleIndicatorState } from './live_transcript';
+import { watchMicPermission } from './mic_permission';
 import { SHARED_COMMANDS, REVEAL_COMMANDS, GRADE_COMMANDS, HELP_COMMANDS, buildCommandTable, commandsForMode } from './commands';
 import type { HelpMode } from './commands';
 import { updateHelpChip, openHelpPanel, closeHelpPanel, isHelpPanelOpen, showHelpHint } from './help';
@@ -164,9 +165,15 @@ async function startListener(dictionary: Dictionary): Promise<void> {
   // separately from the page being hidden/blurred — see
   // updateRecognitionForPageActivity, which must not silently un-mute this.
   let userMuted = false;
+  // Set by watchMicPermission below. Checked first so a proactive permission
+  // read always wins over the optimistic "recognition resumed, so show
+  // Listening" calls elsewhere (see #78 — those calls otherwise mask a
+  // revoked permission until recognition itself gets around to failing).
+  let micPermissionDenied = false;
 
   function restoreIdleIndicator(): void {
-    if (userMuted) setIdleIndicatorState('muted');
+    if (micPermissionDenied) setIdleIndicatorState('mic-denied');
+    else if (userMuted) setIdleIndicatorState('muted');
     else if (context?.mode === 'unsupported') setIdleIndicatorState('unsupported');
     else if (subjectsLoadFailed) setIdleIndicatorState('error');
     else setIdleIndicatorState(_config.hasApiToken ? 'listening' : 'no-token');
@@ -680,6 +687,19 @@ async function startListener(dictionary: Dictionary): Promise<void> {
   window.addEventListener('focus', updateRecognitionForPageActivity);
   window.addEventListener('blur', updateRecognitionForPageActivity);
   updateRecognitionForPageActivity();
+
+  watchMicPermission((state) => {
+    const wasDenied = micPermissionDenied;
+    micPermissionDenied = state === 'denied';
+    if (micPermissionDenied) {
+      setIdleIndicatorState('mic-denied');
+    } else if (wasDenied) {
+      // Permission was just (re)granted. The earlier denial disabled
+      // recognition's auto-restart as a fatal error — nudge it back to life
+      // instead of leaving the indicator to claim "Listening" over nothing.
+      updateRecognitionForPageActivity();
+    }
+  });
 
   // Recognition is listening as of the call above. Now wait for the initial
   // card's subjects (already in flight since the top of this function) and
