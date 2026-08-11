@@ -16,10 +16,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Answers submit as soon as the speech engine stops revising what it heard,
+- Answers submit once the speech engine's in-progress guess holds still,
   instead of always waiting out its end-of-speech detection. Meaning and name
   questions now get this too — previously only reading questions could submit
-  from an in-progress result, and only after a fixed 900 ms wait.
+  from an in-progress result, and only after a fixed 900 ms wait. A guess has
+  to hold steady briefly before it counts, so a pause in the middle of a
+  phrase doesn't cut the rest of it off, and anything that reads as a voice
+  command still routes to the command rather than being submitted as an
+  answer.
 - Switching recognition between English and Japanese on a card change aborts
   the old session instead of waiting for it to drain buffered audio from the
   previous card, so the mic is live again sooner.
@@ -29,6 +33,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Muting, blurring the tab, or opening the help panel no longer lets a
+  matched in-progress answer submit itself a moment later with the mic
+  already off.
 - Dismissing the on-screen keyboard on iPad no longer pauses recognition.
   Touch-primary devices now give a window blur a brief grace window before
   treating it as "left the page," since keyboard dismissal clears itself

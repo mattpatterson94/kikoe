@@ -1493,13 +1493,13 @@ describe('startListener ippatsu mode (one-shot auto-submit on a miss)', () => {
   // Starts the listener on a card of the given question type with the given
   // settings and waits until the subject data has been loaded, so utterances
   // fired afterwards hit the normal (non-pending) check path.
-  async function loadCard(type, settings) {
+  async function loadCard(type, settings, subjects = [subject]) {
     setCardDOM(type);
     stampConfig({ hasApiToken: true, settings });
     const subjectRequest = interceptSubjectRequest();
     await importApp();
     await subjectRequest.ready;
-    subjectRequest.respond([subject]);
+    subjectRequest.respond(subjects);
     await vi.waitFor(() => {
       if (document.getElementById('kikoe-idle-label')?.textContent !== 'Listening') {
         throw new Error('subjects not loaded yet');
@@ -1593,14 +1593,67 @@ describe('startListener ippatsu mode (one-shot auto-submit on a miss)', () => {
   // The engine re-sending an in-progress result without revising it means the
   // user has stopped talking, so there is nothing left for the wait to protect
   // against.
-  test('a matched interim repeated unchanged submits without waiting', async () => {
+  test('a matched interim repeated unchanged submits ahead of the backstop', async () => {
     const native = await loadCard('Reading', {});
-    native.onresult({ resultIndex: 0, results: [interimResult('さむい')] });
-    expect(document.getElementById('user-response').value).toBe('');
+    vi.useFakeTimers();
+    try {
+      native.onresult({ resultIndex: 0, results: [interimResult('さむい')] });
+      expect(document.getElementById('user-response').value).toBe('');
 
-    native.onresult({ resultIndex: 0, results: [interimResult('さむい')] });
+      // Held still past the settle floor, but well short of the 900ms backstop.
+      vi.advanceTimersByTime(400);
+      native.onresult({ resultIndex: 0, results: [interimResult('さむい')] });
 
-    expect(document.getElementById('user-response').value).toBe('さむい');
+      expect(document.getElementById('user-response').value).toBe('さむい');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  // The engine re-emits on audio activity, not only when it revises the
+  // transcript, so an unchanged interim arriving straight away is what a pause
+  // in the middle of an utterance looks like — cutting in there would push the
+  // rest of the phrase onto the next card.
+  test('an unchanged interim during a mid-phrase pause does not submit early', async () => {
+    const native = await loadCard('Reading', {});
+    vi.useFakeTimers();
+    try {
+      native.onresult({ resultIndex: 0, results: [interimResult('さむい')] });
+      vi.advanceTimersByTime(150);
+      native.onresult({ resultIndex: 0, results: [interimResult('さむい')] });
+
+      expect(document.getElementById('user-response').value).toBe('');
+
+      // The user carries on, and the revised text replaces the match.
+      native.onresult({ resultIndex: 0, results: [interimResult('さむいですね')] });
+      vi.advanceTimersByTime(900);
+      expect(document.getElementById('user-response').value).toBe('');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  // An unchanged re-emission is not new speech, so it must not push the
+  // backstop out — otherwise a steady stream of them defers the submit forever.
+  test('unchanged interims do not postpone the backstop', async () => {
+    const native = await loadCard('Reading', {});
+    vi.useFakeTimers();
+    try {
+      native.onresult({ resultIndex: 0, results: [interimResult('さむい')] });
+      // Repeats inside the settle floor: too early to submit, but they must
+      // not reset the deadline either.
+      vi.advanceTimersByTime(100);
+      native.onresult({ resultIndex: 0, results: [interimResult('さむい')] });
+      vi.advanceTimersByTime(100);
+      native.onresult({ resultIndex: 0, results: [interimResult('さむい')] });
+      expect(document.getElementById('user-response').value).toBe('');
+
+      // 900ms after the first match, not after the last repeat.
+      vi.advanceTimersByTime(700);
+      expect(document.getElementById('user-response').value).toBe('さむい');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   test('an interim that is still being revised keeps waiting', async () => {
@@ -1610,6 +1663,46 @@ describe('startListener ippatsu mode (one-shot auto-submit on a miss)', () => {
     native.onresult({ resultIndex: 0, results: [interimResult('さむいです')] });
 
     expect(document.getElementById('user-response').value).toBe('');
+  });
+
+  // Voice commands outrank answers, and several command words are themselves
+  // accepted meanings. The interim shortcut checks answers before the final
+  // path gets to match commands, so it has to stay out of the way here.
+  test('a command word that is also an accepted meaning still runs the command', async () => {
+    const mistake = {
+      ...subject,
+      data: { ...subject.data, meanings: [{ meaning: 'Mistake', accepted_answer: true }] },
+    };
+    const native = await loadCard('Meaning', {}, [mistake]);
+    vi.useFakeTimers();
+    try {
+      native.onresult({ resultIndex: 0, results: [interimResult('mistake')] });
+      vi.advanceTimersByTime(900);
+
+      // Not submitted as an answer by the interim shortcut.
+      expect(document.getElementById('user-response').value).toBe('');
+    } finally {
+      vi.useRealTimers();
+    }
+
+    // The final routes it to 'wrong', which submits the placeholder instead.
+    native.onresult({ resultIndex: 0, results: [finalResult('mistake')] });
+    expect(document.getElementById('user-response').value).toBe('aaa');
+  });
+
+  test('muting cancels a matched interim instead of submitting it once muted', async () => {
+    const native = await loadCard('Reading', {});
+    vi.useFakeTimers();
+    try {
+      native.onresult({ resultIndex: 0, results: [interimResult('さむい')] });
+      document.getElementById('kikoe-idle').click();
+
+      vi.advanceTimersByTime(900);
+      expect(document.getElementById('user-response').value).toBe('');
+      expect(document.getElementById('kikoe-idle-label').textContent).toBe('Muted');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   // Fuzzy matching is disabled for interims: a partial utterance can land

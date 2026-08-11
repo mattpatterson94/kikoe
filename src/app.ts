@@ -35,11 +35,18 @@ const RESTARTING_INDICATOR_MS = 900;
 
 // A matched interim isn't submitted the instant it matches: the user may still
 // be mid-utterance, and cutting them off would push the tail of their speech
-// onto the next card. The recognizer re-emitting an interim without revising
-// it is direct evidence that speech has stopped, so a repeat submits
-// immediately (see scheduleMatchedInterimSubmit) and this timeout is only the
-// backstop for engines that don't re-emit an unchanged interim.
+// onto the next card — where, with ippatsu on, it is auto-marked wrong. This
+// is the backstop wait when nothing better is known.
 const MATCHED_INTERIM_SUBMIT_MS = 900;
+
+// How long a matched interim must hold still before an unchanged re-emission
+// counts as "the user stopped talking" (see scheduleMatchedInterimSubmit).
+// The engine re-emits on audio activity, not only when it revises the
+// transcript, so an unchanged interim on its own is also what a mid-phrase
+// pause looks like — this floor is what separates the two. It sits above a
+// natural mid-phrase pause and below the backstop, so the common case still
+// submits well before MATCHED_INTERIM_SUBMIT_MS.
+const MATCHED_INTERIM_SETTLE_MS = 400;
 
 // window blur/focus exist as page-activity signals for the desktop case
 // visibilitychange misses: alt-tabbing to another app while the browser
@@ -304,6 +311,8 @@ async function startListener(dictionary: Dictionary): Promise<void> {
     raws: string[];
     resultId: string;
     result: Extract<CheckResult, { success: true }>;
+    /** When this text first matched, for the settle floor. */
+    matchedAt: number;
   } | null = null;
 
   // While the help panel is open the mic is paused: the panel displays the
@@ -460,18 +469,23 @@ async function startListener(dictionary: Dictionary): Promise<void> {
     resultId: string,
     result: Extract<CheckResult, { success: true }>,
   ): void {
-    // The same in-progress result matching the same text again means the
-    // recognizer has stopped revising it — the user has finished speaking, so
-    // there's nothing left to wait for.
-    const settled = pendingInterimSubmit?.resultId === resultId &&
-      pendingInterimSubmit?.raws[0] === raws[0];
-    clearTimeout(matchedInterimTimer);
-    matchedInterimTimer = undefined;
-    pendingInterimSubmit = { ctx, raws, resultId, result };
-    if (settled) {
-      submitMatchedInterim();
+    const pending = pendingInterimSubmit;
+    // The same in-progress result still matching the same text: the recognizer
+    // has stopped revising it.
+    const unchanged = pending?.resultId === resultId && pending.raws[0] === raws[0];
+
+    if (pending && unchanged) {
+      // Not new speech, so this must not push the backstop further out — leave
+      // the original deadline running. Submitting ahead of it needs the text to
+      // have held still long enough to tell a finished utterance apart from a
+      // pause in the middle of one.
+      pendingInterimSubmit = { ...pending, ctx, result };
+      if (Date.now() - pending.matchedAt >= MATCHED_INTERIM_SETTLE_MS) submitMatchedInterim();
       return;
     }
+
+    clearTimeout(matchedInterimTimer);
+    pendingInterimSubmit = { ctx, raws, resultId, result, matchedAt: Date.now() };
     matchedInterimTimer = setTimeout(submitMatchedInterim, MATCHED_INTERIM_SUBMIT_MS);
   }
 
@@ -586,8 +600,14 @@ async function startListener(dictionary: Dictionary): Promise<void> {
     // land within WaniKani's edit-distance tolerance of an accepted meaning
     // while the user is still mid-word. Near-misses still submit via the
     // normal final-result path below.
+    //
+    // Anything that reads as a voice command is left entirely to the final
+    // path, which matches commands before answers. Otherwise this shortcut
+    // would invert that priority: several command words are themselves
+    // accepted meanings ("mistake" for 誤り, "next" for 次), so saying
+    // "mistake" to mark a card wrong would submit it as a correct answer.
     if (!final) {
-      if (!submitted && ctx && isInterimSubmittable(ctx.type)) {
+      if (!submitted && ctx && isInterimSubmittable(ctx.type) && !matchCommand(raws)) {
         const interimResult = checkAlternatives(ctx, raws, { fuzzyMeaning: false });
         if (interimResult?.success && interimResult.answer) {
           logCheckResult(ctx, interimResult);
@@ -684,6 +704,11 @@ async function startListener(dictionary: Dictionary): Promise<void> {
     if (site.didContextChange(context, newContext)) {
       submitted = false;
       pendingRaws = null;
+      // Speech matched against the card being left behind must not carry into
+      // this one: the settle check keys off the in-progress result's identity,
+      // which the engine reuses across a card change when the utterance never
+      // finalized.
+      clearMatchedInterimTimer();
       context = newContext;
       // Change the speech model before waiting for WaniKani subject data.
       // Otherwise the recognizer can spend that loading window interpreting
@@ -759,6 +784,10 @@ async function startListener(dictionary: Dictionary): Promise<void> {
   function updateRecognitionForPageActivity(): void {
     clearTimeout(restartIndicatorTimer);
     clearTimeout(touchBlurGraceTimer);
+    // Muting, blurring, or opening the help panel must not leave a matched
+    // interim queued behind it — otherwise the answer lands seconds later,
+    // with the mic already off and nothing on screen explaining it.
+    clearMatchedInterimTimer();
     emptyFinals = 0;
     if (micPermissionDenied) {
       // Retrying start() here would just fail again with the same
