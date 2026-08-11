@@ -716,7 +716,11 @@ async function startListener(dictionary: Dictionary): Promise<void> {
 
   startSpeedEnhancer(getSettings);
 
-  showIdleIndicator(getSettings(), () => setMuted(!userMuted));
+  // While permission is denied there's nothing to mute/unmute — recognition
+  // isn't running — so ignore the click instead of letting it silently set
+  // userMuted, which would otherwise block the automatic resume once
+  // watchMicPermission (below) sees permission granted again.
+  showIdleIndicator(getSettings(), () => { if (!micPermissionDenied) setMuted(!userMuted); });
 
   // The "?" chip next to the indicator; recreated/removed when the setting
   // changes. Saying "help" works regardless of the chip's visibility.
@@ -739,7 +743,14 @@ async function startListener(dictionary: Dictionary): Promise<void> {
     clearTimeout(restartIndicatorTimer);
     clearTimeout(touchBlurGraceTimer);
     emptyFinals = 0;
-    if (userMuted) {
+    if (micPermissionDenied) {
+      // Retrying start() here would just fail again with the same
+      // 'not-allowed' error on every focus/blur/visibility flip until the
+      // user actually grants permission — watchMicPermission's onchange
+      // handler is what resumes recognition once that happens.
+      recognition.pause();
+      restoreIdleIndicator();
+    } else if (userMuted) {
       recognition.pause();
       restoreIdleIndicator();
     } else if (isPageActive() && !helpOpen) {

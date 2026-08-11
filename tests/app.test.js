@@ -208,6 +208,47 @@ describe('startListener proactive microphone permission check', () => {
     expect(label.textContent).toMatch(/listening/i);
     expect(native.nativeStart.mock.calls.length).toBeGreaterThan(callsBeforeGrant);
   });
+
+  test('clicking the indicator while denied does not block the later automatic recovery', async () => {
+    const status = { state: 'denied', onchange: null };
+    navigator.permissions = { query: vi.fn(() => Promise.resolve(status)) };
+    stampConfig({ hasApiToken: true });
+
+    await importApp();
+    const chip = document.getElementById('kikoe-idle');
+    const label = document.getElementById('kikoe-idle-label');
+    await vi.waitFor(() => expect(label.textContent).toMatch(/microphone access denied/i));
+
+    // A user poking at the (visibly inert) chip while denied must not set an
+    // explicit mute that would later block watchMicPermission's recovery.
+    chip.click();
+    expect(label.textContent).toMatch(/microphone access denied/i);
+
+    status.state = 'granted';
+    status.onchange();
+
+    expect(label.textContent).toMatch(/listening/i);
+  });
+
+  test('does not keep retrying recognition.start() while permission stays denied', async () => {
+    const status = { state: 'denied', onchange: null };
+    navigator.permissions = { query: vi.fn(() => Promise.resolve(status)) };
+    stampConfig({ hasApiToken: true });
+
+    await importApp();
+    const label = document.getElementById('kikoe-idle-label');
+    await vi.waitFor(() => expect(label.textContent).toMatch(/microphone access denied/i));
+
+    const native = MockSpeechRecognition.instances[0];
+    const callsWhileDenied = native.nativeStart.mock.calls.length;
+
+    window.dispatchEvent(new Event('blur'));
+    window.dispatchEvent(new Event('focus'));
+    document.dispatchEvent(new Event('visibilitychange'));
+
+    expect(native.nativeStart.mock.calls.length).toBe(callsWhileDenied);
+    expect(label.textContent).toMatch(/microphone access denied/i);
+  });
 });
 
 describe('startListener pending transcript retry on the initial card', () => {
