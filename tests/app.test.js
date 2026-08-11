@@ -127,6 +127,89 @@ describe('startListener recognition error handling', () => {
   });
 });
 
+describe('startListener proactive microphone permission check', () => {
+  // Same MockSpeechRecognition shape as the error-handling describe above —
+  // kept local so instance lists don't leak between describes.
+  class MockSpeechRecognition {
+    constructor() {
+      this.continuous = false;
+      this.interimResults = false;
+      this.maxAlternatives = 1;
+      this.lang = '';
+      this.nativeStart = vi.fn();
+      this.nativeStop = vi.fn();
+      this.start = this.nativeStart;
+      this.stop = this.nativeStop;
+      MockSpeechRecognition.instances.push(this);
+    }
+  }
+  MockSpeechRecognition.instances = [];
+
+  beforeEach(() => {
+    MockSpeechRecognition.instances = [];
+    vi.stubGlobal('webkitSpeechRecognition', MockSpeechRecognition);
+    // jsdom's document.hasFocus() defaults to false, which reads as a
+    // blurred/backgrounded tab to isPageActive() and short-circuits
+    // updateRecognitionForPageActivity straight to 'paused' — pin the tab as
+    // foregrounded so these tests exercise the permission-driven states.
+    vi.spyOn(document, 'hasFocus').mockReturnValue(true);
+  });
+
+  afterEach(() => {
+    delete navigator.permissions;
+    vi.restoreAllMocks();
+  });
+
+  test('flags an already-revoked permission before recognition ever errors', async () => {
+    const status = { state: 'denied', onchange: null };
+    navigator.permissions = { query: vi.fn(() => Promise.resolve(status)) };
+    stampConfig();
+
+    await importApp();
+
+    const label = document.getElementById('kikoe-idle-label');
+    await vi.waitFor(() => expect(label.textContent).toMatch(/microphone access denied/i));
+  });
+
+  test('a permission revoked mid-session overrides the optimistic "Listening" restore', async () => {
+    const status = { state: 'granted', onchange: null };
+    navigator.permissions = { query: vi.fn(() => Promise.resolve(status)) };
+    stampConfig({ hasApiToken: true });
+
+    await importApp();
+    const label = document.getElementById('kikoe-idle-label');
+    await vi.waitFor(() => expect(navigator.permissions.query).toHaveBeenCalled());
+
+    status.state = 'denied';
+    status.onchange();
+    expect(label.textContent).toMatch(/microphone access denied/i);
+
+    // A stray call to restoreIdleIndicator's caller (e.g. a late recognition
+    // result) must not overwrite the denial — see #78.
+    window.dispatchEvent(new Event('focus'));
+    expect(label.textContent).toMatch(/microphone access denied/i);
+  });
+
+  test('recovers and resumes recognition once permission is granted again', async () => {
+    const status = { state: 'denied', onchange: null };
+    navigator.permissions = { query: vi.fn(() => Promise.resolve(status)) };
+    stampConfig({ hasApiToken: true });
+
+    await importApp();
+    const label = document.getElementById('kikoe-idle-label');
+    await vi.waitFor(() => expect(label.textContent).toMatch(/microphone access denied/i));
+
+    const native = MockSpeechRecognition.instances[0];
+    const callsBeforeGrant = native.nativeStart.mock.calls.length;
+
+    status.state = 'granted';
+    status.onchange();
+
+    expect(label.textContent).toMatch(/listening/i);
+    expect(native.nativeStart.mock.calls.length).toBeGreaterThan(callsBeforeGrant);
+  });
+});
+
 describe('startListener pending transcript retry on the initial card', () => {
   // Same MockSpeechRecognition shape as above — kept local to this describe
   // block so its instance list doesn't leak between describes.
