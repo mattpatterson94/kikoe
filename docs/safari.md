@@ -38,9 +38,15 @@ drag into Transporter.
 
 The build number is a floor rather than an exact value: Xcode's export step asks
 App Store Connect whether that number is already taken and increments past it if
-so. Since App Store Connect tracks build numbers per platform, iOS and macOS
-routinely end up on different numbers. The export prints what each artifact
-actually got — trust that over what you passed in.
+so. The export prints what each artifact actually got — trust that over what you
+passed in.
+
+Build numbers are shared across iOS and macOS, not tracked per platform. Both
+apps ship under one bundle identifier, so a macOS package numbered below an
+already-uploaded iOS build is rejected as a 409 even though no macOS build ever
+used that number. Xcode's own auto-increment doesn't account for this and will
+happily export a macOS build that App Store Connect then refuses, so pass a
+build number above the highest one uploaded for *either* platform.
 
 The script also writes two Info.plist keys the converter omits.
 `LSApplicationCategoryType` (`public.app-category.education`, override with
