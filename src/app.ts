@@ -10,6 +10,7 @@ import { debugLog } from './logger';
 import { startSpeedEnhancer as startWanikaniSpeedEnhancer } from './speed';
 import { startSpeedEnhancer as startBunproSpeedEnhancer } from './bunpro_speed';
 import { createTranscriptContainer, logTranscript, showIdleIndicator, setIdleIndicatorState } from './live_transcript';
+import { acquireWakeLock, releaseWakeLock } from './wake_lock';
 import { SHARED_COMMANDS, REVEAL_COMMANDS, GRADE_COMMANDS, HELP_COMMANDS, buildCommandTable, commandsForMode } from './commands';
 import type { HelpMode } from './commands';
 import { updateHelpChip, openHelpPanel, closeHelpPanel, isHelpPanelOpen, showHelpHint } from './help';
@@ -641,7 +642,10 @@ async function startListener(dictionary: Dictionary): Promise<void> {
   // The "?" chip next to the indicator; recreated/removed when the setting
   // changes. Saying "help" works regardless of the chip's visibility.
   updateHelpChip(getSettings(), toggleHelp);
-  document.addEventListener('kikoe:settingsChanged', () => updateHelpChip(getSettings(), toggleHelp));
+  document.addEventListener('kikoe:settingsChanged', () => {
+    updateHelpChip(getSettings(), toggleHelp);
+    syncWakeLock();
+  });
 
   // One-time discovery nudge; content.ts persists the flag so it never
   // shows again once seen.
@@ -655,6 +659,19 @@ async function startListener(dictionary: Dictionary): Promise<void> {
   // the indicator should stay muted even if the tab loses and regains focus.
   // An open help panel pauses like a blurred tab (see setHelpOpen) and
   // resumes on close, again without clobbering an explicit mute.
+  // Mirrors the resume/pause branches below: the screen only needs to stay
+  // awake while recognition is actually listening, and the Wake Lock API
+  // releases itself whenever the document goes hidden, so this has to be
+  // re-evaluated on every activity change and settings update rather than
+  // requested once.
+  function syncWakeLock(): void {
+    if (!userMuted && isPageActive() && !helpOpen && getSettings().keep_screen_awake) {
+      acquireWakeLock();
+    } else {
+      releaseWakeLock();
+    }
+  }
+
   function updateRecognitionForPageActivity(): void {
     clearTimeout(restartIndicatorTimer);
     emptyFinals = 0;
@@ -668,6 +685,7 @@ async function startListener(dictionary: Dictionary): Promise<void> {
       recognition.pause();
       setIdleIndicatorState('paused');
     }
+    syncWakeLock();
   }
 
   function setMuted(muted: boolean): void {

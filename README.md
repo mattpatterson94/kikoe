@@ -17,6 +17,7 @@
 - Voice commands: say "next" (or 次) to advance, "wrong" / 間違い to mark an answer incorrect
 - In-page help: say "help" (or ヘルプ) or click the ? button next to the listening indicator for a cheat sheet of the commands that work on the current card
 - Automatic language switching between Japanese recognition for reading questions and English for meaning questions
+- Keeps the screen awake while listening, so a hands-free review doesn't get cut short by the device's idle timer
 
 ## Chrome Web Store Description Excerpt
 

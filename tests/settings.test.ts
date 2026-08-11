@@ -30,6 +30,10 @@ describe('defaults', () => {
     expect(defaults.show_help_button).toBe(true);
   });
 
+  test('keep_screen_awake is on by default', () => {
+    expect(defaults.keep_screen_awake).toBe(true);
+  });
+
   test('help_hint_shown is off by default (the one-time hint has not been seen)', () => {
     expect(defaults.help_hint_shown).toBe(false);
   });
@@ -37,7 +41,7 @@ describe('defaults', () => {
   test('all expected keys are present', () => {
     const keys = ['debug', 'customCorrections', 'turbo', 'speed_show_info',
       'transcript', 'transcript_theme', 'transcript_position',
-      'show_help_button', 'help_hint_shown'];
+      'show_help_button', 'keep_screen_awake', 'help_hint_shown'];
     for (const k of keys) expect(defaults).toHaveProperty(k);
   });
 });

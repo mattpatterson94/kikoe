@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Added
+
+- Keep screen awake while listening (on by default, toggle in settings): uses
+  the Screen Wake Lock API to stop the display from dimming or auto-locking
+  during a hands-free review, since there's no touch or mouse input to reset
+  the device's idle timer.
+
 ## [0.10.0] - 2026-07-16
 
 ### Changed
