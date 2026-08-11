@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- A "Can't read this page" indicator state. WaniKani and BunPro are read
+  through site markup that changes from time to time, and when it did, Kikoe
+  would quietly do nothing while still showing "Listening". It now checks that
+  it can still see the question, its type, and somewhere to put the answer,
+  and says so when it can't. Brief gaps during a normal card change are
+  ignored, and the state clears itself as soon as the page can be read again.
+- A watchdog for a recognizer that has gone silent. The speech engine can
+  leave a session open while its audio has actually stopped — after a device
+  switch, waking from sleep, or a Bluetooth headset handing over — producing
+  no speech, no error, and nothing to react to. Previously the only fix was
+  reloading the page; now recognition restarts itself.
 - Keep screen awake while listening (on by default, toggle in settings): uses
   the Screen Wake Lock API to stop the display from dimming or auto-locking
   during a hands-free review, since there's no touch or mouse input to reset
@@ -30,9 +41,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Upcoming WaniKani subjects are prefetched alongside the current card's fetch
   rather than after it, so a card that misses the cache no longer delays the
   cards behind it.
+- Cached WaniKani answers now expire after a week and are dropped when their
+  stored format changes, so edits made on WaniKani — a new user synonym, for
+  instance — are picked up instead of being masked indefinitely by a cache
+  entry that never went stale.
+- Recognition backs off before restarting after any failed session, not only
+  after a network error. Ordinary silence is unaffected: the engine ending a
+  session it has been running for a while is normal and still restarts
+  immediately.
+- Firefox is documented as unsupported. It was listed as a supported browser
+  with install instructions, but Firefox has no Web Speech recognition, so the
+  extension could never work there — following those instructions produced a
+  dead extension. The build still assembles a `firefox/` directory.
+  ([#20](https://github.com/mattpatterson94/kikoe/issues/20))
 
 ### Fixed
 
+- A WaniKani card could lose its answers because of a *storage* problem rather
+  than a network one: once the browser's storage limit was reached, subjects
+  that had been fetched successfully were thrown away and the card reported
+  "Subjects failed to load". Caching is now best-effort and never costs an
+  answer that has already been fetched. Kikoe also asks for unlimited storage
+  and keeps its cache trimmed, so the limit is far less likely to be reached
+  at all.
+- Prefetching could stop working permanently part-way through a session. A
+  failed cache write left the affected upcoming items marked as already
+  requested without ever storing them, so they were never fetched again and
+  those cards always started cold.
 - Muting, blurring the tab, or opening the help panel no longer lets a
   matched in-progress answer submit itself a moment later with the mic
   already off.

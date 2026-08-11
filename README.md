@@ -27,7 +27,7 @@ New in 0.8.0: one-click corrections make Kikoe easier to tune while you review. 
 
 - A [WaniKani](https://www.wanikani.com) account and/or a [BunPro](https://bunpro.jp) account
 - For WaniKani: an API token (read-only is sufficient). BunPro needs no token, since the accepted answers are already on the review page.
-- Chrome/Chromium (Manifest V3), Firefox 109+ (Manifest V2), or Safari Web Extension tooling for the mobile Safari spike
+- Chrome/Chromium (Manifest V3), or Safari Web Extension tooling for the mobile Safari spike. Firefox is [not supported](#firefox-not-supported)
 - Node.js and npm (to build from source)
 - Microphone access granted to the browser
 
@@ -60,16 +60,6 @@ npm run pack:safari # safari only → dist/kikoe-safari-web-extension.zip
 4. Select the `chrome/` folder inside the repo.
 5. The extension appears in your toolbar. Proceed to [First-time setup](#first-time-setup).
 
-### Firefox
-
-1. Open `about:debugging` in Firefox.
-2. Click **This Firefox** in the left sidebar.
-3. Click **Load Temporary Add-on…**
-4. Navigate to the `firefox/` folder and select `manifest.json`.
-5. The extension is now active for this session. Proceed to [First-time setup](#first-time-setup).
-
-> **Note:** Firefox only supports temporary add-on loading in development. The extension will be removed when Firefox restarts. For a permanent install, you would need to submit the extension to AMO or sign it manually with `web-ext`.
-
 ### Safari Web Extension
 
 1. Run `npm run build`.
@@ -84,6 +74,16 @@ npm run pack:safari # safari only → dist/kikoe-safari-web-extension.zip
 5. Proceed to [First-time setup](#first-time-setup).
 
 See [docs/safari.md](docs/safari.md) for the current spike notes and real-device validation checklist.
+
+### Firefox (not supported)
+
+Kikoe does not work in Firefox, and installing it there will not help.
+
+Voice input depends on the Web Speech API's `webkitSpeechRecognition`, which Firefox does not implement. The extension detects this at startup and shows **⚠ Voice recognition not supported by this browser** rather than pretending to listen. There is no workaround from the extension's side.
+
+`npm run build` still assembles a `firefox/` directory so the target doesn't rot, and it will load in `about:debugging` — it simply can't recognize speech.
+
+This changes only if [local speech recognition](https://github.com/mattpatterson94/kikoe/issues/63) becomes viable, which is not currently planned.
 
 ## First-time Setup
 
@@ -259,7 +259,7 @@ extension/
   options.html        # settings UI
   options.js          # settings UI logic
 chrome/               # assembled Chrome extension (output of build)
-firefox/              # assembled Firefox extension (output of build)
+firefox/              # assembled Firefox extension (output of build; unsupported)
 safari/               # assembled Safari Web Extension (output of build)
 ```
 
@@ -271,7 +271,7 @@ safari/               # assembled Safari Web Extension (output of build)
 - Make sure you granted microphone permission to the browser.
 
 **Speech recognition isn't working.**
-- Chrome has the best support for the Web Speech API. Firefox support may be limited.
+- Kikoe needs Chrome/Chromium or Safari. Firefox has no Web Speech recognition at all — see [Firefox (not supported)](#firefox-not-supported).
 - Ensure your microphone is not muted and the browser has permission to use it.
 - Check the browser console for `[kikoe]` errors.
 

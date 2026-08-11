@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  checks:
+    name: Tests, lint, types
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - run: npm ci
+
+      - name: Tests
+        run: npm test
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Types
+        run: npm run typecheck
+
+      # The voice-command tables in README.md are generated from
+      # src/commands.ts; this fails when the two have drifted apart.
+      - name: README command tables
+        run: npm run readme:commands:check
+
+# Deliberately no build step: `npm run build` downloads ~12 MB of dictionary
+# data, and nothing here needs the assembled extension. The end-to-end specs
+# that will need it can cache the download when they land.
