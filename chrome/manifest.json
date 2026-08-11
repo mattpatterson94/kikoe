@@ -29,7 +29,8 @@
     "https://www.bunpro.jp/*"
   ],
   "permissions": [
-    "storage"
+    "storage",
+    "unlimitedStorage"
   ],
   "content_scripts": [
     {

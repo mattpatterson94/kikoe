@@ -270,7 +270,7 @@ export function showIdleIndicator(settings: Settings, onToggle?: () => void): vo
   ensureCornerContainer().appendChild(el);
 }
 
-const ERROR_STYLED_STATES = new Set(['error', 'mic-denied', 'no-mic', 'unsupported-browser']);
+const ERROR_STYLED_STATES = new Set(['error', 'mic-denied', 'no-mic', 'unsupported-browser', 'cannot-read-page']);
 
 export function setIdleIndicatorState(state: string): void {
   const label = document.getElementById('kikoe-idle-label');
@@ -298,6 +298,7 @@ export function setIdleIndicatorState(state: string): void {
   else if (state === 'mic-denied') label.textContent = '⚠ Microphone access denied';
   else if (state === 'no-mic') label.textContent = '⚠ No microphone found';
   else if (state === 'error') label.textContent = '⚠ Subjects failed to load';
+  else if (state === 'cannot-read-page') label.textContent = "⚠ Can't read this page";
   else label.textContent = 'Listening';
 }
 

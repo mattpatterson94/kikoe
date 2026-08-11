@@ -220,6 +220,30 @@ export function clickInfo(): void {
   if (hint) hint.click();
 }
 
+// The BunPro counterpart of wanikani.ts's canReadPage. BunPro's own class
+// names churn (which is why the buttons are matched by label rather than
+// class), but #quiz-metadata-element is the documented third-party surface,
+// so its absence on a quiz page is the signal that something moved.
+//
+// A graded card is exempt: BunPro swaps the input out post-attempt, and
+// there is nothing left to drive there anyway.
+export function canReadPage(): boolean {
+  const context = getContext();
+  if (!context) return false;
+
+  // 'mode' is what separates the two context shapes — only Reveal & Grade
+  // cards carry it.
+  if ('mode' in context) {
+    return context.revealed
+      ? !!(findLabeledButton(RevealLabels.good) && findLabeledButton(RevealLabels.bad))
+      : !!findLabeledButton(RevealLabels.reveal);
+  }
+
+  if (context.postAttempt) return true;
+  if (!context.prompt || !context.type) return false;
+  return !!document.querySelector(Selectors.Input);
+}
+
 // Fires onChange (debounced) when the current card's identity or question
 // mode settles on a new value — not on every attribute mutation.
 export function createCardWatcher(onChange: () => void): MutationObserver {

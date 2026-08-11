@@ -1981,3 +1981,116 @@ describe('startListener help panel', () => {
     expect(document.getElementById('kikoe-help-hint')).toBeNull();
   });
 });
+
+// ── adapter health check ──────────────────────────────────────────────────────
+
+describe('startListener adapter health check', () => {
+  class MockSpeechRecognition {
+    constructor() {
+      this.continuous = false;
+      this.interimResults = false;
+      this.maxAlternatives = 1;
+      this.lang = '';
+      this.start = vi.fn();
+      this.stop = vi.fn();
+      this.abort = vi.fn();
+    }
+  }
+
+  // Everything the WaniKani adapter reads to drive a review card.
+  function stubReadableCard() {
+    document.body.innerHTML = `
+      <span class="quiz-input__question-category">Kanji</span>
+      <span class="quiz-input__question-type">meaning</span>
+      <div class="character-header__characters">下</div>
+      <input id="user-response">
+    `;
+  }
+
+  let errorSpy;
+
+  beforeEach(() => {
+    vi.stubGlobal('webkitSpeechRecognition', MockSpeechRecognition);
+    errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    errorSpy.mockRestore();
+  });
+
+  const label = () => document.getElementById('kikoe-idle-label').textContent;
+
+  test('stays listening while the page reads normally', async () => {
+    stubReadableCard();
+    stampConfig({ hasApiToken: true });
+    await importApp();
+
+    vi.advanceTimersByTime(10_000);
+
+    expect(label()).toMatch(/listening/i);
+  });
+
+  // The failure this exists for: a rename lands, every read returns null, and
+  // the indicator would otherwise go on claiming to listen over nothing.
+  test('reports an unreadable page once the grace window elapses', async () => {
+    stubReadableCard();
+    stampConfig({ hasApiToken: true });
+    await importApp();
+
+    document.getElementById('user-response').remove();
+    vi.advanceTimersByTime(10_000);
+
+    expect(label()).toMatch(/can't read this page/i);
+    expect(document.getElementById('kikoe-idle').classList.contains('kikoe-chip-error')).toBe(true);
+  });
+
+  // Card transitions leave the DOM half-built for a moment; that must not
+  // flash an error.
+  test('tolerates a brief unreadable moment without reporting it', async () => {
+    stubReadableCard();
+    stampConfig({ hasApiToken: true });
+    await importApp();
+
+    const input = document.getElementById('user-response');
+    input.remove();
+    vi.advanceTimersByTime(1500);
+    document.body.appendChild(input);
+    vi.advanceTimersByTime(1500);
+
+    expect(label()).toMatch(/listening/i);
+  });
+
+  test('clears itself once the page becomes readable again', async () => {
+    stubReadableCard();
+    stampConfig({ hasApiToken: true });
+    await importApp();
+
+    const input = document.getElementById('user-response');
+    input.remove();
+    vi.advanceTimersByTime(10_000);
+    expect(label()).toMatch(/can't read this page/i);
+
+    document.body.appendChild(input);
+    vi.advanceTimersByTime(2000);
+
+    expect(label()).toMatch(/listening/i);
+  });
+
+  // An explicit mute is the user's own doing and outranks a diagnosis of the
+  // page, which they can do nothing about.
+  test('an explicit mute outranks the unreadable state', async () => {
+    stubReadableCard();
+    stampConfig({ hasApiToken: true });
+    await importApp();
+
+    document.getElementById('user-response').remove();
+    vi.advanceTimersByTime(10_000);
+    expect(label()).toMatch(/can't read this page/i);
+
+    document.getElementById('kikoe-idle').click();
+
+    expect(label()).toMatch(/muted/i);
+  });
+});

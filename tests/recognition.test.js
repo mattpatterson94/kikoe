@@ -105,14 +105,23 @@ describe('createRecognition', () => {
   });
 
   test('auto-restarts when active recognition ends', () => {
-    const recognition = createRecognition('ja-JP', vi.fn());
-    const native = recognitionInstances[0];
+    vi.useFakeTimers();
+    try {
+      const recognition = createRecognition('ja-JP', vi.fn());
+      const native = recognitionInstances[0];
 
-    recognition.start();
-    recognition.onend();
+      recognition.start();
+      // A session that ran for a while before ending is the engine's ordinary
+      // idle timeout, which restarts immediately. Ending instantly instead
+      // would be a failed session, and is backed off — see 'restart backoff'.
+      vi.advanceTimersByTime(30_000);
+      recognition.onend();
 
-    expect(native.nativeStart).toHaveBeenCalledTimes(2);
-    expect(recognition.isPaused()).toBe(false);
+      expect(native.nativeStart).toHaveBeenCalledTimes(2);
+      expect(recognition.isPaused()).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   // Requests multiple ranked guesses from the engine: short utterances and
@@ -190,16 +199,22 @@ describe('createRecognition', () => {
   });
 
   test('does not reuse result identities after recognition restarts', () => {
-    const callback = vi.fn();
-    const recognition = createRecognition('ja-JP', callback);
-    const native = recognitionInstances[0];
+    vi.useFakeTimers();
+    try {
+      const callback = vi.fn();
+      const recognition = createRecognition('ja-JP', callback);
+      const native = recognitionInstances[0];
 
-    recognition.start();
-    native.onresult({ resultIndex: 0, results: [makeResult(['かい'], true)] });
-    recognition.onend();
-    native.onresult({ resultIndex: 0, results: [makeResult(['かい'], true)] });
+      recognition.start();
+      native.onresult({ resultIndex: 0, results: [makeResult(['かい'], true)] });
+      vi.advanceTimersByTime(30_000);
+      recognition.onend();
+      native.onresult({ resultIndex: 0, results: [makeResult(['かい'], true)] });
 
-    expect(callback.mock.calls[0][2]).not.toBe(callback.mock.calls[1][2]);
+      expect(callback.mock.calls[0][2]).not.toBe(callback.mock.calls[1][2]);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   // Regression: createRecognition returned null when webkitSpeechRecognition
@@ -266,7 +281,9 @@ describe('createRecognition', () => {
         native.onend();
 
         expect(native.nativeStart).not.toHaveBeenCalled();
-        vi.runAllTimers();
+        // Bounded rather than runAllTimers: the liveness watchdog runs on an
+        // interval, which runAllTimers would spin on forever.
+        vi.advanceTimersByTime(2000);
         expect(native.nativeStart).toHaveBeenCalledTimes(1);
       } finally {
         vi.useRealTimers();
@@ -289,5 +306,217 @@ describe('createRecognition', () => {
         vi.useRealTimers();
       }
     });
+  });
+});
+
+// ── restart backoff ───────────────────────────────────────────────────────────
+
+describe('restart backoff', () => {
+  beforeEach(() => {
+    recognitionInstances = [];
+    vi.stubGlobal('webkitSpeechRecognition', MockSpeechRecognition);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+  });
+
+  // The engine ends sessions on its own during silence. Backing those off
+  // would leave the mic dead for seconds every time the user stops talking.
+  test('restarts immediately after a healthy session ends', () => {
+    vi.useFakeTimers();
+    const recognition = createRecognition('ja-JP', vi.fn());
+    const native = recognitionInstances[0];
+
+    recognition.resume();
+    native.nativeStart.mockClear();
+    vi.advanceTimersByTime(30_000);
+    native.onend();
+
+    expect(native.nativeStart).toHaveBeenCalledTimes(1);
+  });
+
+  // A session that dies on arrival isn't the idle timeout — it's a failure
+  // that will repeat, and restarting it without delay spins.
+  test('backs off when a session ends almost as soon as it started', () => {
+    vi.useFakeTimers();
+    const recognition = createRecognition('ja-JP', vi.fn());
+    const native = recognitionInstances[0];
+
+    recognition.resume();
+    native.nativeStart.mockClear();
+    native.onend();
+
+    expect(native.nativeStart).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(1000);
+    expect(native.nativeStart).toHaveBeenCalledTimes(1);
+  });
+
+  test('backoff grows with each consecutive unhealthy session', () => {
+    vi.useFakeTimers();
+    const recognition = createRecognition('ja-JP', vi.fn());
+    const native = recognitionInstances[0];
+    recognition.resume();
+
+    native.onend();
+    vi.advanceTimersByTime(1000);
+    native.nativeStart.mockClear();
+
+    // Second immediate end in a row waits longer than the first did.
+    native.onend();
+    vi.advanceTimersByTime(1000);
+    expect(native.nativeStart).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(1000);
+    expect(native.nativeStart).toHaveBeenCalledTimes(1);
+  });
+
+  test('backs off after a non-network error too', () => {
+    vi.useFakeTimers();
+    const recognition = createRecognition('ja-JP', vi.fn());
+    const native = recognitionInstances[0];
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    recognition.resume();
+    native.nativeStart.mockClear();
+    vi.advanceTimersByTime(30_000);
+    native.onerror({ error: 'bad-grammar' });
+    native.onend();
+
+    expect(native.nativeStart).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(1000);
+    expect(native.nativeStart).toHaveBeenCalledTimes(1);
+    errorSpy.mockRestore();
+  });
+
+  // Ordinary silence is not a fault, so it must not accumulate backoff.
+  test('does not back off after a no-speech error', () => {
+    vi.useFakeTimers();
+    const recognition = createRecognition('ja-JP', vi.fn());
+    const native = recognitionInstances[0];
+
+    recognition.resume();
+    native.nativeStart.mockClear();
+    vi.advanceTimersByTime(30_000);
+    native.onerror({ error: 'no-speech' });
+    native.onend();
+
+    expect(native.nativeStart).toHaveBeenCalledTimes(1);
+  });
+
+  test('a result clears accumulated backoff', () => {
+    vi.useFakeTimers();
+    const recognition = createRecognition('ja-JP', vi.fn());
+    const native = recognitionInstances[0];
+    recognition.resume();
+
+    native.onend();
+    vi.advanceTimersByTime(1000);
+    native.nativeStart.mockClear();
+
+    native.onresult({ resultIndex: 0, results: [makeResult(['かい'], true)] });
+    vi.advanceTimersByTime(30_000);
+    native.onend();
+
+    expect(native.nativeStart).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ── liveness watchdog ─────────────────────────────────────────────────────────
+
+describe('liveness watchdog', () => {
+  let errorSpy;
+
+  beforeEach(() => {
+    recognitionInstances = [];
+    vi.stubGlobal('webkitSpeechRecognition', MockSpeechRecognition);
+    vi.useFakeTimers();
+    errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+    errorSpy.mockRestore();
+  });
+
+  // The failure this exists for: the session stays nominally open while its
+  // audio track is dead, so there is no error and no 'end' to react to.
+  test('restarts a session that has produced nothing at all', () => {
+    const recognition = createRecognition('ja-JP', vi.fn());
+    const native = recognitionInstances[0];
+    recognition.resume();
+
+    vi.advanceTimersByTime(60_000);
+
+    expect(native.nativeAbort).toHaveBeenCalled();
+  });
+
+  test('leaves a recognizer alone while it is still producing results', () => {
+    const recognition = createRecognition('ja-JP', vi.fn());
+    const native = recognitionInstances[0];
+    recognition.resume();
+
+    for (let i = 0; i < 6; i++) {
+      vi.advanceTimersByTime(10_000);
+      native.onresult({ resultIndex: 0, results: [makeResult(['かい'], true)] });
+    }
+
+    expect(native.nativeAbort).not.toHaveBeenCalled();
+  });
+
+  // Capture starting is a sign of life even in total silence, which is what
+  // keeps a quiet-but-healthy session from being restarted underneath a user
+  // who simply isn't talking.
+  test('treats audio capture starting as liveness', () => {
+    const recognition = createRecognition('ja-JP', vi.fn());
+    const native = recognitionInstances[0];
+    recognition.resume();
+
+    for (let i = 0; i < 6; i++) {
+      vi.advanceTimersByTime(10_000);
+      native.onaudiostart();
+    }
+
+    expect(native.nativeAbort).not.toHaveBeenCalled();
+  });
+
+  // Paused covers muted, hidden/blurred, help panel open, and mic denied —
+  // app.ts pauses for all of them, and none should be restarted.
+  test('does not restart while paused', () => {
+    const recognition = createRecognition('ja-JP', vi.fn());
+    const native = recognitionInstances[0];
+    recognition.pause();
+    native.nativeAbort.mockClear();
+
+    vi.advanceTimersByTime(120_000);
+
+    expect(native.nativeAbort).not.toHaveBeenCalled();
+  });
+
+  // Resuming after a pause longer than the timeout is not a stall.
+  test('gives a fresh window after resuming from a long pause', () => {
+    const recognition = createRecognition('ja-JP', vi.fn());
+    const native = recognitionInstances[0];
+
+    recognition.pause();
+    vi.advanceTimersByTime(120_000);
+    recognition.resume();
+    native.nativeAbort.mockClear();
+    vi.advanceTimersByTime(10_000);
+
+    expect(native.nativeAbort).not.toHaveBeenCalled();
+  });
+
+  test('does not restart repeatedly once it has fired', () => {
+    const recognition = createRecognition('ja-JP', vi.fn());
+    const native = recognitionInstances[0];
+    recognition.resume();
+
+    vi.advanceTimersByTime(60_000);
+    expect(native.nativeAbort).toHaveBeenCalledTimes(1);
+
+    vi.advanceTimersByTime(10_000);
+    expect(native.nativeAbort).toHaveBeenCalledTimes(1);
   });
 });

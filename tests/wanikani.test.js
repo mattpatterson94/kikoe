@@ -2,7 +2,7 @@ import {
   getPrompt, getLanguage, getContext,
   didContextChange, didAnswerCorrectly,
   getUserSynonyms, inputAnswer, createCardWatcher,
-  getQueuedSubjectIds,
+  getQueuedSubjectIds, canReadPage,
 } from '../src/wanikani';
 
 
@@ -493,5 +493,80 @@ describe('getQueuedSubjectIds', () => {
   test('returns empty array when there is no embedded JSON at all', () => {
     setDOM('');
     expect(getQueuedSubjectIds()).toEqual([]);
+  });
+});
+
+// ── canReadPage ───────────────────────────────────────────────────────────────
+
+describe('canReadPage', () => {
+  const fullCard = `
+    <span class="quiz-input__question-category">Kanji</span>
+    <span class="quiz-input__question-type">Meaning</span>
+    <div class="character-header__characters">下</div>
+    <input id="user-response">
+  `;
+
+  test('true when a review card renders everything the adapter reads', () => {
+    setURL('https://www.wanikani.com/subjects/review');
+    setDOM(fullCard);
+    expect(canReadPage()).toBe(true);
+  });
+
+  test('false when the prompt element is missing', () => {
+    setURL('https://www.wanikani.com/subjects/review');
+    setDOM(`
+      <span class="quiz-input__question-category">Kanji</span>
+      <span class="quiz-input__question-type">Meaning</span>
+      <input id="user-response">
+    `);
+    expect(canReadPage()).toBe(false);
+  });
+
+  test('false when the question type element is missing', () => {
+    setURL('https://www.wanikani.com/subjects/review');
+    setDOM(`
+      <span class="quiz-input__question-category">Kanji</span>
+      <div class="character-header__characters">下</div>
+      <input id="user-response">
+    `);
+    expect(canReadPage()).toBe(false);
+  });
+
+  // Nothing else notices a renamed answer field: submitAnswer silently
+  // no-ops and the card never advances.
+  test('false when the answer input is missing', () => {
+    setURL('https://www.wanikani.com/subjects/review');
+    setDOM(`
+      <span class="quiz-input__question-category">Kanji</span>
+      <span class="quiz-input__question-type">Meaning</span>
+      <div class="character-header__characters">下</div>
+    `);
+    expect(canReadPage()).toBe(false);
+  });
+
+  test('false on an unrecognized page', () => {
+    setURL('https://www.wanikani.com/dashboard');
+    setDOM(fullCard);
+    expect(canReadPage()).toBe(false);
+  });
+
+  // Lesson *content* has no input by design, and item pages are
+  // informational — demanding one there would report a healthy page broken.
+  test('true on lesson content, which has no answer input', () => {
+    setURL('https://www.wanikani.com/subject-lessons/12345');
+    setDOM('<div class="character-header__characters">下</div>');
+    expect(canReadPage()).toBe(true);
+  });
+
+  test('true on an item page', () => {
+    setURL('https://www.wanikani.com/kanji/下');
+    setDOM('<span class="page-header__icon page-header__icon">下</span>');
+    expect(canReadPage()).toBe(true);
+  });
+
+  test('asserts the lesson quiz, which does present a question', () => {
+    setURL('https://www.wanikani.com/subject-lessons/12345/quiz');
+    setDOM('<div class="character-header__characters">下</div>');
+    expect(canReadPage()).toBe(false);
   });
 });
