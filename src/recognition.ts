@@ -12,10 +12,32 @@ const FATAL_ERRORS = new Set<SpeechRecognitionErrorCode>([
   'not-allowed', 'service-not-allowed', 'audio-capture',
 ]);
 
-// Transient 'network' errors back off geometrically instead of restarting
-// immediately, so a flaky connection doesn't spin the recognizer in a loop.
-const NETWORK_BACKOFF_MS = 1000;
-const MAX_NETWORK_BACKOFF_MS = 8000;
+// Unhealthy sessions back off geometrically instead of restarting
+// immediately, so a repeating failure doesn't spin the recognizer in a loop.
+const RESTART_BACKOFF_MS = 1000;
+const MAX_RESTART_BACKOFF_MS = 8000;
+
+// What counts as unhealthy. The engine ends sessions on its own routinely —
+// an idle timeout during silence is normal and must restart immediately, or
+// the mic would be dead for seconds at a time whenever the user stops
+// talking. A session that ends almost as soon as it started is the opposite:
+// not the idle timeout, but a failure that will repeat. That distinction is
+// what lets the backoff cover every cause instead of only 'network'.
+const MIN_HEALTHY_SESSION_MS = 1000;
+
+// Chrome can leave a session nominally open while its audio track is dead —
+// device switch, sleep/resume, Bluetooth handoff. It emits no results, no
+// error, and crucially no 'end', so the auto-restart below never runs and
+// the indicator goes on claiming to listen over nothing. Short of a page
+// reload nothing recovers from this today.
+//
+// The timeout has to sit above a plausible silent gap. It mostly does so by
+// construction: 'audiostart' fires every time capture begins, so the engine's
+// own routine session cycling keeps a healthy-but-silent recognizer looking
+// alive, and only a completely inert one trips this. Worth validating
+// against real session traces before tightening.
+const LIVENESS_TIMEOUT_MS = 45000;
+const LIVENESS_CHECK_INTERVAL_MS = 5000;
 
 export type TranscriptCallback = (transcripts: string[], isFinal: boolean, resultId: string) => void;
 
@@ -49,7 +71,12 @@ export function createRecognition(
   recognition.maxAlternatives = MAX_ALTERNATIVES;
   recognition.lang = getLang();
   let shouldAutoRestart = true;
-  let networkErrorStreak = 0;
+  // Consecutive sessions that ended unhealthily; drives the restart backoff.
+  let unhealthyRestarts = 0;
+  let sessionStartedAt = 0;
+  let sawErrorThisSession = false;
+  // Last sign of life from the engine, for the liveness watchdog below.
+  let lastActivityAt = Date.now();
   let sessionId = 0;
   const start = recognition.start.bind(recognition);
   const stop = recognition.stop.bind(recognition);
@@ -63,6 +90,8 @@ export function createRecognition(
 
   function safeStart(): void {
     recognition.lang = getLang();
+    sessionStartedAt = Date.now();
+    sawErrorThisSession = false;
     try {
       start();
       sessionId++;
@@ -91,8 +120,16 @@ export function createRecognition(
     }
   }
 
+  // Capture beginning is a sign of life even when nothing is said, so it
+  // keeps a silent-but-healthy recognizer from tripping the watchdog.
+  recognition.onaudiostart = () => {
+    lastActivityAt = Date.now();
+  };
+
   recognition.onresult = (event) => {
-    networkErrorStreak = 0;
+    unhealthyRestarts = 0;
+    sawErrorThisSession = false;
+    lastActivityAt = Date.now();
 
     for (let i = event.resultIndex; i < event.results.length; ++i) {
       const result = event.results[i];
@@ -114,25 +151,51 @@ export function createRecognition(
 
     if (FATAL_ERRORS.has(event.error)) {
       shouldAutoRestart = false;
-    } else if (event.error === 'network') {
-      networkErrorStreak++;
+    } else {
+      sawErrorThisSession = true;
     }
 
     onError?.(event.error);
   };
 
   recognition.onend = () => {
+    // A session is unhealthy if it reported an error or barely ran at all.
+    // Anything else — including the engine's ordinary idle timeout during
+    // silence — resets the streak and restarts without delay.
+    const tooShort = Date.now() - sessionStartedAt < MIN_HEALTHY_SESSION_MS;
+    if (sawErrorThisSession || tooShort) unhealthyRestarts++;
+    else unhealthyRestarts = 0;
+
     if (!shouldAutoRestart) return;
-    if (networkErrorStreak > 0) {
-      const delay = Math.min(networkErrorStreak * NETWORK_BACKOFF_MS, MAX_NETWORK_BACKOFF_MS);
+    const delay = Math.min(unhealthyRestarts * RESTART_BACKOFF_MS, MAX_RESTART_BACKOFF_MS);
+    if (delay > 0) {
       setTimeout(() => { if (shouldAutoRestart) safeStart(); }, delay);
     } else {
       safeStart();
     }
   };
 
+  // Paused covers every case where silence is expected and a restart would
+  // be wrong — user mute, hidden or blurred tab, open help panel, denied
+  // microphone — because app.ts pauses the recognizer for all of them.
+  setInterval(() => {
+    if (recognition.isPaused()) return;
+    if (Date.now() - lastActivityAt < LIVENESS_TIMEOUT_MS) return;
+    console.error('[kikoe] recognition went silent; restarting');
+    // Reset first: restart() is asynchronous, and leaving the stale
+    // timestamp in place would fire this again on the next tick.
+    lastActivityAt = Date.now();
+    recognition.restart();
+  }, LIVENESS_CHECK_INTERVAL_MS);
+
+  // Explicit starts get a fresh liveness window: coming back from a pause
+  // that lasted longer than the timeout must not read as a stall. The
+  // auto-restart in onend deliberately doesn't do this — a recognizer that
+  // keeps restarting but never captures anything is exactly what the
+  // watchdog is for.
   recognition.start = () => {
     shouldAutoRestart = true;
+    lastActivityAt = Date.now();
     safeStart();
   };
 
@@ -143,6 +206,7 @@ export function createRecognition(
 
   recognition.resume = () => {
     shouldAutoRestart = true;
+    lastActivityAt = Date.now();
     safeStart();
   };
 
