@@ -33,6 +33,33 @@ jobs:
       - name: README command tables
         run: npm run readme:commands:check
 
-# Deliberately no build step: `npm run build` downloads ~12 MB of dictionary
-# data, and nothing here needs the assembled extension. The end-to-end specs
-# that will need it can cache the download when they land.
+  # Separate job: this one needs the assembled extension, a browser, and a
+  # display, none of which the checks above want to wait for.
+  e2e:
+    name: End-to-end
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - run: npm ci
+
+      # ~12 MB of JMdict/KANJIDIC2, fetched by build.sh and unchanged between
+      # runs unless DATA_VERSION moves.
+      - name: Cache dictionary data
+        uses: actions/cache@v4
+        with:
+          path: data
+          key: kikoe-dictionary-${{ hashFiles('build.sh') }}
+
+      - run: npx playwright install --with-deps chromium
+
+      - run: npm run build
+
+      # Chromium loads extensions only in a headed browser.
+      - name: End-to-end specs
+        run: xvfb-run -a npm run test:e2e

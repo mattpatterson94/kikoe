@@ -8,6 +8,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
+    "test:e2e": "vitest run --config vitest.e2e.config.js",
     "pack:chrome": "mkdir -p dist && cd chrome && zip -r ../dist/kikoe-chrome.zip .",
     "pack:firefox": "mkdir -p dist && cd firefox && zip -r ../dist/kikoe-firefox.zip .",
     "pack:safari": "mkdir -p dist && cd safari && zip -r ../dist/kikoe-safari-web-extension.zip .",
