@@ -53,6 +53,13 @@ export function createRecognition(
   let sessionId = 0;
   const start = recognition.start.bind(recognition);
   const stop = recognition.stop.bind(recognition);
+  // stop() keeps the session alive until the engine has finished processing
+  // whatever audio it has buffered, which is exactly the wrong trade for a
+  // restart: the buffered audio belongs to the card being left behind, and
+  // waiting for it leaves the mic dead while the user is already answering the
+  // next one. abort() ends the session at once. Guarded because the interface
+  // is optional on non-Chromium implementations.
+  const abort = typeof recognition.abort === 'function' ? recognition.abort.bind(recognition) : null;
 
   function safeStart(): void {
     recognition.lang = getLang();
@@ -72,6 +79,18 @@ export function createRecognition(
     }
   }
 
+  function safeAbort(): void {
+    if (!abort) {
+      safeStop();
+      return;
+    }
+    try {
+      abort();
+    } catch (err) {
+      if (!(err instanceof Error) || err.name !== 'InvalidStateError') throw err;
+    }
+  }
+
   recognition.onresult = (event) => {
     networkErrorStreak = 0;
 
@@ -85,7 +104,10 @@ export function createRecognition(
   };
 
   recognition.onerror = (event) => {
-    if (event.error === 'no-speech') {
+    // 'no-speech' is ordinary silence, and 'aborted' is restart() tearing the
+    // session down on purpose — neither is a fault, and the auto-restart in
+    // onend already brings the recognizer back.
+    if (event.error === 'no-speech' || event.error === 'aborted') {
       return;
     }
     console.error('[kikoe] error occurred in recognition:', event.error);
@@ -126,7 +148,7 @@ export function createRecognition(
 
   recognition.restart = () => {
     shouldAutoRestart = true;
-    safeStop();
+    safeAbort();
   };
 
   recognition.isPaused = () => {
