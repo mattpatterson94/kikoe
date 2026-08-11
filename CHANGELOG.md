@@ -9,10 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- Dismissing the on-screen keyboard on iPad no longer pauses recognition —
-  window blur is only treated as "left the page" on devices with a
-  mouse/trackpad as the primary pointer, since touch devices report keyboard
-  dismissal the same way. ([#79](https://github.com/mattpatterson94/kikoe/issues/79))
+- Dismissing the on-screen keyboard on iPad no longer pauses recognition.
+  Touch-primary devices now give a window blur a brief grace window before
+  treating it as "left the page," since keyboard dismissal clears itself
+  almost immediately, while a real case like iPad Split View (the page stays
+  visible but focus moves to the app alongside it) still pauses once the
+  grace window elapses. ([#79](https://github.com/mattpatterson94/kikoe/issues/79))
 
 ## [0.10.0] - 2026-07-16
 

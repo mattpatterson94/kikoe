@@ -633,10 +633,10 @@ describe('startListener mute/pause control', () => {
   // Regression test for https://github.com/mattpatterson94/kikoe/issues/79:
   // dismissing the on-screen keyboard on a touch device (e.g. iPad) blurs
   // whatever input triggered it, which some browsers surface as a window
-  // blur even though the user never left the page. On a coarse-pointer
-  // (touch-primary) device that must not pause recognition — only a real
-  // visibilitychange (backgrounding) should.
-  test('window blur does not pause recognition on a touch-primary device', async () => {
+  // blur even though the user never left the page. That kind of blur
+  // clears itself (hasFocus() goes back to true) well within the grace
+  // window, so it must never reach the point of pausing recognition.
+  test('a quick keyboard-dismiss blur/focus on a touch-primary device does not pause recognition', async () => {
     vi.stubGlobal('matchMedia', vi.fn(() => ({ matches: true })));
     setReviewCardDOM();
     stampConfig({ hasApiToken: true });
@@ -645,14 +645,50 @@ describe('startListener mute/pause control', () => {
     const native = MockSpeechRecognition.instances[0];
     const stopsBefore = native.nativeStop.mock.calls.length;
 
-    document.hasFocus.mockReturnValue(false);
-    window.dispatchEvent(new Event('blur'));
+    vi.useFakeTimers();
+    try {
+      document.hasFocus.mockReturnValue(false);
+      window.dispatchEvent(new Event('blur'));
+      document.hasFocus.mockReturnValue(true);
+      window.dispatchEvent(new Event('focus'));
+      vi.advanceTimersByTime(1000);
 
-    const label = document.getElementById('kikoe-idle-label');
-    expect(label.textContent).toBe('Listening');
-    expect(native.nativeStop.mock.calls.length).toBe(stopsBefore);
+      const label = document.getElementById('kikoe-idle-label');
+      expect(label.textContent).toBe('Listening');
+      expect(native.nativeStop.mock.calls.length).toBe(stopsBefore);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 
-    document.hasFocus.mockReturnValue(true);
+  // A blur that does NOT clear itself (e.g. iPad Split View, where the page
+  // stays fully visible but focus moves to the app alongside it) still
+  // needs to pause recognition once the grace window elapses — otherwise
+  // the mic keeps listening while the user's attention is on another app.
+  test('a sustained window blur on a touch-primary device still pauses recognition', async () => {
+    vi.stubGlobal('matchMedia', vi.fn(() => ({ matches: true })));
+    setReviewCardDOM();
+    stampConfig({ hasApiToken: true });
+    await importApp();
+
+    const native = MockSpeechRecognition.instances[0];
+    const stopsBefore = native.nativeStop.mock.calls.length;
+
+    vi.useFakeTimers();
+    try {
+      document.hasFocus.mockReturnValue(false);
+      window.dispatchEvent(new Event('blur'));
+
+      const label = document.getElementById('kikoe-idle-label');
+      expect(label.textContent).toBe('Listening');
+
+      vi.advanceTimersByTime(400);
+      expect(label.textContent).toBe('Paused');
+      expect(native.nativeStop.mock.calls.length).toBeGreaterThan(stopsBefore);
+    } finally {
+      vi.useRealTimers();
+      document.hasFocus.mockReturnValue(true);
+    }
   });
 
   test('visibilitychange to hidden still pauses recognition on a touch-primary device', async () => {
