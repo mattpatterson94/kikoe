@@ -50,6 +50,21 @@ npm run pack:firefox # firefox only → dist/kikoe-firefox.zip
 npm run pack:safari # safari only → dist/kikoe-safari-web-extension.zip
 ```
 
+### Publishing
+
+```bash
+npm run publish:chrome             # upload a draft to the Chrome Web Store
+npm run publish:chrome -- --publish # upload and submit for review
+npm run safari:app -- <build>      # build the Safari apps for Transporter
+```
+
+`publish:chrome` uploads a draft by default — submitting for review stays a
+deliberate step. It reads credentials from `CWS_CLIENT_ID`, `CWS_CLIENT_SECRET`,
+`CWS_REFRESH_TOKEN`, and `CWS_EXTENSION_ID`, which belong in a file outside the
+repo; see the header of [scripts/publish-chrome.sh](scripts/publish-chrome.sh)
+for how to create them. Safari App Store builds are covered in
+[docs/safari.md](docs/safari.md).
+
 ## Installation
 
 ### Chrome
