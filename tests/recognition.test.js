@@ -10,9 +10,19 @@ class MockSpeechRecognition {
     this.lang = '';
     this.nativeStart = vi.fn();
     this.nativeStop = vi.fn();
+    this.nativeAbort = vi.fn();
     this.start = this.nativeStart;
     this.stop = this.nativeStop;
+    this.abort = this.nativeAbort;
     recognitionInstances.push(this);
+  }
+}
+
+// An engine without the optional abort() — restart must still work.
+class MockSpeechRecognitionWithoutAbort extends MockSpeechRecognition {
+  constructor() {
+    super();
+    delete this.abort;
   }
 }
 
@@ -34,12 +44,52 @@ describe('createRecognition', () => {
     vi.unstubAllGlobals();
   });
 
-  test('exposes restart by stopping the active recognition session', () => {
+  // stop() keeps the session open until the engine has drained its audio
+  // buffer, which on a card change is speech from the card being left behind.
+  // Aborting ends it immediately so the mic is live again sooner.
+  test('exposes restart by aborting the active recognition session', () => {
     const recognition = createRecognition('ja-JP', vi.fn());
+    const native = recognitionInstances[0];
 
     recognition.restart();
 
-    expect(recognition.stop).toHaveBeenCalledTimes(1);
+    expect(native.nativeAbort).toHaveBeenCalledTimes(1);
+    expect(native.nativeStop).not.toHaveBeenCalled();
+  });
+
+  test('restart falls back to stopping when the engine has no abort', () => {
+    vi.stubGlobal('webkitSpeechRecognition', MockSpeechRecognitionWithoutAbort);
+    const recognition = createRecognition('ja-JP', vi.fn());
+    const native = recognitionInstances[0];
+
+    recognition.restart();
+
+    expect(native.nativeStop).toHaveBeenCalledTimes(1);
+  });
+
+  test('restart still auto-restarts the recognizer once the session ends', () => {
+    const recognition = createRecognition('ja-JP', vi.fn());
+    const native = recognitionInstances[0];
+
+    recognition.restart();
+    // Chrome reports its own abort as an error before ending the session.
+    native.onerror({ error: 'aborted' });
+    native.onend();
+
+    expect(native.nativeStart).toHaveBeenCalledTimes(1);
+    expect(recognition.isPaused()).toBe(false);
+  });
+
+  // pause() is not a latency-sensitive path (blur, mute, help panel), and
+  // stopping lets any in-flight result finish rather than discarding it.
+  test('pause stops rather than aborts', () => {
+    const recognition = createRecognition('ja-JP', vi.fn());
+    const native = recognitionInstances[0];
+
+    recognition.pause();
+
+    expect(native.nativeStop).toHaveBeenCalledTimes(1);
+    expect(native.nativeAbort).not.toHaveBeenCalled();
   });
 
   test('does not auto-restart when paused recognition ends', () => {
@@ -172,12 +222,14 @@ describe('createRecognition', () => {
       expect(onError).toHaveBeenCalledWith('not-allowed');
     });
 
-    test('does not invoke onError for no-speech', () => {
+    // 'aborted' is this module's own restart(); reporting it would surface a
+    // console error on every card change that swaps the recognizer language.
+    test.each(['no-speech', 'aborted'])('does not invoke onError for %s', (errorType) => {
       const onError = vi.fn();
       createRecognition('ja-JP', vi.fn(), onError);
       const native = recognitionInstances[0];
 
-      native.onerror({ error: 'no-speech' });
+      native.onerror({ error: errorType });
 
       expect(onError).not.toHaveBeenCalled();
     });
