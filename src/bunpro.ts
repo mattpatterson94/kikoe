@@ -192,9 +192,34 @@ export function submitAnswer(input: string): boolean {
   return false;
 }
 
+// The card markWrong() last submitted a placeholder answer for, so
+// bunpro_speed.ts can tell Kikoe's own deliberate miss (ippatsu burning a
+// shot, the "wrong" command) apart from a real answer BunPro happened to grade
+// wrong. Pinned to the card rather than a bare boolean: a flag left unconsumed
+// — the click never registered, the card advanced first — must not be read as
+// a self-submitted miss on a later one.
+let selfWrongCardId: number | string | null = null;
+
+function currentCardId(): number | string | null {
+  const meta = getMetadata();
+  if (!meta) return null;
+  return (parseJson(meta.dataset.metaInfo) as MetaInfo | null)?.id ?? null;
+}
+
 export function markWrong(): boolean {
   const incorrect = getLanguage() === 'en-US' ? 'aaa' : 'あああ';
-  return submitAnswer(incorrect);
+  if (!submitAnswer(incorrect)) return false;
+  selfWrongCardId = currentCardId();
+  return true;
+}
+
+// Reads and clears in one go: the flag applies to the next result to land and
+// nothing after it, whether or not that result turns out to be the matching
+// card's.
+export function takeSelfSubmittedWrongCardId(): number | string | null {
+  const id = selfWrongCardId;
+  selfWrongCardId = null;
+  return id;
 }
 
 // Best-effort: only needed for accounts without BunPro's native Lightning

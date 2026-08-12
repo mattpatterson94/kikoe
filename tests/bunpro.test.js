@@ -1,6 +1,7 @@
 import {
   getLanguage, getContext, didContextChange,
-  inputAnswer, submitAnswer, markWrong, clickNext, clickInfo,
+  inputAnswer, submitAnswer, markWrong, takeSelfSubmittedWrongCardId,
+  clickNext, clickInfo,
   reveal, gradeGood, gradeBad,
   createCardWatcher, canReadPage,
 } from '../src/bunpro';
@@ -250,6 +251,43 @@ describe('markWrong', () => {
     const { input } = addInput();
     expect(markWrong()).toBe(true);
     expect(input.value).toBe('aaa');
+  });
+});
+
+// ── takeSelfSubmittedWrongCardId ──────────────────────────────────────────────
+
+describe('takeSelfSubmittedWrongCardId', () => {
+  // The flag is module state that outlives a single test, as it outlives a
+  // single card in the page — drain whatever an earlier test left behind.
+  beforeEach(() => { takeSelfSubmittedWrongCardId(); });
+
+  test('is null until markWrong submits', () => {
+    addMetadata();
+    expect(takeSelfSubmittedWrongCardId()).toBeNull();
+  });
+
+  test('reports the card markWrong submitted for', () => {
+    addMetadata();
+    addInput();
+    markWrong();
+    expect(takeSelfSubmittedWrongCardId()).toBe(806);
+  });
+
+  test('clears after a single read', () => {
+    addMetadata();
+    addInput();
+    markWrong();
+    expect(takeSelfSubmittedWrongCardId()).toBe(806);
+    expect(takeSelfSubmittedWrongCardId()).toBeNull();
+  });
+
+  // A miss the user typed themselves must stay indistinguishable from any
+  // other card Kikoe never touched.
+  test('stays null when markWrong could not submit', () => {
+    addMetadata();
+    // No input/button on the page, so the submission never lands.
+    expect(markWrong()).toBe(false);
+    expect(takeSelfSubmittedWrongCardId()).toBeNull();
   });
 });
 

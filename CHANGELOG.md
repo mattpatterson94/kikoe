@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Changed
+
+- On BunPro, "Show item info on wrong answer" now only opens the panel for a
+  miss Kikoe itself submitted — ippatsu burning a shot, or the "wrong" command
+  — rather than for every wrong answer. A real answer that BunPro simply graded
+  wrong leaves the card alone, since BunPro is already showing the correct
+  answer there and clicking into the card re-renders on top of that reveal.
+  WaniKani is unchanged.
+
 ### Fixed
 
 - "Show item info on wrong answer" now works on BunPro. It looked for a button

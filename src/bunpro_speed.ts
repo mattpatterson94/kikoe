@@ -12,9 +12,10 @@
 //
 // Configurable via settings (same keys as WaniKani):
 //   turbo           (bool)   – auto-advance to next card on correct answer
-//   speed_show_info (bool)   – auto-open the hint on wrong answer
+//   speed_show_info (bool)   – auto-open item info on a wrong answer Kikoe
+//                              itself submitted (see takeSelfSubmittedWrongCardId)
 
-import { clickNext, clickInfo } from './bunpro';
+import { clickNext, clickInfo, takeSelfSubmittedWrongCardId } from './bunpro';
 import { debugLog } from './logger';
 import type { Settings } from './settings';
 
@@ -50,6 +51,11 @@ export function startSpeedEnhancer(getSettingsFn: () => Settings): BunproSpeedEn
     if (key === lastResultKey) return;
     lastResultKey = key;
 
+    // Consumed on whichever result actually lands, so it can't carry past the
+    // attempt markWrong() raised it for.
+    const selfWrongCardId = takeSelfSubmittedWrongCardId();
+    const selfSubmitted = cardId !== null && selfWrongCardId === cardId;
+
     const s = getSettingsFn();
 
     if (result === 'true' && s.turbo) {
@@ -59,7 +65,11 @@ export function startSpeedEnhancer(getSettingsFn: () => Settings): BunproSpeedEn
         clickNext();
       }, RESULT_DELAY_MS);
     }
-    if (result === 'false' && s.speed_show_info) {
+    // Only Kikoe's own placeholder-wrong submissions open the panel. An answer
+    // the user meant, which BunPro simply graded wrong, leaves the card alone —
+    // BunPro is already showing the correct answer there, and clicking into it
+    // re-renders the card on top of that reveal.
+    if (result === 'false' && selfSubmitted && s.speed_show_info) {
       setTimeout(clickInfo, RESULT_DELAY_MS);
     }
   }
