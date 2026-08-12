@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Reviews</title></head>
+<body>
+  <!-- Hand-built approximation of a WaniKani review card. Contains exactly
+       what src/wanikani.ts reads (see its Selectors and PathPatterns) and
+       nothing else. See tests/fixtures/README.md. -->
+  <div class="character-header__characters">下</div>
+
+  <div class="quiz-input__input-container">
+    <span class="quiz-input__question-category">Vocabulary</span>
+    <span class="quiz-input__question-type">Meaning</span>
+    <input id="user-response" type="text" autocomplete="off">
+    <button class="quiz-input__submit-button" type="button">Submit</button>
+  </div>
+
+  <!-- The review queue is embedded as JSON so the SPA can resume without an
+       extra API round-trip; getQueuedSubjectIds scans for it to drive
+       prefetching. -->
+  <script type="application/json" id="quiz-queue">
+    {"subject_ids": [8761, 8762, 8763]}
+  </script>
+</body>
+</html>

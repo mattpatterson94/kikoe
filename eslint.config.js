@@ -44,13 +44,17 @@ export default [
     },
   },
   {
-    files: ['tests/**/*.{js,ts}'],
+    // .mjs covers tests/e2e, which drives a real browser from Node: the
+    // module scope is Node, but the callbacks passed to page.evaluate run in
+    // the page (and, for extension pages, with the webextension APIs).
+    files: ['tests/**/*.{js,mjs,ts}'],
     languageOptions: {
       ecmaVersion: 'latest',
       sourceType: 'module',
       globals: {
         ...globals.browser,
         ...globals.node,
+        ...globals.webextensions,
         // vitest with globals: true (see vitest.config.js)
         describe: 'readonly',
         it: 'readonly',
@@ -65,7 +69,7 @@ export default [
     },
   },
   {
-    files: ['dev.js', 'scripts/**/*.js', 'vitest.config.js', 'eslint.config.js'],
+    files: ['dev.js', 'scripts/**/*.js', 'vitest.config.js', 'vitest.e2e.config.js', 'eslint.config.js'],
     languageOptions: {
       ecmaVersion: 'latest',
       sourceType: 'module',
