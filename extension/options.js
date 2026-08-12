@@ -9,6 +9,7 @@ const defaults = {
   transcript_position: 'top',
   show_help_button: true,
   keep_screen_awake: true,
+  strict_kanji_readings: false,
   debug: false,
   customCorrections: [],
 };

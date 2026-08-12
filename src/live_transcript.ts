@@ -311,6 +311,7 @@ function reasonHint(transcript: TranscriptInfo): string | null {
       ? "that's the meaning — say the reading"
       : "that's the reading — say the meaning";
   }
+  if (transcript.reason === 'ambiguous-kanji') return "heard the kanji — say the reading again";
   if (transcript.reason === 'no-match') return 'no match';
   // Reveal & Grade cards (see app.js's reveal-mode routing).
   if (transcript.reason === 'say-reveal') return 'say "reveal" to show the answer';

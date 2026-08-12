@@ -590,6 +590,14 @@
   </section>
 
   <section class="card">
+    <h2>Experimental</h2>
+    <div class="field">
+      <label for="strict_kanji_readings">Strict kanji readings<span class="hint">On kanji reading questions, only accept kana the recogniser actually heard. Speech recognition usually writes a spoken reading back as the kanji itself (say うえ, get 上), which is indistinguishable from any other reading of that character — so the wrong reading can still be marked correct. With this on, Kikoe asks you to say it again instead, at the cost of an occasional retry when you were right. Vocabulary questions are unaffected.</span></label>
+      <input type="checkbox" id="strict_kanji_readings">
+    </div>
+  </section>
+
+  <section class="card">
     <h2>Advanced</h2>
     <div class="field">
       <label for="debug">Debug mode<span class="hint">Log diagnostic details (speech matching, subject loading, token discovery) to the browser console</span></label>

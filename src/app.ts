@@ -401,7 +401,9 @@ async function startListener(dictionary: Dictionary): Promise<void> {
   // because it tells the user exactly what to do differently; 'not-loaded'
   // is uniform across every alternative (it depends on context, not the
   // candidate), so it never competes with the other two.
-  const REASON_PRIORITY: Record<string, number> = { 'wrong-type': 2, 'no-match': 1 };
+  // 'ambiguous-kanji' outranks both: it names the one thing the user can act
+  // on (repeat the reading so the recognizer emits kana instead of the kanji).
+  const REASON_PRIORITY: Record<string, number> = { 'ambiguous-kanji': 3, 'wrong-type': 2, 'no-match': 1 };
 
   // Try every alternative transcript the recognizer offered (ranked by its
   // own confidence) and use the first one that produces a match. Short
@@ -418,7 +420,11 @@ async function startListener(dictionary: Dictionary): Promise<void> {
     // apply on the next utterance via the settings-changed event.
     const corrections = getSettings().customCorrections;
     for (const raw of raws) {
-      const result = checkAnswer(ctx, transformers, raw, { fuzzyMeaning, corrections });
+      const result = checkAnswer(ctx, transformers, raw, {
+        fuzzyMeaning,
+        corrections,
+        strictKanjiReadings: getSettings().strict_kanji_readings,
+      });
       if (result.success && result.answer) return result;
       const priority = REASON_PRIORITY[result.transcript.reason ?? ''] ?? 0;
       if (!best || priority > (REASON_PRIORITY[best.transcript.reason ?? ''] ?? 0)) best = result;
@@ -545,7 +551,8 @@ async function startListener(dictionary: Dictionary): Promise<void> {
   // Ippatsu (一発) mode: one shot per question. A genuine miss ('no-match' —
   // a right-type answer that didn't match) is submitted as wrong via
   // site.markWrong() instead of waiting for a retry. Recognizer glitches
-  // ('wrong-type', 'not-loaded') don't burn the shot. markWrong's placeholder
+  // ('wrong-type', 'not-loaded', 'ambiguous-kanji' — the last of which means
+  // the reading never reached us) don't burn the shot. markWrong's placeholder
   // is used rather than the heard text because WaniKani "shakes" without
   // grading on kanji or valid-but-unaccepted alternate readings, which would
   // strand the card with submitted stuck on true.
