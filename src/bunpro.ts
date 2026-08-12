@@ -172,10 +172,32 @@ export function didContextChange(oldContext: ContextIdentity, newContext: Contex
          (newContext?.type !== oldContext?.type);
 }
 
+// The card Kikoe last submitted an answer for, so a graded card can be told
+// apart from an untouched one carrying a stale post-attempt flag.
+let lastSubmittedCardId: number | string | null = null;
+
+// Whether writing to the input would land on a card Kikoe has already answered.
+// Once BunPro grades, it shows its own answer reveal in that field, and writing
+// there replaces the reveal with whatever Kikoe types. app.js's `submitted`
+// flag already suppresses the ordinary paths; this is the structural backstop
+// for anything that slips past it — a late speech result landing while the card
+// is mid-transition, say.
+//
+// Deliberately scoped to the card Kikoe itself answered rather than to
+// data-meta-is-post-attempt alone: a fresh card that has not yet cleared the
+// previous one's flag must still accept an answer, or a fast reply would be
+// dropped outright, which is far worse than a clobbered reveal.
+function isAlreadyAnswered(): boolean {
+  const meta = getMetadata();
+  if (meta?.dataset.metaIsPostAttempt !== 'true') return false;
+  return lastSubmittedCardId !== null && currentCardId() === lastSubmittedCardId;
+}
+
 // BunPro's input is React-controlled: assigning .value directly is ignored
 // because React tracks the value internally. Use the native setter, then
 // dispatch a bubbling input event so React picks up the change.
 export function inputAnswer(input: string): boolean {
+  if (isAlreadyAnswered()) return false;
   const el = document.querySelector<HTMLInputElement>(Selectors.Input);
   if (!el) return false;
   const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
@@ -188,8 +210,10 @@ export function inputAnswer(input: string): boolean {
 export function submitAnswer(input: string): boolean {
   if (!inputAnswer(input)) return false;
   const button = document.querySelector<HTMLButtonElement>(Selectors.Submit);
-  if (button) { button.click(); return true; }
-  return false;
+  if (!button) return false;
+  lastSubmittedCardId = currentCardId();
+  button.click();
+  return true;
 }
 
 // The card markWrong() last submitted a placeholder answer for, so

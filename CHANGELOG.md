@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Kikoe no longer types into a BunPro card it has already answered. Once BunPro
+  grades, it shows its own answer reveal in the input, and writing there
+  replaces that reveal with whatever Kikoe submitted — so a speech result
+  arriving late, after the card was graded, could put the wrong answer back over
+  the correct one. Only the card Kikoe itself answered is affected: a new card
+  that hasn't yet cleared the previous one's state still accepts an answer, so a
+  fast reply is never dropped.
 - On BunPro, "Show item info on wrong answer" now only opens the panel for a
   miss Kikoe itself submitted — ippatsu burning a shot, or the "wrong" command
   — rather than for every wrong answer. A real answer that BunPro simply graded

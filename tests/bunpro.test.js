@@ -254,6 +254,61 @@ describe('markWrong', () => {
   });
 });
 
+// ── writing to an already-answered card ───────────────────────────────────────
+
+describe('inputAnswer on a graded card', () => {
+  // lastSubmittedCardId is module state that outlives a test, so each case
+  // needs its own instance to start from "Kikoe has answered nothing".
+  let bunpro;
+  beforeEach(async () => {
+    vi.resetModules();
+    bunpro = await import('../src/bunpro');
+  });
+
+  // BunPro shows its own answer reveal in the input once it grades; writing
+  // there would replace that reveal with whatever Kikoe types.
+  test('refuses to write over the reveal on a card Kikoe answered', () => {
+    const meta = addMetadata();
+    const { input } = addInput();
+    expect(bunpro.submitAnswer('おとこ')).toBe(true);
+
+    meta.setAttribute('data-meta-is-post-attempt', 'true');
+    input.value = 'BunPro reveal';
+    expect(bunpro.inputAnswer('おとこ')).toBe(false);
+    expect(input.value).toBe('BunPro reveal');
+  });
+
+  // Dropping a real answer is worse than a clobbered reveal, so the guard only
+  // covers the card Kikoe itself answered.
+  test('still answers a fresh card carrying a stale post-attempt flag', () => {
+    const meta = addMetadata();
+    addInput();
+    expect(bunpro.submitAnswer('おとこ')).toBe(true);
+
+    meta.setAttribute('data-meta-info', JSON.stringify({ id: 807, type: 'vocab' }));
+    meta.setAttribute('data-meta-is-post-attempt', 'true');
+    expect(bunpro.inputAnswer('おんな')).toBe(true);
+  });
+
+  test('answers the same card again once BunPro re-asks it', () => {
+    const meta = addMetadata();
+    addInput();
+    expect(bunpro.submitAnswer('おとこ')).toBe(true);
+    meta.setAttribute('data-meta-is-post-attempt', 'true');
+
+    // The repeat attempt clears the flag, and the card is answerable again.
+    meta.setAttribute('data-meta-is-post-attempt', 'false');
+    meta.setAttribute('data-meta-total-submissions-count', '1');
+    expect(bunpro.inputAnswer('おとこ')).toBe(true);
+  });
+
+  test('does not block a card graded without Kikoe submitting anything', () => {
+    addMetadata({ 'data-meta-is-post-attempt': 'true' });
+    addInput();
+    expect(bunpro.inputAnswer('おとこ')).toBe(true);
+  });
+});
+
 // ── takeSelfSubmittedWrongCardId ──────────────────────────────────────────────
 
 describe('takeSelfSubmittedWrongCardId', () => {
