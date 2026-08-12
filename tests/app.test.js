@@ -37,15 +37,40 @@ async function importApp() {
   });
 }
 
+// app.ts registers window/document listeners when it starts and never removes
+// them, which is right in a real session but leaks between tests: window and
+// document outlive vi.resetModules(), so a blur dispatched by a later test also
+// runs every earlier test's handler. Those stale closures carry their own page
+// state and resolve the indicator by ID against the *current* DOM, so they
+// happily overwrite the label the test under examination just set. Track what
+// each test registers and unregister it afterwards.
+const trackedListeners = [];
+const restoreAddEventListener = [];
+
+function trackListeners(target) {
+  const real = target.addEventListener.bind(target);
+  target.addEventListener = (type, fn, opts) => {
+    trackedListeners.push([target, type, fn, opts]);
+    real(type, fn, opts);
+  };
+  restoreAddEventListener.push(() => { target.addEventListener = real; });
+}
+
 beforeEach(() => {
   vi.resetModules();
   document.body.innerHTML = '';
   document.documentElement.removeAttribute('data-kikoe-config');
+  trackListeners(window);
+  trackListeners(document);
   stubReviewPage();
   stubDictionaryFetch();
 });
 
 afterEach(() => {
+  for (const undo of restoreAddEventListener.splice(0)) undo();
+  for (const [target, type, fn, opts] of trackedListeners.splice(0)) {
+    target.removeEventListener(type, fn, opts);
+  }
   vi.unstubAllGlobals();
 });
 
@@ -754,12 +779,20 @@ describe('startListener mute/pause control', () => {
     document.hasFocus.mockReturnValue(true);
   });
 
-  // Regression test for https://github.com/mattpatterson94/kikoe/issues/79:
-  // dismissing the on-screen keyboard on a touch device (e.g. iPad) blurs
-  // whatever input triggered it, which some browsers surface as a window
-  // blur even though the user never left the page. That kind of blur
-  // clears itself (hasFocus() goes back to true) well within the grace
-  // window, so it must never reach the point of pausing recognition.
+  // Minimal stand-in for window.visualViewport, which jsdom has none of. Only
+  // the height and its resize notifications matter to the keyboard observer.
+  function stubVisualViewport(height = 1000) {
+    const listeners = [];
+    const vv = {
+      height,
+      offsetTop: 0,
+      addEventListener(type, fn) { if (type === 'resize') listeners.push(fn); },
+      resizeTo(next) { vv.height = next; listeners.forEach(fn => fn()); },
+    };
+    vi.stubGlobal('visualViewport', vv);
+    return vv;
+  }
+
   test('a quick keyboard-dismiss blur/focus on a touch-primary device does not pause recognition', async () => {
     vi.stubGlobal('matchMedia', vi.fn(() => ({ matches: true })));
     setReviewCardDOM();
@@ -785,12 +818,13 @@ describe('startListener mute/pause control', () => {
     }
   });
 
-  // A blur that does NOT clear itself (e.g. iPad Split View, where the page
-  // stays fully visible but focus moves to the app alongside it) still
-  // needs to pause recognition once the grace window elapses — otherwise
-  // the mic keeps listening while the user's attention is on another app.
+  // A blur with no keyboard behind it (e.g. iPad Split View, where the page
+  // stays fully visible but focus moves to the app alongside it) still needs
+  // to pause once the grace window elapses — otherwise the mic keeps listening
+  // while the user's attention is on another app.
   test('a sustained window blur on a touch-primary device still pauses recognition', async () => {
     vi.stubGlobal('matchMedia', vi.fn(() => ({ matches: true })));
+    stubVisualViewport();
     setReviewCardDOM();
     stampConfig({ hasApiToken: true });
     await importApp();
@@ -806,9 +840,75 @@ describe('startListener mute/pause control', () => {
       const label = document.getElementById('kikoe-idle-label');
       expect(label.textContent).toBe('Listening');
 
-      vi.advanceTimersByTime(400);
+      vi.advanceTimersByTime(600);
       expect(label.textContent).toBe('Paused');
       expect(native.nativeStop.mock.calls.length).toBeGreaterThan(stopsBefore);
+    } finally {
+      vi.useRealTimers();
+      document.hasFocus.mockReturnValue(true);
+    }
+  });
+
+  // The real #79 case, and what the original grace-window fix got wrong: the
+  // keyboard-dismiss blur never clears. document.hasFocus() stays false until
+  // the user taps something, which on a hands-free review is never — so the
+  // grace window only ever delayed the pause. What has to settle it is *why*
+  // focus went away, which the visual viewport growing back answers.
+  test('a keyboard-dismiss blur that never clears does not pause recognition', async () => {
+    vi.stubGlobal('matchMedia', vi.fn(() => ({ matches: true })));
+    const viewport = stubVisualViewport(600); // keyboard up
+    setReviewCardDOM();
+    stampConfig({ hasApiToken: true });
+    await importApp();
+
+    const native = MockSpeechRecognition.instances[0];
+    const stopsBefore = native.nativeStop.mock.calls.length;
+    const label = document.getElementById('kikoe-idle-label');
+
+    vi.useFakeTimers();
+    try {
+      // Dismissing the keyboard: focus leaves the document first and stays
+      // gone, then the keyboard finishes retracting and the viewport grows.
+      document.hasFocus.mockReturnValue(false);
+      window.dispatchEvent(new Event('blur'));
+      vi.advanceTimersByTime(200);
+      viewport.resizeTo(1000);
+
+      vi.advanceTimersByTime(600);
+      expect(label.textContent).toBe('Listening');
+      expect(native.nativeStop.mock.calls.length).toBe(stopsBefore);
+
+      // And it must stay listening: isPageActive() is re-read on every later
+      // update, so a stuck hasFocus() would otherwise re-pause here.
+      document.dispatchEvent(new Event('visibilitychange'));
+      expect(label.textContent).toBe('Listening');
+      expect(native.nativeStop.mock.calls.length).toBe(stopsBefore);
+    } finally {
+      vi.useRealTimers();
+      document.hasFocus.mockReturnValue(true);
+    }
+  });
+
+  // Where the keyboard can't be observed there is no way to tell the two apart,
+  // and stranding a hands-free session on "Paused" is the worse failure.
+  test('without a visual viewport to consult, a touch blur does not pause', async () => {
+    vi.stubGlobal('matchMedia', vi.fn(() => ({ matches: true })));
+    vi.stubGlobal('visualViewport', undefined);
+    setReviewCardDOM();
+    stampConfig({ hasApiToken: true });
+    await importApp();
+
+    const native = MockSpeechRecognition.instances[0];
+    const stopsBefore = native.nativeStop.mock.calls.length;
+
+    vi.useFakeTimers();
+    try {
+      document.hasFocus.mockReturnValue(false);
+      window.dispatchEvent(new Event('blur'));
+      vi.advanceTimersByTime(2000);
+
+      expect(document.getElementById('kikoe-idle-label').textContent).toBe('Listening');
+      expect(native.nativeStop.mock.calls.length).toBe(stopsBefore);
     } finally {
       vi.useRealTimers();
       document.hasFocus.mockReturnValue(true);
@@ -994,6 +1094,37 @@ describe('startListener BunPro Reveal & Grade cards', () => {
 
     const label = document.getElementById('kikoe-idle-label');
     expect(label.textContent).toBe('Muted');
+  });
+
+  // Regression test for https://github.com/mattpatterson94/kikoe/issues/79:
+  // the touch-blur-grace fix lives in shared page-activity handling with no
+  // site branching, but it had only been exercised against WaniKani's DOM.
+  // Confirm dismissing the on-screen keyboard on BunPro doesn't pause either.
+  test('a quick keyboard-dismiss blur/focus on a touch-primary device does not pause recognition', async () => {
+    addMetadata();
+    addButton('Show Answer');
+    stampConfig({ hasApiToken: true });
+    vi.stubGlobal('matchMedia', vi.fn(() => ({ matches: true })));
+    vi.spyOn(document, 'hasFocus').mockReturnValue(true);
+    await importApp();
+
+    const native = MockSpeechRecognition.instances[0];
+    const stopsBefore = native.nativeStop.mock.calls.length;
+
+    vi.useFakeTimers();
+    try {
+      document.hasFocus.mockReturnValue(false);
+      window.dispatchEvent(new Event('blur'));
+      document.hasFocus.mockReturnValue(true);
+      window.dispatchEvent(new Event('focus'));
+      vi.advanceTimersByTime(1000);
+
+      const label = document.getElementById('kikoe-idle-label');
+      expect(label.textContent).toBe('Listening');
+      expect(native.nativeStop.mock.calls.length).toBe(stopsBefore);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   test('manual-input cards still go through the checkAnswer path', async () => {

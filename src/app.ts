@@ -12,6 +12,12 @@ import { startSpeedEnhancer as startBunproSpeedEnhancer } from './bunpro_speed';
 import { createTranscriptContainer, logTranscript, showIdleIndicator, setIdleIndicatorState } from './live_transcript';
 import { acquireWakeLock, releaseWakeLock } from './wake_lock';
 import { watchMicPermission } from './mic_permission';
+import {
+  isTouchPrimaryDevice,
+  watchOnscreenKeyboard,
+  keyboardJustRetracted,
+  isOnscreenKeyboardObservable,
+} from './onscreen_keyboard';
 import { SHARED_COMMANDS, REVEAL_COMMANDS, GRADE_COMMANDS, HELP_COMMANDS, buildCommandTable, commandsForMode } from './commands';
 import type { HelpMode } from './commands';
 import { updateHelpChip, openHelpPanel, closeHelpPanel, isHelpPanelOpen, showHelpHint } from './help';
@@ -53,17 +59,14 @@ const MATCHED_INTERIM_SETTLE_MS = 400;
 // window (and this tab) stays visible on screen. Touch-primary devices need
 // the same signal for the equivalent case (e.g. iPad Split View, where the
 // page stays fully visible while focus moves to the app alongside it) — but
-// dismissing the on-screen keyboard also blurs whatever input triggered it,
-// which some of these browsers report as the window itself losing focus,
-// and recovers on its own an instant later without a matching 'focus' event.
-// See https://github.com/mattpatterson94/kikoe/issues/79.
-function isTouchPrimaryDevice(): boolean {
-  return typeof window.matchMedia === 'function' && window.matchMedia('(pointer: coarse)').matches;
-}
-
-// A touch-primary keyboard-dismiss blur clears itself within this window;
-// a real "attention elsewhere" blur (Split View, backgrounding) does not.
-const TOUCH_BLUR_GRACE_MS = 400;
+// dismissing the on-screen keyboard also drops focus out of the document, and
+// contrary to what this originally assumed that blur does NOT clear itself:
+// focus stays gone until the user taps something, which on a hands-free review
+// is never. See https://github.com/mattpatterson94/kikoe/issues/79.
+//
+// So a touch blur can't be resolved by waiting it out — the wait has to be used
+// to ask *why* focus went away, which the on-screen keyboard observer answers.
+const TOUCH_BLUR_GRACE_MS = 600;
 
 // How long the page has to stay unreadable before the indicator says so, and
 // how often that's re-evaluated. Card transitions routinely leave the DOM
@@ -217,6 +220,15 @@ async function startListener(dictionary: Dictionary): Promise<void> {
   // likely. Ranked above the context-derived states because when the page
   // can't be read, whatever context says about it is meaningless.
   let pageUnreadable = false;
+  // On touch-primary devices document.hasFocus() is not a usable liveness
+  // signal (see TOUCH_BLUR_GRACE_MS): dismissing the on-screen keyboard leaves
+  // it false indefinitely, so a live read reports "the user left" for a page
+  // sitting right in front of them. isPageActive() is consulted on every
+  // update, not just on blur, so that stuck value would re-pause long after the
+  // keyboard is gone. Latch a *deliberate* blur here instead — one that
+  // outlived the grace window and wasn't the keyboard retracting — and read
+  // that on touch. Desktop keeps reading hasFocus() live.
+  let touchBlurred = false;
 
   function restoreIdleIndicator(): void {
     if (micPermissionDenied) setIdleIndicatorState('mic-denied');
@@ -391,6 +403,7 @@ async function startListener(dictionary: Dictionary): Promise<void> {
 
   function isPageActive(): boolean {
     const hidden = document.hidden || document.visibilityState === 'hidden';
+    if (isTouchPrimaryDevice()) return !hidden && !touchBlurred;
     const blurred = typeof document.hasFocus === 'function' && !document.hasFocus();
     return !hidden && !blurred;
   }
@@ -862,23 +875,43 @@ async function startListener(dictionary: Dictionary): Promise<void> {
     syncWakeLock();
   }
 
-  // On a touch-primary device, react to blur/focus after a short grace
-  // window instead of immediately: a keyboard-dismiss blur clears itself
-  // (via a 'focus' event or document.hasFocus() simply going true again)
-  // well within TOUCH_BLUR_GRACE_MS, so it never reaches
-  // updateRecognitionForPageActivity and never pauses the mic. A real
-  // "attention elsewhere" blur (Split View, backgrounding) is still blurred
-  // when the timer fires and pauses as normal. Desktop reacts immediately,
-  // as before — alt-tab there is a deliberate, sustained action with no
-  // equivalent flicker to debounce.
+  // Desktop reacts to blur/focus immediately — alt-tab there is deliberate and
+  // sustained, with no keyboard flicker to disambiguate.
+  //
+  // On touch, the grace window is what buys time to find out *why* focus went
+  // away: the blur lands first and the keyboard's retract only reports itself
+  // once the animation moves the visual viewport. When the timer fires, a blur
+  // explained by the keyboard is left alone (the page is still right in front
+  // of the user), and anything else latches as a real "attention elsewhere".
   function handleWindowBlurOrFocus(): void {
     clearTimeout(touchBlurGraceTimer);
-    const stillBlurred = typeof document.hasFocus === 'function' && !document.hasFocus();
-    if (isTouchPrimaryDevice() && stillBlurred) {
-      touchBlurGraceTimer = setTimeout(updateRecognitionForPageActivity, TOUCH_BLUR_GRACE_MS);
-    } else {
+    const blurred = typeof document.hasFocus === 'function' && !document.hasFocus();
+
+    if (!isTouchPrimaryDevice()) {
       updateRecognitionForPageActivity();
+      return;
     }
+
+    if (!blurred) {
+      touchBlurred = false;
+      updateRecognitionForPageActivity();
+      return;
+    }
+
+    touchBlurGraceTimer = setTimeout(() => {
+      if (typeof document.hasFocus === 'function' && document.hasFocus()) {
+        touchBlurred = false;
+        updateRecognitionForPageActivity();
+        return;
+      }
+      // Keyboard's doing — not the user leaving. Where the keyboard can't be
+      // observed at all, assume the same: a session stranded on "Paused" costs
+      // the user every answer until they notice, while a missed Split View
+      // pause only leaves the mic listening somewhere they can still mute it.
+      if (keyboardJustRetracted() || !isOnscreenKeyboardObservable()) return;
+      touchBlurred = true;
+      updateRecognitionForPageActivity();
+    }, TOUCH_BLUR_GRACE_MS);
   }
 
   function setMuted(muted: boolean): void {
@@ -887,6 +920,7 @@ async function startListener(dictionary: Dictionary): Promise<void> {
     updateRecognitionForPageActivity();
   }
 
+  watchOnscreenKeyboard();
   document.addEventListener('visibilitychange', updateRecognitionForPageActivity);
   window.addEventListener('focus', handleWindowBlurOrFocus);
   window.addEventListener('blur', handleWindowBlurOrFocus);
