@@ -52,6 +52,7 @@ writeFileSync(files.html, `<!DOCTYPE html>
             <p class="state-on">Kikoe’s extension is currently on. You can turn it off in Safari Extensions preferences.</p>
             <p class="state-off">Kikoe’s extension is currently off. You can turn it on in Safari Extensions preferences.</p>
             <button class="open-preferences">Quit and Open Safari Extensions Preferences...</button>
+            <p class="note">Turning the extension on isn’t quite enough — Safari also asks separately for permission to run it on websites. In that same preferences pane, set Kikoe’s website access to “Allow” (or “Always Allow on Every Website”) for WaniKani and BunPro, or open a review page, click the Kikoe icon in Safari’s toolbar, and choose Allow there.</p>
         </section>
     </main>
 </body>

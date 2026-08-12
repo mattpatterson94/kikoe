@@ -99,11 +99,45 @@ The first iOS/iPadOS validation pass should verify:
 3. `chrome.storage.sync`, `chrome.storage.local`, `chrome.runtime.getURL`, and
    `chrome.runtime.openOptionsPage` work in Safari's extension runtime.
 4. The options page or containing app clearly tells users that Safari extension
-   access and microphone access are separate setup steps.
+   access, website access, and microphone access are three separate setup
+   steps.
 5. Microphone permission can be granted from the injected Kikoe UI after opening
    a review page.
 6. `webkitSpeechRecognition` emits interim/final results on iPhone or iPad.
 7. WaniKani API-token storage and subject prefetching work after reload.
+
+## Website Access Is a Separate, Easy-to-Miss Step
+
+Turning Kikoe on in Safari's Extensions preferences is not enough to run it.
+Unlike Chrome and Firefox — which auto-grant a required `host_permissions`
+entry at install — Safari treats every extension's site access as a
+per-extension "Ask" gate by default, even for permissions declared as
+required (non-optional) in the manifest. Until that gate is opened,
+`content_scripts` never run on a matching page at all, so `content.js` never
+executes and nothing in the extension gets a chance to explain what's wrong.
+
+The only native ways to open the gate are the toolbar icon's dropdown menu
+(click the puzzle-piece/extensions icon if Kikoe's own icon isn't pinned, then
+choose "Always Allow on Every Website") or the website-access dropdown next to
+Kikoe in Safari Settings/Preferences > Extensions. Neither is something a new
+user stumbles onto — the extension just looks broken until they do.
+
+Because the content script can't run before access is granted, it can't show
+an in-page prompt either — this has to be solved from a context that runs
+regardless of per-site permission. The fix here uses two of those:
+
+- The shared options page (`extension/options.js` /
+  `extension/options.html`) checks `chrome.permissions.contains({ origins })`
+  for the same origins as `host_permissions` and, when they aren't granted,
+  shows a "Site Access" card with a button that calls
+  `chrome.permissions.request({ origins })`. Chrome and Firefox already have
+  these origins granted at install, so `contains` is `true` and the card never
+  appears there — this only matters, and only shows up, on Safari. Options
+  opens whenever the toolbar icon is clicked (see `background.js`), which is
+  exactly the moment a confused user goes looking for help.
+- The customized containing-app page (`scripts/customize-safari-app.js`)
+  spells out the website-access step explicitly for macOS, alongside the
+  existing "turn the extension on" instructions.
 
 ## Known Open Questions
 

@@ -17,6 +17,20 @@ const apiTokenPageUrl = 'https://www.wanikani.com/settings/personal_access_token
 const apiTokenDiscoveryRequestedKey = 'kikoe_api_token_discovery_requested';
 const apiTokenDiscoveryStatusKey = 'kikoe_api_token_discovery_status';
 
+// Chrome/Firefox grant these at install since they're required (not optional)
+// host_permissions, so `contains` is always true there and this card never
+// shows. Safari instead defaults every extension's site access to "Ask",
+// even for required permissions, and only reveals that through its toolbar
+// icon or Settings > Extensions — easy to miss entirely. Calling `request`
+// here surfaces Safari's native allow dialog directly from a page the user
+// already opened deliberately.
+const SITE_ACCESS_ORIGINS = [
+  'https://www.wanikani.com/*',
+  'https://api.wanikani.com/*',
+  'https://bunpro.jp/*',
+  'https://www.bunpro.jp/*',
+];
+
 // Keys read/written via a same-id form element. customCorrections is edited
 // through the dynamic row list below instead.
 const fields = Object.keys(defaults).filter((k) => k !== 'customCorrections');
@@ -131,6 +145,44 @@ chrome.storage.onChanged.addListener((changes, area) => {
   }
 });
 
+// ── site access (Safari's per-site permission gate) ─────────────────────────────
+
+function setSiteAccessStatus(message, state = '') {
+  const status = get('siteAccessStatus');
+  status.textContent = message;
+  status.className = `status${state ? ` ${state}` : ''}`;
+}
+
+async function refreshSiteAccess() {
+  const card = get('siteAccessCard');
+  if (!chrome.permissions?.contains) {
+    card.hidden = true;
+    return;
+  }
+  const granted = await chrome.permissions.contains({ origins: SITE_ACCESS_ORIGINS });
+  card.hidden = granted;
+}
+
+async function grantSiteAccess() {
+  const button = get('grantSiteAccess');
+  button.disabled = true;
+  try {
+    const granted = await chrome.permissions.request({ origins: SITE_ACCESS_ORIGINS });
+    if (granted) {
+      setSiteAccessStatus('Access granted — reload WaniKani or BunPro to start using Kikoe.', 'ok');
+      get('siteAccessCard').hidden = true;
+    } else {
+      setSiteAccessStatus("Access wasn't granted, so Kikoe can't run on WaniKani or BunPro yet.", 'error');
+    }
+  } catch {
+    setSiteAccessStatus('Could not request access automatically — open Safari Settings > Extensions > Kikoe and set website access to Allow.', 'error');
+  } finally {
+    button.disabled = false;
+  }
+}
+
+get('grantSiteAccess').addEventListener('click', grantSiteAccess);
+
 // ── form load/save ────────────────────────────────────────────────────────────
 
 function readForm() {
@@ -179,3 +231,4 @@ get('save').addEventListener('click', async () => {
 });
 
 load();
+refreshSiteAccess();
