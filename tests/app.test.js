@@ -996,6 +996,37 @@ describe('startListener BunPro Reveal & Grade cards', () => {
     expect(label.textContent).toBe('Muted');
   });
 
+  // Regression test for https://github.com/mattpatterson94/kikoe/issues/79:
+  // the touch-blur-grace fix lives in shared page-activity handling with no
+  // site branching, but it had only been exercised against WaniKani's DOM.
+  // Confirm dismissing the on-screen keyboard on BunPro doesn't pause either.
+  test('a quick keyboard-dismiss blur/focus on a touch-primary device does not pause recognition', async () => {
+    addMetadata();
+    addButton('Show Answer');
+    stampConfig({ hasApiToken: true });
+    vi.stubGlobal('matchMedia', vi.fn(() => ({ matches: true })));
+    vi.spyOn(document, 'hasFocus').mockReturnValue(true);
+    await importApp();
+
+    const native = MockSpeechRecognition.instances[0];
+    const stopsBefore = native.nativeStop.mock.calls.length;
+
+    vi.useFakeTimers();
+    try {
+      document.hasFocus.mockReturnValue(false);
+      window.dispatchEvent(new Event('blur'));
+      document.hasFocus.mockReturnValue(true);
+      window.dispatchEvent(new Event('focus'));
+      vi.advanceTimersByTime(1000);
+
+      const label = document.getElementById('kikoe-idle-label');
+      expect(label.textContent).toBe('Listening');
+      expect(native.nativeStop.mock.calls.length).toBe(stopsBefore);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   test('manual-input cards still go through the checkAnswer path', async () => {
     addMetadata({
       'data-meta-input-mode': 'manual',
