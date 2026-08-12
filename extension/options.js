@@ -132,6 +132,119 @@ chrome.storage.onChanged.addListener((changes, area) => {
   }
 });
 
+// ── site access ───────────────────────────────────────────────────────────────
+//
+// Safari defaults an extension's website access to "Ask" even for required
+// (non-optional) host_permissions, and never prompts on its own: content
+// scripts simply don't run until the user finds Kikoe's toolbar menu or
+// Safari's Extensions settings. Since content.js can't run, it can't explain
+// itself either — so this card, on a page that runs regardless of site
+// permission, is where the gap gets surfaced. Chrome and Firefox grant the
+// same origins at install, so the card stays hidden there.
+
+// Taken from the manifest rather than repeated here: options.js is copied
+// verbatim by build.sh (no bundler, so it can't import), and a hand-kept copy
+// would drift from the three manifests. `injected` is what content_scripts
+// needs to run at all — the case where Kikoe looks broken — while `declared`
+// also covers api.wanikani.com, worth folding into the same prompt but never
+// the reason the UI is missing.
+function siteAccessOrigins() {
+  const manifest = chrome.runtime.getManifest?.() || {};
+  const injected = (manifest.content_scripts || []).flatMap((cs) => cs.matches || []);
+  const declared = manifest.host_permissions || [];
+  return { injected, all: [...new Set([...declared, ...injected])] };
+}
+
+// "https://www.wanikani.com/*" → "www.wanikani.com", for status messages.
+function originHost(origin) {
+  return origin.replace(/^[a-z]+:\/\//i, '').replace(/\/\*?$/, '');
+}
+
+// Checked one origin at a time on purpose: a single contains() call over the
+// whole set is all-or-nothing, so a user who allowed WaniKani but not BunPro
+// would be told Kikoe can't run on the site where it works fine.
+async function missingSiteAccess() {
+  const { injected } = siteAccessOrigins();
+  const granted = await Promise.all(
+    injected.map((origin) => chrome.permissions.contains({ origins: [origin] })),
+  );
+  return injected.filter((_, i) => !granted[i]);
+}
+
+function setSiteAccessStatus(message, state = '') {
+  const status = get('siteAccessStatus');
+  status.textContent = message;
+  status.className = `status${state ? ` ${state}` : ''}`;
+}
+
+async function refreshSiteAccess() {
+  const card = get('siteAccessCard');
+  if (!chrome.permissions?.contains) {
+    card.hidden = true;
+    return;
+  }
+  try {
+    card.hidden = !(await missingSiteAccess()).length;
+  } catch (err) {
+    // Can't tell either way. Showing the card beats silently doing nothing on
+    // the one browser it exists for: its manual steps are correct advice for
+    // anyone whose extension isn't running, and the button is guarded.
+    console.error('[kikoe] could not read site access:', err);
+    card.hidden = false;
+  }
+}
+
+function checkSiteAccess() {
+  refreshSiteAccess().catch((err) => console.error('[kikoe] site access check failed:', err));
+}
+
+// Re-reads the real grant instead of trusting request()'s boolean, which
+// can't express the partial grant the native prompt allows (some sites
+// permitted, others not). The card deliberately stays up on success so the
+// reload instruction is readable — nothing is missing by the next refresh,
+// so it goes away then.
+async function reportSiteAccess() {
+  let missing;
+  try {
+    missing = await missingSiteAccess();
+  } catch {
+    setSiteAccessStatus('Could not confirm site access — use the steps below.', 'error');
+    return;
+  }
+  if (!missing.length) {
+    setSiteAccessStatus('Access granted — reload WaniKani or BunPro to start using Kikoe.', 'ok');
+    return;
+  }
+  setSiteAccessStatus(`Still no access for ${missing.map(originHost).join(', ')} — use the steps below.`, 'error');
+}
+
+async function grantSiteAccess() {
+  const button = get('grantSiteAccess');
+  button.disabled = true;
+  try {
+    await chrome.permissions.request({ origins: siteAccessOrigins().all });
+  } catch (err) {
+    // Chromium rejects request() outright for origins that aren't in
+    // optional_host_permissions, and Safari may decline to prompt at all.
+    // Either way the manual steps under the button still apply, and
+    // reportSiteAccess below says so.
+    console.error('[kikoe] site access request failed:', err);
+  }
+  button.disabled = false;
+  await reportSiteAccess();
+}
+
+get('grantSiteAccess').addEventListener('click', grantSiteAccess);
+
+// The card sends users to Safari's own settings, so re-check when they come
+// back — otherwise they return to the same card and copy and reasonably
+// conclude it didn't work. onAdded covers a grant made through the prompt;
+// visibilitychange covers one made outside the browser entirely.
+chrome.permissions?.onAdded?.addListener(checkSiteAccess);
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) checkSiteAccess();
+});
+
 // ── form load/save ────────────────────────────────────────────────────────────
 
 function readForm() {
@@ -180,3 +293,4 @@ get('save').addEventListener('click', async () => {
 });
 
 load();
+checkSiteAccess();
