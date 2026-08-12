@@ -1,6 +1,6 @@
 import type { Settings } from './settings';
 import type { CommandSpec } from './commands';
-import { themeClass, ensureCornerContainer, guardCornerActivation } from './live_transcript';
+import { themeClass, ensureCornerContainer } from './live_transcript';
 
 const STYLE_ID = 'kikoe-help-styles';
 const HINT_FADE_DELAY_MS = 8000;
@@ -140,7 +140,7 @@ export function updateHelpChip(settings: Settings, onActivate: () => void): void
   chip.setAttribute('title', 'Voice commands & tips');
   chip.setAttribute('aria-label', 'Show voice command help');
   chip.textContent = '?';
-  chip.addEventListener('click', guardCornerActivation(chip, onActivate));
+  chip.addEventListener('click', onActivate);
   chip.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault();

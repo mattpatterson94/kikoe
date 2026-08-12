@@ -9,13 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- Dismissing the on-screen keyboard on iPad no longer mutes the mic. The
-  status and help chips sit in the bottom-right corner of the page, which iOS
-  leaves underneath the on-screen keyboard — the same corner the iPad's own
-  keyboard-dismiss key occupies. Retracting the keyboard uncovered a chip
-  directly beneath the finger that dismissed it, and the tap landed on it as a
-  click. Both chips now ignore a click that arrives while they're still
-  covered by the keyboard, or in the moment just after it retracts.
+- Dismissing the on-screen keyboard on iPad still paused recognition, which
+  the fix in 0.11.0 only delayed rather than resolved. That fix assumed the
+  blur cleared itself within a grace window; it doesn't — dismissing the
+  keyboard drops focus out of the document and leaves it there until the user
+  taps something, which on a hands-free review never happens. Because page
+  activity is re-read on every update and not just on blur, the stale value
+  also re-paused long after the keyboard was gone. Touch devices now use the
+  grace window to establish *why* focus went away — the visual viewport
+  growing back identifies the keyboard retracting — and only treat a blur as
+  "left the page" when the keyboard wasn't the cause. iPad Split View still
+  pauses as before. ([#79](https://github.com/mattpatterson94/kikoe/issues/79))
 
 ## [0.11.0] - 2026-08-11
 
