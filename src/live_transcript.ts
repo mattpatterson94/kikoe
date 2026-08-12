@@ -178,6 +178,67 @@ export function themeClass(settings: Settings): string {
   return 'kikoe-theme-system';
 }
 
+// The corner controls are pinned to the bottom right of the *layout* viewport.
+// iOS keeps that viewport at full height while the on-screen keyboard is up, so
+// the chips sit underneath the keyboard — invisible and untappable — and the
+// iPad's own keyboard-dismiss key occupies that very same bottom-right corner.
+// Dismissing the keyboard therefore uncovers a chip directly under the finger
+// that dismissed it, and that tap can land on the chip as a click, muting the
+// mic (or opening help) when the user never aimed at it.
+//
+// Only honour a click when the chip was genuinely on screen to be aimed at: not
+// still covered by the keyboard, and not within the settle window after the
+// keyboard retracted, since the click can arrive either mid-animation or a beat
+// after it finishes.
+const KEYBOARD_DISMISS_SETTLE_MS = 500;
+
+let keyboardRetracting = false;
+let keyboardRetractTimer: ReturnType<typeof setTimeout> | undefined;
+let viewportGuardInstalled = false;
+
+function installViewportGuard(): void {
+  if (viewportGuardInstalled) return;
+  const vv = window.visualViewport;
+  if (!vv) return;
+  viewportGuardInstalled = true;
+  let lastHeight = vv.height;
+  vv.addEventListener('resize', () => {
+    // The visual viewport growing back is the keyboard retracting and being
+    // about to uncover the corner. Shrinking is the keyboard appearing, which
+    // needs no guard — the chips are covered, so isCoveredByKeyboard has it.
+    if (vv.height > lastHeight) {
+      keyboardRetracting = true;
+      clearTimeout(keyboardRetractTimer);
+      keyboardRetractTimer = setTimeout(() => { keyboardRetracting = false; }, KEYBOARD_DISMISS_SETTLE_MS);
+    }
+    lastHeight = vv.height;
+  });
+}
+
+// True when the keyboard has shrunk the visual viewport to above the chip, so
+// the chip is off screen and cannot be what the user meant to tap.
+function isCoveredByKeyboard(el: HTMLElement): boolean {
+  const vv = window.visualViewport;
+  if (!vv) return false;
+  const rect = el.getBoundingClientRect();
+  // jsdom (and any browser before first layout) reports an all-zero rect,
+  // which carries no position information — treat it as visible.
+  if (rect.width === 0 && rect.height === 0) return false;
+  // visualViewport offsets share getBoundingClientRect's frame of reference.
+  return rect.bottom > vv.offsetTop + vv.height + 1;
+}
+
+// Wraps a corner chip's click handler so a tap that only dismissed the
+// on-screen keyboard can't activate it. Keyboard (Enter/Space) activation is
+// left unwrapped — it is always deliberate and never a stray touch.
+export function guardCornerActivation(el: HTMLElement, onActivate: () => void): () => void {
+  installViewportGuard();
+  return () => {
+    if (keyboardRetracting || isCoveredByKeyboard(el)) return;
+    onActivate();
+  };
+}
+
 // The bottom-right corner holds every persistent control (status indicator,
 // help chip) in one flex row, so siblings line up without measuring each
 // other's width. Recreated on demand since WaniKani re-renders can wipe body
@@ -248,7 +309,7 @@ export function showIdleIndicator(settings: Settings, onToggle?: () => void): vo
         onToggle();
       }
     };
-    el.addEventListener('click', onActivate);
+    el.addEventListener('click', guardCornerActivation(el, onActivate));
     el.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' || e.key === ' ') {
         e.preventDefault();

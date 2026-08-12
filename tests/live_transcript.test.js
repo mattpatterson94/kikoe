@@ -310,6 +310,125 @@ describe('showIdleIndicator click-to-toggle', () => {
   });
 });
 
+// The corner chips sit at the bottom right of the layout viewport, which iOS
+// leaves at full height while the on-screen keyboard is up — so they end up
+// underneath the keyboard, right where the iPad's own dismiss key is. The tap
+// that dismisses the keyboard uncovers a chip beneath the finger and can land
+// on it as a click, muting the mic without the user aiming at it.
+describe('corner chip activation guard (on-screen keyboard dismissal)', () => {
+  const LAYOUT_HEIGHT = 1000;
+
+  // The guard keeps module-level state (the settle timer, whether the
+  // visualViewport listener has been installed), so every test re-imports the
+  // module fresh against its own stubbed viewport.
+  async function freshModule(viewport) {
+    vi.resetModules();
+    vi.stubGlobal('visualViewport', viewport);
+    return import('../src/live_transcript');
+  }
+
+  // Minimal stand-in for window.visualViewport: jsdom has none, and only the
+  // height/offsetTop pair plus resize notifications matter to the guard.
+  function fakeViewport(height) {
+    const listeners = [];
+    return {
+      height,
+      offsetTop: 0,
+      addEventListener(type, fn) { if (type === 'resize') listeners.push(fn); },
+      resizeTo(next) { this.height = next; listeners.forEach(fn => fn()); },
+    };
+  }
+
+  // A chip pinned 16px above the bottom of the layout viewport, as the real
+  // corner container is. jsdom does no layout, so the rect has to be supplied.
+  function stubChipRect(el) {
+    el.getBoundingClientRect = () => ({
+      top: LAYOUT_HEIGHT - 32, bottom: LAYOUT_HEIGHT - 16,
+      left: 880, right: 990, width: 110, height: 16,
+      x: 880, y: LAYOUT_HEIGHT - 32, toJSON: () => ({}),
+    });
+  }
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  test('a click while the keyboard still covers the chip is ignored', async () => {
+    const { showIdleIndicator } = await freshModule(fakeViewport(600));
+    const onToggle = vi.fn();
+    showIdleIndicator(settings(), onToggle);
+    const chip = document.getElementById('kikoe-idle');
+    stubChipRect(chip);
+
+    chip.click();
+
+    expect(onToggle).not.toHaveBeenCalled();
+  });
+
+  test('a click in the settle window just after the keyboard retracts is ignored', async () => {
+    const viewport = fakeViewport(600);
+    const { showIdleIndicator } = await freshModule(viewport);
+    const onToggle = vi.fn();
+    showIdleIndicator(settings(), onToggle);
+    const chip = document.getElementById('kikoe-idle');
+    stubChipRect(chip);
+
+    vi.useFakeTimers();
+    try {
+      // Keyboard finishes retracting: the chip is uncovered and now on screen,
+      // but the dismissing tap can still arrive as a click a beat later.
+      viewport.resizeTo(LAYOUT_HEIGHT);
+      chip.click();
+      expect(onToggle).not.toHaveBeenCalled();
+
+      // Once the window elapses, the chip is a normal control again.
+      vi.advanceTimersByTime(500);
+      chip.click();
+      expect(onToggle).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test('a deliberate click with the keyboard down still toggles', async () => {
+    const { showIdleIndicator } = await freshModule(fakeViewport(LAYOUT_HEIGHT));
+    const onToggle = vi.fn();
+    showIdleIndicator(settings(), onToggle);
+    const chip = document.getElementById('kikoe-idle');
+    stubChipRect(chip);
+
+    chip.click();
+
+    expect(onToggle).toHaveBeenCalledTimes(1);
+  });
+
+  test('keyboard (Enter) activation is never suppressed', async () => {
+    const { showIdleIndicator } = await freshModule(fakeViewport(600));
+    const onToggle = vi.fn();
+    showIdleIndicator(settings(), onToggle);
+    const chip = document.getElementById('kikoe-idle');
+    stubChipRect(chip);
+
+    chip.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+
+    expect(onToggle).toHaveBeenCalledTimes(1);
+  });
+
+  test('the help chip is guarded the same way', async () => {
+    vi.resetModules();
+    vi.stubGlobal('visualViewport', fakeViewport(600));
+    const { updateHelpChip } = await import('../src/help');
+    const onActivate = vi.fn();
+    updateHelpChip({ ...settings(), show_help_button: true }, onActivate);
+    const chip = document.getElementById('kikoe-help-chip');
+    stubChipRect(chip);
+
+    chip.click();
+
+    expect(onActivate).not.toHaveBeenCalled();
+  });
+});
+
 describe('setIdleIndicatorState cannot-read-page', () => {
   test('labels an unreadable page and styles it as an error', () => {
     showIdleIndicator(settings());

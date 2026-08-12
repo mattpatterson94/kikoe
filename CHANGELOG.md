@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Fixed
+
+- Dismissing the on-screen keyboard on iPad no longer mutes the mic. The
+  status and help chips sit in the bottom-right corner of the page, which iOS
+  leaves underneath the on-screen keyboard — the same corner the iPad's own
+  keyboard-dismiss key occupies. Retracting the keyboard uncovered a chip
+  directly beneath the finger that dismissed it, and the tap landed on it as a
+  click. Both chips now ignore a click that arrives while they're still
+  covered by the keyboard, or in the moment just after it retracts.
+
 ## [0.11.0] - 2026-08-11
 
 ### Added
