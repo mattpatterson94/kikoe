@@ -52,7 +52,7 @@ writeFileSync(files.html, `<!DOCTYPE html>
             <p class="state-on">Kikoe’s extension is currently on. You can turn it off in Safari Extensions preferences.</p>
             <p class="state-off">Kikoe’s extension is currently off. You can turn it on in Safari Extensions preferences.</p>
             <button class="open-preferences">Quit and Open Safari Extensions Preferences...</button>
-            <p class="note">Turning the extension on isn’t quite enough — Safari also asks separately for permission to run it on websites. In that same preferences pane, set Kikoe’s website access to “Allow” (or “Always Allow on Every Website”) for WaniKani and BunPro, or open a review page, click the Kikoe icon in Safari’s toolbar, and choose Allow there.</p>
+            <p class="note access-note">Turning the extension on isn’t quite enough — Safari also asks separately for permission to run it on websites. In that same preferences pane, set Kikoe’s website access to “Allow” for WaniKani and BunPro, or open a review page, click Kikoe’s icon in Safari’s toolbar, and choose Allow there.</p>
         </section>
     </main>
 </body>
@@ -216,14 +216,26 @@ body.state-off :is(.state-on, .state-unknown) {
 }
 `);
 
-writeFileSync(files.js, `function show(platform, enabled, useSettingsInsteadOfPreferences) {
+writeFileSync(files.js, `// Descendant selectors, not Apple's template's getElementsByClassName with a
+// two-class string: that form needs both classes on one element, and here
+// platform-mac sits on the wrapping <section> while the state classes sit on
+// the <p> elements inside it. Reading [0] of an empty list threw a TypeError
+// before the state toggling below ever ran, so on macOS 13+ the panel stayed
+// in its "unknown" state and the button kept the stale Preferences label.
+function setText(selector, text) {
+    const el = document.querySelector(selector);
+    if (el) el.innerText = text;
+}
+
+function show(platform, enabled, useSettingsInsteadOfPreferences) {
     document.body.classList.add(\`platform-\${platform}\`);
 
     if (useSettingsInsteadOfPreferences) {
-        document.getElementsByClassName('platform-mac state-on')[0].innerText = "Kikoe’s extension is currently on. You can turn it off in the Extensions section of Safari Settings.";
-        document.getElementsByClassName('platform-mac state-off')[0].innerText = "Kikoe’s extension is currently off. You can turn it on in the Extensions section of Safari Settings.";
-        document.getElementsByClassName('platform-mac state-unknown')[0].innerText = "You can turn on Kikoe’s extension in the Extensions section of Safari Settings.";
-        document.getElementsByClassName('platform-mac open-preferences')[0].innerText = "Quit and Open Safari Settings...";
+        setText('.platform-mac .state-on', "Kikoe’s extension is currently on. You can turn it off in the Extensions section of Safari Settings.");
+        setText('.platform-mac .state-off', "Kikoe’s extension is currently off. You can turn it on in the Extensions section of Safari Settings.");
+        setText('.platform-mac .state-unknown', "You can turn on Kikoe’s extension in the Extensions section of Safari Settings.");
+        setText('.platform-mac .open-preferences', "Quit and Open Safari Settings...");
+        setText('.platform-mac .access-note', "Turning the extension on isn’t quite enough — Safari also asks separately for permission to run it on websites. In that same Extensions section of Safari Settings, set Kikoe’s website access to “Allow” for WaniKani and BunPro, or open a review page, click Kikoe’s icon in Safari’s toolbar, and choose Allow there.");
     }
 
     if (typeof enabled === "boolean") {

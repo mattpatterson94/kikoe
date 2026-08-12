@@ -254,10 +254,26 @@
     #siteAccessCard .status {
       text-align: left;
       max-width: none;
-      margin-top: 10px;
+      margin: 10px 0 0;
     }
 
+    #siteAccessCard .status:empty { margin: 0; }
+
     #siteAccessCard button { margin-top: 4px; }
+
+    #siteAccessCard .setup-note { margin-top: 12px; }
+
+    .setup-steps {
+      margin: 6px 0 0;
+      padding-left: 1.25em;
+      color: var(--text-soft);
+      font-size: 0.9rem;
+      font-weight: 650;
+    }
+
+    .setup-steps li + li { margin-top: 4px; }
+
+    .setup-steps strong { color: var(--text); }
 
     input:focus-visible, select:focus-visible {
       outline: none;
@@ -497,12 +513,18 @@
   <section class="card" id="siteAccessCard" hidden>
     <h2>Site Access</h2>
     <p class="setup-note">
-      Kikoe can't run on WaniKani or BunPro until you allow it. Click below,
-      or open Safari Settings &gt; Extensions &gt; Kikoe and set website
-      access to Allow.
+      Kikoe can't run on WaniKani or BunPro until the browser is allowed to
+      run it there. Safari asks for this separately from turning the extension
+      on, and won't prompt you for it on its own.
     </p>
     <button type="button" id="grantSiteAccess">Allow WaniKani &amp; BunPro access</button>
     <p class="status" id="siteAccessStatus" role="status" aria-live="polite"></p>
+    <p class="setup-note">If that button doesn't do anything, grant it directly:</p>
+    <ul class="setup-steps">
+      <li><strong>iPhone / iPad:</strong> Settings &gt; Apps &gt; Safari &gt; Extensions &gt; Kikoe, then set each site to Allow.</li>
+      <li><strong>Mac:</strong> Safari &gt; Settings &gt; Extensions &gt; Kikoe, then set each site's access to Allow.</li>
+      <li><strong>Either:</strong> open a review page and choose Allow from Kikoe's icon in Safari's toolbar.</li>
+    </ul>
   </section>
 
   <section class="card">

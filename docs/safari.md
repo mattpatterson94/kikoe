@@ -127,20 +127,47 @@ an in-page prompt either — this has to be solved from a context that runs
 regardless of per-site permission. The fix here uses two of those:
 
 - The shared options page (`extension/options.js` /
-  `extension/options.html`) checks `chrome.permissions.contains({ origins })`
-  for the same origins as `host_permissions` and, when they aren't granted,
-  shows a "Site Access" card with a button that calls
-  `chrome.permissions.request({ origins })`. Chrome and Firefox already have
-  these origins granted at install, so `contains` is `true` and the card never
-  appears there — this only matters, and only shows up, on Safari. Options
-  opens whenever the toolbar icon is clicked (see `background.js`), which is
-  exactly the moment a confused user goes looking for help.
+  `extension/options.html`) checks each content-script origin with
+  `chrome.permissions.contains` and, when any is missing, shows a "Site
+  Access" card. Chrome and Firefox grant those origins at install, so the card
+  stays hidden there. Options opens whenever the toolbar icon is clicked (see
+  `background.js`), which is exactly the moment a confused user goes looking
+  for help.
 - The customized containing-app page (`scripts/customize-safari-app.js`)
-  spells out the website-access step explicitly for macOS, alongside the
-  existing "turn the extension on" instructions.
+  spells out the website-access step for macOS, alongside the existing "turn
+  the extension on" instructions.
+
+Details in the options-page card that are load-bearing rather than incidental:
+
+- **The manual steps are always visible, not just on failure.** The card's
+  button calls `chrome.permissions.request`, but whether Safari prompts for a
+  *required* host permission this way is unverified on a real device (see the
+  open questions below), and Chromium rejects the call outright for origins
+  that aren't `optional_host_permissions`. If the button turns out to be a
+  no-op, the card still tells the user exactly where to go, per platform.
+- **Origins come from `chrome.runtime.getManifest()`**, not a copy in
+  `options.js`. The file is copied verbatim by `build.sh` with no bundler, so
+  it can't import them, and a hand-kept list would drift from the three
+  manifests.
+- **Each origin is checked separately.** One `contains` call over the whole
+  set is all-or-nothing, so a user who allowed WaniKani but not BunPro would
+  otherwise be told Kikoe can't run on the site where it works.
+- **The grant is re-read after requesting** rather than trusting `request`'s
+  boolean, which can't express the partial grant Safari's prompt allows.
+- **`permissions.onAdded` and `visibilitychange` re-check.** The card sends
+  users into Safari's settings; without a re-check they come back to the same
+  card and conclude it didn't work.
 
 ## Known Open Questions
 
+- Whether Safari's `permissions.request()` actually prompts for origins
+  declared as **required** `host_permissions` (rather than
+  `optional_host_permissions`). This is what the options-page button relies
+  on, and it needs a real-device check — the card's manual steps are written
+  to stand on their own precisely because this is unverified. If Safari turns
+  out to ignore the call, the follow-up is to move these origins to
+  `optional_host_permissions` in `safari_manifest.json` and keep
+  `content_scripts.matches` as the declared injection surface.
 - Whether Safari iOS allows `webkitSpeechRecognition` reliably from an injected
   extension UI rather than first-party page JavaScript.
 - Whether the MV3 service worker is sufficient for the options-opening bridge on
