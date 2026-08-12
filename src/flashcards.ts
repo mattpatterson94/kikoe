@@ -92,7 +92,7 @@ export interface QuestionContext {
   meanings?: string[];
 }
 
-export type FailureReason = 'not-loaded' | 'wrong-type' | 'no-match';
+export type FailureReason = 'not-loaded' | 'wrong-type' | 'no-match' | 'ambiguous-kanji';
 
 export interface Transcript {
   raw: string;
@@ -108,6 +108,15 @@ export type CheckResult =
 export interface CheckOptions {
   fuzzyMeaning?: boolean;
   corrections?: readonly (Partial<Correction> | null)[];
+  strictKanjiReadings?: boolean;
+}
+
+// CJK ideographs, including the extension A and compatibility blocks that
+// speech recognition occasionally emits.
+const KANJI_RE = /[㐀-䶿一-鿿豈-﫿]/;
+
+function containsKanji(s: string): boolean {
+  return KANJI_RE.test(s);
 }
 
 // User-defined corrections from settings: an array of { heard, intended }
@@ -314,12 +323,30 @@ export function checkAnswer(
   opts: CheckOptions = {},
 ): CheckResult {
   const { type } = context;
-  const { fuzzyMeaning = false, corrections = [] } = opts;
+  const { fuzzyMeaning = false, corrections = [], strictKanjiReadings = false } = opts;
   const customLookup = buildCorrectionLookup(corrections);
   const candidates = generateCandidates(transformers, raw);
 
   if (type === 'reading') {
     const acceptedReadings = (context.readings || []);
+
+    // On a kanji card the question *is* which reading to produce, so a
+    // transcript that came back as kanji can't answer it. Japanese speech
+    // recognition writes spoken readings back as kanji (say うえ, hear 上),
+    // and the dictionary transformers then expand that kanji into every
+    // reading it has — one of which is always the accepted one. Matching on
+    // that grades the card correct whichever reading was actually spoken.
+    // The kana is the only evidence of what the user said, so when strict
+    // mode is on, require it rather than reconstructing a reading from the
+    // prompt character. Vocabulary is unaffected: resolving 大人 → おとな is
+    // the dictionary's job there, and the word has one pronunciation.
+    if (strictKanjiReadings && context.category === 'kanji' && containsKanji(raw)) {
+      return {
+        success: false,
+        error: false,
+        transcript: { raw, reason: 'ambiguous-kanji', type: 'reading' },
+      };
+    }
 
     for (const c of candidates) {
       // isKana is strict: only pure hiragana/katakana passes.

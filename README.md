@@ -223,6 +223,25 @@ When the live transcript shows a `no match` bubble during a review, click the
 bubble to confirm and save a correction from what Kikoe heard to the current
 accepted answer.
 
+### Experimental
+
+Japanese speech recognition usually writes a spoken reading back as the kanji
+itself — say うえ and the recogniser returns 上. Kikoe then looks that kanji up
+and expands it into every reading it has, one of which is whichever reading
+WaniKani is asking for. On a kanji reading question that means the card is
+marked correct no matter which reading you actually said, because the kana that
+would distinguish them never reached the extension.
+
+Strict kanji readings closes that gap by only accepting kana the recogniser
+genuinely produced. When all that comes back is the kanji, Kikoe asks you to say
+it again instead of guessing. The trade-off is the occasional retry when you
+were right the first time. Vocabulary questions are unaffected — a word has one
+pronunciation, so resolving 仙台 to せんだい invents nothing.
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| Strict kanji readings | Off | On kanji reading questions, only accept kana the recogniser actually heard, instead of reconstructing a reading from the prompt character |
+
 ### Advanced
 
 | Setting | Default | Description |
