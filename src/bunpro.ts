@@ -9,6 +9,7 @@ const Selectors = {
   Metadata: '#quiz-metadata-element',
   Input: '#js-manual-input',
   Submit: '.InputManual__button',
+  // Legacy fallback for clickInfo — see InfoLabels.
   Hint: 'button[title="Toggle the hint level"]',
 };
 
@@ -68,6 +69,13 @@ const RevealLabels = {
   good: ['good'],
   bad: ['bad'],
 };
+
+// The graded card's "Show Info" button (alongside Undo / Alternatives), which
+// is what speed_show_info opens on a wrong answer. Matched by label for the
+// same reason as RevealLabels; only the stale title selector was used before,
+// which matched nothing, so the setting silently did nothing on BunPro.
+// 'item info' mirrors the WaniKani wording in case BunPro converges on it.
+const InfoLabels = ['show info', 'item info'];
 
 function findLabeledButton(labels: string[]): HTMLButtonElement | null {
   for (const button of document.querySelectorAll('button')) {
@@ -215,7 +223,11 @@ export function gradeBad(): boolean {
   return clickLabeledButton(RevealLabels.bad);
 }
 
+// Opening item info is idempotent by construction: once the panel is open
+// BunPro's button reads "Hide Info", which no longer matches InfoLabels, so a
+// repeat call can't toggle it back shut.
 export function clickInfo(): void {
+  if (clickLabeledButton(InfoLabels)) return;
   const hint = document.querySelector<HTMLButtonElement>(Selectors.Hint);
   if (hint) hint.click();
 }

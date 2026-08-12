@@ -316,7 +316,20 @@ describe('gradeGood / gradeBad', () => {
 });
 
 describe('clickInfo', () => {
-  test('clicks the hint toggle button', () => {
+  // The button a graded card actually renders, alongside Undo/Alternatives.
+  test('clicks the "Show Info" button on a graded card', () => {
+    const button = addButton('Show Info');
+    clickInfo();
+    expect(button.clicked).toBe(true);
+  });
+
+  test('leaves an already-open panel open rather than toggling it shut', () => {
+    const button = addButton('Hide Info');
+    clickInfo();
+    expect(button.clicked).toBeUndefined();
+  });
+
+  test('falls back to the hint toggle button', () => {
     const button = document.createElement('button');
     button.title = 'Toggle the hint level';
     button.addEventListener('click', () => { button.clicked = true; });
@@ -325,7 +338,18 @@ describe('clickInfo', () => {
     expect(button.clicked).toBe(true);
   });
 
-  test('does not throw when the hint button is absent', () => {
+  test('prefers "Show Info" over the hint toggle when both exist', () => {
+    const hint = document.createElement('button');
+    hint.title = 'Toggle the hint level';
+    hint.addEventListener('click', () => { hint.clicked = true; });
+    document.body.appendChild(hint);
+    const info = addButton('Show Info');
+    clickInfo();
+    expect(info.clicked).toBe(true);
+    expect(hint.clicked).toBeUndefined();
+  });
+
+  test('does not throw when no info button is present', () => {
     expect(() => clickInfo()).not.toThrow();
   });
 });

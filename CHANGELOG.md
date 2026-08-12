@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Fixed
+
+- "Show item info on wrong answer" now works on BunPro. It looked for a button
+  by a title attribute that no card renders, so it silently matched nothing and
+  the setting did nothing there — the button a graded card shows is labelled
+  "Show Info". It's now matched by label, the way the Reveal & Grade buttons
+  already are, since BunPro's markup changes from time to time. Opening the
+  panel a second time can't close it again, and the old title selector is kept
+  as a fallback.
+
 ## [0.11.0] - 2026-08-11
 
 ### Added
