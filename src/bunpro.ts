@@ -175,22 +175,35 @@ export function didContextChange(oldContext: ContextIdentity, newContext: Contex
 // The card Kikoe last submitted an answer for, so a graded card can be told
 // apart from an untouched one carrying a stale post-attempt flag.
 let lastSubmittedCardId: number | string | null = null;
+let lastSubmittedAt = 0;
+
+// How long a submission keeps its card pinned. What this guards against is a
+// speech result for the utterance just submitted arriving late, which the
+// engine emits about a second after the user stops talking — so the pin only
+// has to outlive that. Letting it stand indefinitely instead would leave the
+// item id claimed for the rest of the session, and ids repeat: a ghost review
+// of the same item later could inherit the pin and have its answer dropped.
+// The submission count can't stand in for a tighter identity here — grading is
+// itself what increments it, so the card Kikoe answered never keeps the count
+// it was answered at.
+const SUBMISSION_PIN_MS = 5000;
 
 // Whether writing to the input would land on a card Kikoe has already answered.
 // Once BunPro grades, it shows its own answer reveal in that field, and writing
 // there replaces the reveal with whatever Kikoe types. app.js's `submitted`
 // flag already suppresses the ordinary paths; this is the structural backstop
-// for anything that slips past it — a late speech result landing while the card
-// is mid-transition, say.
+// for anything that slips past it.
 //
 // Deliberately scoped to the card Kikoe itself answered rather than to
 // data-meta-is-post-attempt alone: a fresh card that has not yet cleared the
 // previous one's flag must still accept an answer, or a fast reply would be
 // dropped outright, which is far worse than a clobbered reveal.
 function isAlreadyAnswered(): boolean {
+  if (lastSubmittedCardId === null) return false;
+  if (Date.now() - lastSubmittedAt > SUBMISSION_PIN_MS) return false;
   const meta = getMetadata();
   if (meta?.dataset.metaIsPostAttempt !== 'true') return false;
-  return lastSubmittedCardId !== null && currentCardId() === lastSubmittedCardId;
+  return currentCardId() === lastSubmittedCardId;
 }
 
 // BunPro's input is React-controlled: assigning .value directly is ignored
@@ -211,7 +224,10 @@ export function submitAnswer(input: string): boolean {
   if (!inputAnswer(input)) return false;
   const button = document.querySelector<HTMLButtonElement>(Selectors.Submit);
   if (!button) return false;
+  // Snapshot before the click: it is synchronous, and BunPro's grade re-render
+  // can land inside it and swap the metadata element out from under us.
   lastSubmittedCardId = currentCardId();
+  lastSubmittedAt = Date.now();
   button.click();
   return true;
 }
@@ -233,7 +249,11 @@ function currentCardId(): number | string | null {
 export function markWrong(): boolean {
   const incorrect = getLanguage() === 'en-US' ? 'aaa' : 'あああ';
   if (!submitAnswer(incorrect)) return false;
-  selfWrongCardId = currentCardId();
+  // Reuse submitAnswer's pre-click snapshot rather than re-reading the DOM:
+  // by now the click has already run BunPro's grading synchronously, so the
+  // metadata element may have been re-rendered and currentCardId() can come
+  // back null — which would silently drop the flag and never open item info.
+  selfWrongCardId = lastSubmittedCardId;
   return true;
 }
 

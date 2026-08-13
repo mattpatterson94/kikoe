@@ -307,6 +307,41 @@ describe('inputAnswer on a graded card', () => {
     addInput();
     expect(bunpro.inputAnswer('おとこ')).toBe(true);
   });
+
+  // Item ids repeat within a session, so the pin has to lapse — otherwise a
+  // ghost review of the same item inherits it and has its answer dropped.
+  test('lets the pin lapse so a ghost of the same item is answerable', () => {
+    vi.useFakeTimers();
+    try {
+      const meta = addMetadata();
+      addInput();
+      expect(bunpro.submitAnswer('おとこ')).toBe(true);
+      meta.setAttribute('data-meta-is-post-attempt', 'true');
+      expect(bunpro.inputAnswer('おとこ')).toBe(false);
+
+      // The same item comes back much later, while the flag still reads stale.
+      vi.advanceTimersByTime(5001);
+      expect(bunpro.inputAnswer('おとこ')).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test('still blocks a late write arriving within the pin window', () => {
+    vi.useFakeTimers();
+    try {
+      const meta = addMetadata();
+      addInput();
+      expect(bunpro.submitAnswer('おとこ')).toBe(true);
+      meta.setAttribute('data-meta-is-post-attempt', 'true');
+
+      // A speech result finalizing about a second after the utterance ended.
+      vi.advanceTimersByTime(1200);
+      expect(bunpro.inputAnswer('おとこ')).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
 
 // ── takeSelfSubmittedWrongCardId ──────────────────────────────────────────────
