@@ -9,6 +9,7 @@ const Selectors = {
   Metadata: '#quiz-metadata-element',
   Input: '#js-manual-input',
   Submit: '.InputManual__button',
+  // Legacy fallback for clickInfo — see InfoLabels.
   Hint: 'button[title="Toggle the hint level"]',
 };
 
@@ -68,6 +69,13 @@ const RevealLabels = {
   good: ['good'],
   bad: ['bad'],
 };
+
+// The graded card's "Show Info" button (alongside Undo / Alternatives), which
+// is what speed_show_info opens on a wrong answer. Matched by label for the
+// same reason as RevealLabels; only the stale title selector was used before,
+// which matched nothing, so the setting silently did nothing on BunPro.
+// 'item info' mirrors the WaniKani wording in case BunPro converges on it.
+const InfoLabels = ['show info', 'item info'];
 
 function findLabeledButton(labels: string[]): HTMLButtonElement | null {
   for (const button of document.querySelectorAll('button')) {
@@ -164,10 +172,45 @@ export function didContextChange(oldContext: ContextIdentity, newContext: Contex
          (newContext?.type !== oldContext?.type);
 }
 
+// The card Kikoe last submitted an answer for, so a graded card can be told
+// apart from an untouched one carrying a stale post-attempt flag.
+let lastSubmittedCardId: number | string | null = null;
+let lastSubmittedAt = 0;
+
+// How long a submission keeps its card pinned. What this guards against is a
+// speech result for the utterance just submitted arriving late, which the
+// engine emits about a second after the user stops talking — so the pin only
+// has to outlive that. Letting it stand indefinitely instead would leave the
+// item id claimed for the rest of the session, and ids repeat: a ghost review
+// of the same item later could inherit the pin and have its answer dropped.
+// The submission count can't stand in for a tighter identity here — grading is
+// itself what increments it, so the card Kikoe answered never keeps the count
+// it was answered at.
+const SUBMISSION_PIN_MS = 5000;
+
+// Whether writing to the input would land on a card Kikoe has already answered.
+// Once BunPro grades, it shows its own answer reveal in that field, and writing
+// there replaces the reveal with whatever Kikoe types. app.js's `submitted`
+// flag already suppresses the ordinary paths; this is the structural backstop
+// for anything that slips past it.
+//
+// Deliberately scoped to the card Kikoe itself answered rather than to
+// data-meta-is-post-attempt alone: a fresh card that has not yet cleared the
+// previous one's flag must still accept an answer, or a fast reply would be
+// dropped outright, which is far worse than a clobbered reveal.
+function isAlreadyAnswered(): boolean {
+  if (lastSubmittedCardId === null) return false;
+  if (Date.now() - lastSubmittedAt > SUBMISSION_PIN_MS) return false;
+  const meta = getMetadata();
+  if (meta?.dataset.metaIsPostAttempt !== 'true') return false;
+  return currentCardId() === lastSubmittedCardId;
+}
+
 // BunPro's input is React-controlled: assigning .value directly is ignored
 // because React tracks the value internally. Use the native setter, then
 // dispatch a bubbling input event so React picks up the change.
 export function inputAnswer(input: string): boolean {
+  if (isAlreadyAnswered()) return false;
   const el = document.querySelector<HTMLInputElement>(Selectors.Input);
   if (!el) return false;
   const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
@@ -180,13 +223,47 @@ export function inputAnswer(input: string): boolean {
 export function submitAnswer(input: string): boolean {
   if (!inputAnswer(input)) return false;
   const button = document.querySelector<HTMLButtonElement>(Selectors.Submit);
-  if (button) { button.click(); return true; }
-  return false;
+  if (!button) return false;
+  // Snapshot before the click: it is synchronous, and BunPro's grade re-render
+  // can land inside it and swap the metadata element out from under us.
+  lastSubmittedCardId = currentCardId();
+  lastSubmittedAt = Date.now();
+  button.click();
+  return true;
+}
+
+// The card markWrong() last submitted a placeholder answer for, so
+// bunpro_speed.ts can tell Kikoe's own deliberate miss (ippatsu burning a
+// shot, the "wrong" command) apart from a real answer BunPro happened to grade
+// wrong. Pinned to the card rather than a bare boolean: a flag left unconsumed
+// — the click never registered, the card advanced first — must not be read as
+// a self-submitted miss on a later one.
+let selfWrongCardId: number | string | null = null;
+
+function currentCardId(): number | string | null {
+  const meta = getMetadata();
+  if (!meta) return null;
+  return (parseJson(meta.dataset.metaInfo) as MetaInfo | null)?.id ?? null;
 }
 
 export function markWrong(): boolean {
   const incorrect = getLanguage() === 'en-US' ? 'aaa' : 'あああ';
-  return submitAnswer(incorrect);
+  if (!submitAnswer(incorrect)) return false;
+  // Reuse submitAnswer's pre-click snapshot rather than re-reading the DOM:
+  // by now the click has already run BunPro's grading synchronously, so the
+  // metadata element may have been re-rendered and currentCardId() can come
+  // back null — which would silently drop the flag and never open item info.
+  selfWrongCardId = lastSubmittedCardId;
+  return true;
+}
+
+// Reads and clears in one go: the flag applies to the next result to land and
+// nothing after it, whether or not that result turns out to be the matching
+// card's.
+export function takeSelfSubmittedWrongCardId(): number | string | null {
+  const id = selfWrongCardId;
+  selfWrongCardId = null;
+  return id;
 }
 
 // Best-effort: only needed for accounts without BunPro's native Lightning
@@ -215,7 +292,11 @@ export function gradeBad(): boolean {
   return clickLabeledButton(RevealLabels.bad);
 }
 
+// Opening item info is idempotent by construction: once the panel is open
+// BunPro's button reads "Hide Info", which no longer matches InfoLabels, so a
+// repeat call can't toggle it back shut.
 export function clickInfo(): void {
+  if (clickLabeledButton(InfoLabels)) return;
   const hint = document.querySelector<HTMLButtonElement>(Selectors.Hint);
   if (hint) hint.click();
 }

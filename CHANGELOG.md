@@ -7,8 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Changed
+
+- Kikoe no longer types into a BunPro card it has already answered. Once BunPro
+  grades, it shows its own answer reveal in the input, and writing there
+  replaces that reveal with whatever Kikoe submitted — so a speech result
+  arriving late, after the card was graded, could put the wrong answer back over
+  the correct one. Only the card Kikoe itself answered is affected: a new card
+  that hasn't yet cleared the previous one's state still accepts an answer, so a
+  fast reply is never dropped.
+- On BunPro, "Show item info on wrong answer" now only opens the panel for a
+  miss Kikoe itself submitted — ippatsu burning a shot, or the "wrong" command
+  — rather than for every wrong answer. A real answer that BunPro simply graded
+  wrong leaves the card alone, since BunPro is already showing the correct
+  answer there and clicking into the card re-renders on top of that reveal.
+  WaniKani is unchanged.
+
 ### Fixed
 
+- "Show item info on wrong answer" now works on BunPro. It looked for a button
+  by a title attribute that no card renders, so it silently matched nothing and
+  the setting did nothing there — the button a graded card shows is labelled
+  "Show Info". It's now matched by label, the way the Reveal & Grade buttons
+  already are, since BunPro's markup changes from time to time. Opening the
+  panel a second time can't close it again, and the old title selector is kept
+  as a fallback.
 - Dismissing the on-screen keyboard on iPad still paused recognition, which
   the fix in 0.11.0 only delayed rather than resolved. That fix assumed the
   blur cleared itself within a grace window; it doesn't — dismissing the

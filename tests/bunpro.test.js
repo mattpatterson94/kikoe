@@ -1,6 +1,7 @@
 import {
   getLanguage, getContext, didContextChange,
-  inputAnswer, submitAnswer, markWrong, clickNext, clickInfo,
+  inputAnswer, submitAnswer, markWrong, takeSelfSubmittedWrongCardId,
+  clickNext, clickInfo,
   reveal, gradeGood, gradeBad,
   createCardWatcher, canReadPage,
 } from '../src/bunpro';
@@ -253,6 +254,133 @@ describe('markWrong', () => {
   });
 });
 
+// ── writing to an already-answered card ───────────────────────────────────────
+
+describe('inputAnswer on a graded card', () => {
+  // lastSubmittedCardId is module state that outlives a test, so each case
+  // needs its own instance to start from "Kikoe has answered nothing".
+  let bunpro;
+  beforeEach(async () => {
+    vi.resetModules();
+    bunpro = await import('../src/bunpro');
+  });
+
+  // BunPro shows its own answer reveal in the input once it grades; writing
+  // there would replace that reveal with whatever Kikoe types.
+  test('refuses to write over the reveal on a card Kikoe answered', () => {
+    const meta = addMetadata();
+    const { input } = addInput();
+    expect(bunpro.submitAnswer('おとこ')).toBe(true);
+
+    meta.setAttribute('data-meta-is-post-attempt', 'true');
+    input.value = 'BunPro reveal';
+    expect(bunpro.inputAnswer('おとこ')).toBe(false);
+    expect(input.value).toBe('BunPro reveal');
+  });
+
+  // Dropping a real answer is worse than a clobbered reveal, so the guard only
+  // covers the card Kikoe itself answered.
+  test('still answers a fresh card carrying a stale post-attempt flag', () => {
+    const meta = addMetadata();
+    addInput();
+    expect(bunpro.submitAnswer('おとこ')).toBe(true);
+
+    meta.setAttribute('data-meta-info', JSON.stringify({ id: 807, type: 'vocab' }));
+    meta.setAttribute('data-meta-is-post-attempt', 'true');
+    expect(bunpro.inputAnswer('おんな')).toBe(true);
+  });
+
+  test('answers the same card again once BunPro re-asks it', () => {
+    const meta = addMetadata();
+    addInput();
+    expect(bunpro.submitAnswer('おとこ')).toBe(true);
+    meta.setAttribute('data-meta-is-post-attempt', 'true');
+
+    // The repeat attempt clears the flag, and the card is answerable again.
+    meta.setAttribute('data-meta-is-post-attempt', 'false');
+    meta.setAttribute('data-meta-total-submissions-count', '1');
+    expect(bunpro.inputAnswer('おとこ')).toBe(true);
+  });
+
+  test('does not block a card graded without Kikoe submitting anything', () => {
+    addMetadata({ 'data-meta-is-post-attempt': 'true' });
+    addInput();
+    expect(bunpro.inputAnswer('おとこ')).toBe(true);
+  });
+
+  // Item ids repeat within a session, so the pin has to lapse — otherwise a
+  // ghost review of the same item inherits it and has its answer dropped.
+  test('lets the pin lapse so a ghost of the same item is answerable', () => {
+    vi.useFakeTimers();
+    try {
+      const meta = addMetadata();
+      addInput();
+      expect(bunpro.submitAnswer('おとこ')).toBe(true);
+      meta.setAttribute('data-meta-is-post-attempt', 'true');
+      expect(bunpro.inputAnswer('おとこ')).toBe(false);
+
+      // The same item comes back much later, while the flag still reads stale.
+      vi.advanceTimersByTime(5001);
+      expect(bunpro.inputAnswer('おとこ')).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test('still blocks a late write arriving within the pin window', () => {
+    vi.useFakeTimers();
+    try {
+      const meta = addMetadata();
+      addInput();
+      expect(bunpro.submitAnswer('おとこ')).toBe(true);
+      meta.setAttribute('data-meta-is-post-attempt', 'true');
+
+      // A speech result finalizing about a second after the utterance ended.
+      vi.advanceTimersByTime(1200);
+      expect(bunpro.inputAnswer('おとこ')).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+// ── takeSelfSubmittedWrongCardId ──────────────────────────────────────────────
+
+describe('takeSelfSubmittedWrongCardId', () => {
+  // The flag is module state that outlives a single test, as it outlives a
+  // single card in the page — drain whatever an earlier test left behind.
+  beforeEach(() => { takeSelfSubmittedWrongCardId(); });
+
+  test('is null until markWrong submits', () => {
+    addMetadata();
+    expect(takeSelfSubmittedWrongCardId()).toBeNull();
+  });
+
+  test('reports the card markWrong submitted for', () => {
+    addMetadata();
+    addInput();
+    markWrong();
+    expect(takeSelfSubmittedWrongCardId()).toBe(806);
+  });
+
+  test('clears after a single read', () => {
+    addMetadata();
+    addInput();
+    markWrong();
+    expect(takeSelfSubmittedWrongCardId()).toBe(806);
+    expect(takeSelfSubmittedWrongCardId()).toBeNull();
+  });
+
+  // A miss the user typed themselves must stay indistinguishable from any
+  // other card Kikoe never touched.
+  test('stays null when markWrong could not submit', () => {
+    addMetadata();
+    // No input/button on the page, so the submission never lands.
+    expect(markWrong()).toBe(false);
+    expect(takeSelfSubmittedWrongCardId()).toBeNull();
+  });
+});
+
 // ── clickNext / clickInfo ─────────────────────────────────────────────────────
 
 describe('clickNext', () => {
@@ -316,7 +444,20 @@ describe('gradeGood / gradeBad', () => {
 });
 
 describe('clickInfo', () => {
-  test('clicks the hint toggle button', () => {
+  // The button a graded card actually renders, alongside Undo/Alternatives.
+  test('clicks the "Show Info" button on a graded card', () => {
+    const button = addButton('Show Info');
+    clickInfo();
+    expect(button.clicked).toBe(true);
+  });
+
+  test('leaves an already-open panel open rather than toggling it shut', () => {
+    const button = addButton('Hide Info');
+    clickInfo();
+    expect(button.clicked).toBeUndefined();
+  });
+
+  test('falls back to the hint toggle button', () => {
     const button = document.createElement('button');
     button.title = 'Toggle the hint level';
     button.addEventListener('click', () => { button.clicked = true; });
@@ -325,7 +466,18 @@ describe('clickInfo', () => {
     expect(button.clicked).toBe(true);
   });
 
-  test('does not throw when the hint button is absent', () => {
+  test('prefers "Show Info" over the hint toggle when both exist', () => {
+    const hint = document.createElement('button');
+    hint.title = 'Toggle the hint level';
+    hint.addEventListener('click', () => { hint.clicked = true; });
+    document.body.appendChild(hint);
+    const info = addButton('Show Info');
+    clickInfo();
+    expect(info.clicked).toBe(true);
+    expect(hint.clicked).toBeUndefined();
+  });
+
+  test('does not throw when no info button is present', () => {
     expect(() => clickInfo()).not.toThrow();
   });
 });

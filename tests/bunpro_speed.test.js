@@ -2,12 +2,19 @@ import { startSpeedEnhancer } from '../src/bunpro_speed';
 
 // vi.mock is hoisted to the top of the file, so we must define the mocks
 // with vi.hoisted so they're initialized before the factory runs.
-const { clickNext, clickInfo } = vi.hoisted(() => ({
+const { clickNext, clickInfo, takeSelfSubmittedWrongCardId } = vi.hoisted(() => ({
   clickNext: vi.fn(),
   clickInfo: vi.fn(),
+  takeSelfSubmittedWrongCardId: vi.fn(() => null),
 }));
 
-vi.mock('../src/bunpro', () => ({ clickNext, clickInfo }));
+vi.mock('../src/bunpro', () => ({ clickNext, clickInfo, takeSelfSubmittedWrongCardId }));
+
+// Stand in for markWrong() having just submitted a placeholder answer for the
+// given card: the real flag is read once and cleared (see bunpro.ts).
+function selfSubmittedWrongFor(cardId) {
+  takeSelfSubmittedWrongCardId.mockImplementationOnce(() => cardId);
+}
 
 // Each enhancer leaves live MutationObservers on document.body — stop them
 // after each test so earlier instances can't react to later tests' DOM.
@@ -23,6 +30,8 @@ beforeEach(() => {
   vi.useFakeTimers();
   clickNext.mockClear();
   clickInfo.mockClear();
+  takeSelfSubmittedWrongCardId.mockReset();
+  takeSelfSubmittedWrongCardId.mockImplementation(() => null);
   document.body.innerHTML = '';
 });
 
@@ -101,9 +110,10 @@ describe('startSpeedEnhancer (bunpro)', () => {
     expect(clickNext).not.toHaveBeenCalled();
   });
 
-  test('calls clickInfo after the result delay on a wrong answer', async () => {
+  test('calls clickInfo after the result delay on a wrong answer Kikoe submitted', async () => {
     const el = addMetadata();
     start(() => makeSettings({ speed_show_info: true }));
+    selfSubmittedWrongFor(806);
     answer(el, false);
     await Promise.resolve();
     expect(clickInfo).not.toHaveBeenCalled();
@@ -111,13 +121,55 @@ describe('startSpeedEnhancer (bunpro)', () => {
     expect(clickInfo).toHaveBeenCalledTimes(1);
   });
 
-  test('does not call clickInfo when speed_show_info is off', async () => {
+  // The card is already showing BunPro's own reveal in this case; clicking
+  // into it would re-render over the top of that.
+  test('does not call clickInfo for a wrong answer Kikoe did not submit', async () => {
     const el = addMetadata();
-    start(() => makeSettings({ speed_show_info: false }));
+    start(() => makeSettings({ speed_show_info: true }));
     answer(el, false);
     await Promise.resolve();
     vi.runAllTimers();
     expect(clickInfo).not.toHaveBeenCalled();
+  });
+
+  test('does not call clickInfo when speed_show_info is off', async () => {
+    const el = addMetadata();
+    start(() => makeSettings({ speed_show_info: false }));
+    selfSubmittedWrongFor(806);
+    answer(el, false);
+    await Promise.resolve();
+    vi.runAllTimers();
+    expect(clickInfo).not.toHaveBeenCalled();
+  });
+
+  test('does not open info when the flag belongs to an earlier card', async () => {
+    const el = addMetadata({ 'data-meta-info': JSON.stringify({ id: 807, type: 'vocab' }) });
+    start(() => makeSettings({ speed_show_info: true }));
+    // markWrong() raised the flag on 806, but 807 is what got graded.
+    selfSubmittedWrongFor(806);
+    answer(el, false);
+    await Promise.resolve();
+    vi.runAllTimers();
+    expect(clickInfo).not.toHaveBeenCalled();
+  });
+
+  test('does not reuse one flag for a later wrong answer', async () => {
+    const el = addMetadata();
+    start(() => makeSettings({ speed_show_info: true }));
+    selfSubmittedWrongFor(806);
+    answer(el, false);
+    await Promise.resolve();
+    vi.advanceTimersByTime(100);
+    expect(clickInfo).toHaveBeenCalledTimes(1);
+
+    // Same card asked again, this time answered wrong by the user directly.
+    el.setAttribute('data-meta-is-post-attempt', 'false');
+    el.setAttribute('data-meta-total-submissions-count', '1');
+    await Promise.resolve();
+    answer(el, false);
+    await Promise.resolve();
+    vi.runAllTimers();
+    expect(clickInfo).toHaveBeenCalledTimes(1);
   });
 
   test('ignores pre-answer mutations while is-post-attempt is false', async () => {
@@ -146,6 +198,7 @@ describe('startSpeedEnhancer (bunpro)', () => {
   test('reacts to a repeat attempt on the same card (submission count changed)', async () => {
     const el = addMetadata();
     start(() => makeSettings({ speed_show_info: true }));
+    selfSubmittedWrongFor(806);
     answer(el, false);
     await Promise.resolve();
     vi.runAllTimers();
@@ -155,6 +208,7 @@ describe('startSpeedEnhancer (bunpro)', () => {
     el.setAttribute('data-meta-is-post-attempt', 'false');
     el.setAttribute('data-meta-total-submissions-count', '1');
     await Promise.resolve();
+    selfSubmittedWrongFor(806);
     answer(el, false);
     await Promise.resolve();
     vi.runAllTimers();
