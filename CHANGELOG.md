@@ -32,6 +32,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   already are, since BunPro's markup changes from time to time. Opening the
   panel a second time can't close it again, and the old title selector is kept
   as a fallback.
+- Dismissing the on-screen keyboard on iPad still paused recognition, which
+  the fix in 0.11.0 only delayed rather than resolved. That fix assumed the
+  blur cleared itself within a grace window; it doesn't — dismissing the
+  keyboard drops focus out of the document and leaves it there until the user
+  taps something, which on a hands-free review never happens. Because page
+  activity is re-read on every update and not just on blur, the stale value
+  also re-paused long after the keyboard was gone. Touch devices now use the
+  grace window to establish *why* focus went away — the visual viewport
+  growing back identifies the keyboard retracting — and only treat a blur as
+  "left the page" when the keyboard wasn't the cause. iPad Split View still
+  pauses as before. ([#79](https://github.com/mattpatterson94/kikoe/issues/79))
 
 ## [0.11.0] - 2026-08-11
 
