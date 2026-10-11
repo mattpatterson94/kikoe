@@ -2,7 +2,7 @@
 // SpeechAnalyzer (unlike in the iOS Simulator) actually works. Audio is the
 // system Japanese TTS voice rendered to buffers.
 //
-//   swiftc -O ios-spike/macos-probe.swift -o /tmp/kikoe-probe && /tmp/kikoe-probe
+//   swiftc -O ios/research/macos-probe.swift -o /tmp/kikoe-probe && /tmp/kikoe-probe
 import AVFoundation
 import Speech
 

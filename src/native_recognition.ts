@@ -1,5 +1,5 @@
 // Recognizer backed by a native host app instead of Web Speech. The iOS
-// spike (ios-spike/) wraps WaniKani/BunPro in a WKWebView and runs the
+// app (ios/) wraps WaniKani/BunPro in a WKWebView and runs the
 // microphone through Apple's Speech framework, exposing it to the page as the
 // `kikoeSpeech` script message handler. Commands go out over that handler;
 // transcripts come back as `kikoe:nativeSpeech` events the host dispatches on

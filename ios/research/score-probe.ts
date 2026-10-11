@@ -1,22 +1,22 @@
 // Scores recognition-probe transcripts with Kikoe's real matcher (the same
 // transformer chain app.ts uses, dictionary from chrome/data — run
 // `npm run build` first). Usage, from the repo root:
-//   npx esbuild ios-spike/score-probe.ts --bundle --platform=node --format=esm \
+//   npx esbuild ios/research/score-probe.ts --bundle --platform=node --format=esm \
 //     --outfile=/tmp/score-probe.mjs && node /tmp/score-probe.mjs \
-//     sim=ios-spike/probe-results/sim-sfspeech.json macOS=ios-spike/probe-results/macos-analyzer.json
+//     sim=ios/research/probe-results/sim-sfspeech.json macOS=ios/research/probe-results/macos-analyzer.json
 
 import { readFileSync } from 'node:fs';
-import { checkAnswer } from '../src/flashcards';
-import type { Dictionary } from '../src/dict';
-import { ToHiragana } from '../src/candidates/to_hiragana';
-import { ConvertWo } from '../src/candidates/convert_wo';
-import { BasicDictionary } from '../src/candidates/basic_dictionary';
-import { SplitDictionary } from '../src/candidates/split_dictionary';
-import { CompoundDictionary } from '../src/candidates/compound_dictionary';
-import { SuruVerbs } from '../src/candidates/suru_verbs';
-import { RepeatingSubstring } from '../src/candidates/repeating';
-import { MultipleWords } from '../src/candidates/multiple';
-import { Numerals } from '../src/candidates/numerals';
+import { checkAnswer } from '../../src/flashcards';
+import type { Dictionary } from '../../src/dict';
+import { ToHiragana } from '../../src/candidates/to_hiragana';
+import { ConvertWo } from '../../src/candidates/convert_wo';
+import { BasicDictionary } from '../../src/candidates/basic_dictionary';
+import { SplitDictionary } from '../../src/candidates/split_dictionary';
+import { CompoundDictionary } from '../../src/candidates/compound_dictionary';
+import { SuruVerbs } from '../../src/candidates/suru_verbs';
+import { RepeatingSubstring } from '../../src/candidates/repeating';
+import { MultipleWords } from '../../src/candidates/multiple';
+import { Numerals } from '../../src/candidates/numerals';
 
 const dictionary: Dictionary = {};
 for (const f of ['jmdict', 'kanjidic2']) {

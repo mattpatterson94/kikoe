@@ -1,0 +1,9 @@
+// Signing and identity for the Kikoe iOS app. Version numbers come from
+// Version.xcconfig (written by scripts/sync-version.sh from package.json);
+// CURRENT_PROJECT_VERSION is overridden on the xcodebuild command line for
+// release archives.
+#include "Version.xcconfig"
+
+DEVELOPMENT_TEAM = 5UNQUGVP8A
+PRODUCT_BUNDLE_IDENTIFIER = com.mattdoesdev.kikoe.wrapper
+CURRENT_PROJECT_VERSION = 1

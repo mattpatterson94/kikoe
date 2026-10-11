@@ -19,7 +19,7 @@ export default [
     },
   },
   {
-    ignores: ['chrome/**', 'firefox/**', 'safari/**', 'data/**', 'dist/**', 'node_modules/**', '.claude/worktrees/**', 'Kikoe/**', 'ios-spike/**'],
+    ignores: ['chrome/**', 'firefox/**', 'safari/**', 'data/**', 'dist/**', 'node_modules/**', '.claude/worktrees/**', 'Kikoe/**', 'ios/**'],
   },
   {
     files: ['**/*.js'],
