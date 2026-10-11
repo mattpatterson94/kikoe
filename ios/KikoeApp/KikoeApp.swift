@@ -2,157 +2,193 @@ import SwiftUI
 import WebKit
 
 @main
-struct KikoeSpikeApp: App {
+struct KikoeApp: App {
     var body: some Scene {
         WindowGroup {
+            #if DEBUG
             if ProcessInfo.processInfo.arguments.contains("-probe") {
                 NavigationStack { ProbeView() }
             } else {
-                ContentView()
+                RootView()
             }
+            #else
+            RootView()
+            #endif
         }
     }
 }
 
-enum Site: String, CaseIterable, Identifiable {
-    case wanikani = "WaniKani"
-    case bunpro = "BunPro"
-    var id: String { rawValue }
-    var url: URL {
-        switch self {
-        case .wanikani: URL(string: "https://www.wanikani.com/dashboard")!
-        case .bunpro: URL(string: "https://bunpro.jp/dashboard")!
-        }
+struct RootView: View {
+    @StateObject private var app = AppModel()
+
+    var body: some View {
+        SessionScreen(app: app, session: app.current)
+            .sheet(isPresented: $app.showSettings) {
+                SettingsView(app: app)
+            }
+            .alert(app.alert?.message ?? "", isPresented: Binding(
+                get: { app.alert != nil },
+                set: { if !$0 { app.alert = nil } }
+            ), presenting: app.alert) { alert in
+                if alert.confirm {
+                    Button("Cancel", role: .cancel) { alert.completion(false); app.alert = nil }
+                    Button("OK") { alert.completion(true); app.alert = nil }
+                } else {
+                    Button("OK") { alert.completion(true); app.alert = nil }
+                }
+            }
     }
 }
 
-/// How the webview identifies itself. Google refuses OAuth in embedded
-/// webviews (`disallowed_useragent`), detected largely by the missing
-/// "Safari/" token in WKWebView's default UA. The Safari-like mode exists to
-/// test that, not as a recommendation: it's against Google's policy.
-enum UserAgentMode: String, CaseIterable, Identifiable {
-    case webView = "WKWebView default"
-    case safari = "Safari-like"
-    var id: String { rawValue }
-    var applicationName: String? {
-        switch self {
-        case .webView: nil
-        case .safari: "Version/26.0 Mobile/15E148 Safari/604.1"
-        }
-    }
-}
-
-struct ContentView: View {
-    @StateObject private var bridge = KikoeBridge()
-    @State private var site: Site = Site(rawValue: ProcessInfo.processInfo.environment["KIKOE_SITE"] ?? "") ?? .wanikani
-    @State private var uaMode: UserAgentMode = .webView
-    @State private var sayText = ProcessInfo.processInfo.environment["KIKOE_SAY"] ?? "かい"
-    @State private var showProbe = false
+/// The current site's page with Kikoe's controls around it.
+struct SessionScreen: View {
+    @ObservedObject var app: AppModel
+    @ObservedObject var session: PageSession
+    @ObservedObject private var settings = SyncSettings.shared
+    @AppStorage(Pref.developerMode) private var developerMode = false
+    @AppStorage(Pref.showDebugBar) private var showDebugBar = false
+    @State private var pendingCorrection: TranscriptBubble.Correction?
 
     var body: some View {
         NavigationStack {
-            WebView(bridge: bridge, url: site.url, uaMode: uaMode)
-                .id("\(site.rawValue)|\(uaMode.rawValue)")
+            WebContainer(session: session)
                 .ignoresSafeArea(edges: .bottom)
-                .safeAreaInset(edge: .top) { debugBar }
-                .toolbar {
-                    ToolbarItem(placement: .principal) {
-                        Picker("Site", selection: $site) {
-                            ForEach(Site.allCases) { Text($0.rawValue).tag($0) }
+                .overlay(alignment: .top) {
+                    VStack(spacing: 8) {
+                        if session.isLoading {
+                            ProgressView().progressViewStyle(.linear).tint(session.site.tint)
                         }
-                        .pickerStyle(.segmented)
+                        if let indicator = session.indicator, indicator.needsAttention {
+                            IndicatorBanner(indicator: indicator) { session.sendAction("indicatorTapped") }
+                                .transition(.move(edge: .top).combined(with: .opacity))
+                        }
+                        if let hint = session.hint {
+                            HintToast(text: hint).transition(.move(edge: .top).combined(with: .opacity))
+                        }
+                        if let bubble = session.transcript, !bubble.atBottom { transcript(bubble) }
                     }
-                    ToolbarItem(placement: .topBarTrailing) {
-                        Button { bridge.showSettings = true } label: { Image(systemName: "gearshape") }
+                    .padding(.horizontal)
+                }
+                .overlay(alignment: .bottom) {
+                    if let bubble = session.transcript, bubble.atBottom {
+                        transcript(bubble).padding()
                     }
                 }
+                .animation(.easeOut(duration: 0.2), value: session.transcript)
+                .animation(.easeOut(duration: 0.3), value: session.hint)
+                .animation(.easeOut(duration: 0.3), value: session.indicator)
+                .safeAreaInset(edge: .top, spacing: 0) {
+                    if developerMode && showDebugBar { DebugBar() }
+                }
+                .toolbar { toolbar }
                 .navigationBarTitleDisplayMode(.inline)
-                .sheet(isPresented: $bridge.showSettings) { settings }
-                .sheet(isPresented: $showProbe) { NavigationStack { ProbeView() } }
+                .toolbarBackground(.visible, for: .navigationBar)
+                .sheet(isPresented: Binding(
+                    get: { session.help != nil },
+                    set: { if !$0 { session.helpDismissed() } }
+                )) {
+                    if let help = session.help {
+                        HelpSheet(help: help) { session.helpDismissed() }
+                            .presentationDetents([.medium, .large])
+                    }
+                }
+                .confirmationDialog(
+                    "Create a speech correction?",
+                    isPresented: Binding(get: { pendingCorrection != nil }, set: { if !$0 { pendingCorrection = nil } }),
+                    titleVisibility: .visible,
+                    presenting: pendingCorrection
+                ) { correction in
+                    Button("Save and use “\(correction.intended)”") { session.confirmCorrection(correction) }
+                    Button("Cancel", role: .cancel) {}
+                } message: { correction in
+                    Text("Heard: \(correction.heard)\nIntended answer: \(correction.intended)\n\nFrom now on, hearing “\(correction.heard)” counts as “\(correction.intended)”.")
+                }
         }
     }
 
-    private var debugBar: some View {
-        HStack(spacing: 8) {
-            Circle().fill(bridge.listening ? .green : .gray).frame(width: 8, height: 8)
-            Text(bridge.listening ? "\(bridge.currentLocale) · \(bridge.engineKind.rawValue)" : "idle")
-                .font(.caption2.monospaced())
-            Text(bridge.lastHeard.joined(separator: " · ")).font(.caption2).lineLimit(1)
-            Spacer()
-            TextField("say", text: $sayText).font(.caption).frame(width: 90).textFieldStyle(.roundedBorder)
-                .autocorrectionDisabled().textInputAutocapitalization(.never)
-            Button("Say") { Task { await bridge.injectSpeech(sayText) } }.font(.caption)
-        }
-        .padding(.horizontal, 8).padding(.vertical, 4)
-        .background(.bar)
+    private func transcript(_ bubble: TranscriptBubble) -> some View {
+        TranscriptView(bubble: bubble) { pendingCorrection = $0 }
+            .environment(\.colorScheme, settings.transcriptScheme ?? colorScheme)
+            .transition(.opacity.combined(with: .scale(scale: 0.95)))
     }
 
-    private var settings: some View {
-        NavigationStack {
-            Form {
-                Section("Recognizer") {
-                    Picker("Engine", selection: $bridge.engineKind) {
-                        ForEach(EngineKind.allCases) { Text($0.rawValue).tag($0) }
-                    }
-                    Toggle("Send card answers as contextual strings", isOn: $bridge.sendHints)
-                    Text("Hints now: \(bridge.currentHints.joined(separator: ", "))").font(.footnote)
-                }
-                Section("WaniKani API token") {
-                    TextField("token", text: Binding(
-                        get: { ExtensionStorage.all(area: "sync")["apiToken"] as? String ?? "" },
-                        set: { _ = ExtensionStorage.set(area: "sync", items: ["apiToken": $0]) }))
-                        .autocorrectionDisabled().textInputAutocapitalization(.never)
-                }
-                Section("Web view") {
-                    Picker("User agent", selection: $uaMode) {
-                        ForEach(UserAgentMode.allCases) { Text($0.rawValue).tag($0) }
-                    }
-                }
-                Section {
-                    Button("Recognition probe…") { bridge.showSettings = false; showProbe = true }
-                }
+    @Environment(\.colorScheme) private var colorScheme
+
+    @ToolbarContentBuilder
+    private var toolbar: some ToolbarContent {
+        ToolbarItem(placement: .topBarLeading) {
+            if let indicator = session.indicator {
+                IndicatorPill(indicator: indicator) { session.sendAction("indicatorTapped") }
             }
-            .navigationTitle("Kikoe spike")
-            .toolbar { Button("Done") { bridge.showSettings = false } }
+        }
+        ToolbarItem(placement: .principal) {
+            SiteSwitcher(site: $app.site).fixedSize()
+        }
+        ToolbarItemGroup(placement: .topBarTrailing) {
+            if session.helpButtonVisible {
+                Button { session.sendAction("helpButtonTapped") } label: {
+                    Image(systemName: "questionmark.circle")
+                }
+                .accessibilityLabel("Voice commands")
+            }
+            Button { app.showSettings = true } label: { Image(systemName: "gearshape") }
+                .accessibilityLabel("Settings")
         }
     }
 }
 
-struct WebView: UIViewRepresentable {
-    let bridge: KikoeBridge
-    let url: URL
-    let uaMode: UserAgentMode
+/// Hosts whichever session's web view is current. Only that one is in the
+/// window; the others stay alive off-screen, where WebKit marks their
+/// documents hidden and app.ts stops listening on its own.
+struct WebContainer: UIViewRepresentable {
+    let session: PageSession
 
-    func makeCoordinator() -> KikoeBridge { bridge }
-
-    func makeUIView(context: Context) -> WKWebView {
-        let config = WKWebViewConfiguration()
-        if let name = uaMode.applicationName { config.applicationNameForUserAgent = name }
-        config.allowsInlineMediaPlayback = true
-        config.mediaTypesRequiringUserActionForPlayback = []
-        bridge.install(into: config.userContentController)
-        let webView = WKWebView(frame: .zero, configuration: config)
-        webView.isInspectable = true
-        webView.allowsBackForwardNavigationGestures = true
-        bridge.webView = webView
-        // Debug: KIKOE_FIXTURE=<path to tests/fixtures/*.html> loads a frozen
-        // review card under the site's origin, so the real adapter and the
-        // native bridge can be exercised without an account.
-        if let path = ProcessInfo.processInfo.environment["KIKOE_FIXTURE"],
-           let html = try? String(contentsOfFile: path, encoding: .utf8) {
-            webView.loadHTMLString(html, baseURL: url.deletingLastPathComponent().appendingPathComponent("reviews"))
-        } else {
-            webView.load(URLRequest(url: url))
-        }
-        return webView
+    func makeUIView(context: Context) -> UIView {
+        let container = UIView()
+        container.backgroundColor = .systemBackground
+        return container
     }
 
-    func updateUIView(_ webView: WKWebView, context: Context) {}
+    func updateUIView(_ container: UIView, context: Context) {
+        let webView = session.webView
+        guard webView.superview !== container else { return }
+        container.subviews.forEach { $0.removeFromSuperview() }
+        webView.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(webView)
+        NSLayoutConstraint.activate([
+            webView.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            webView.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+            webView.topAnchor.constraint(equalTo: container.topAnchor),
+            webView.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+        ])
+        session.didBecomeVisible()
+    }
+}
 
-    static func dismantleUIView(_ webView: WKWebView, coordinator: KikoeBridge) {
-        coordinator.stopListening()
-        let controller = webView.configuration.userContentController
-        controller.removeAllScriptMessageHandlers()
-        controller.removeAllUserScripts()
+/// Developer: engine, locale and what was last heard, plus a TTS "Say"
+/// button that feeds synthetic speech into the recognizer.
+struct DebugBar: View {
+    @ObservedObject private var speech = SpeechService.shared
+    @AppStorage(Pref.showSayButton) private var showSayButton = false
+    @State private var sayText = "かい"
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Circle().fill(speech.listening ? .green : .gray).frame(width: 8, height: 8)
+            Text(speech.listening ? "\(speech.currentLocale) · \(speech.runningKind.rawValue)" : "idle")
+                .font(.caption2.monospaced())
+            Text(speech.lastHeard.joined(separator: " · ")).font(.caption2).lineLimit(1)
+            Spacer()
+            if showSayButton {
+                TextField("say", text: $sayText).font(.caption).frame(width: 90).textFieldStyle(.roundedBorder)
+                    .autocorrectionDisabled().textInputAutocapitalization(.never)
+                Button("Say") { Task { await speech.injectSpeech(sayText) } }.font(.caption)
+            }
+        }
+        .padding(.horizontal, 8).padding(.vertical, 4)
+        .background(.bar)
+        #if DEBUG
+        .onAppear { if let say = ProcessInfo.processInfo.environment["KIKOE_SAY"] { sayText = say } }
+        #endif
     }
 }
