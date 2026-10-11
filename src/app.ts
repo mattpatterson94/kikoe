@@ -1,6 +1,7 @@
 import { checkAnswer } from './flashcards';
 import type { CheckResult } from './flashcards';
 import { createRecognition, setLanguage } from './recognition';
+import { answerHints } from './native_recognition';
 import * as wanikani from './wanikani';
 import * as bunpro from './bunpro';
 import { detectSite } from './site';
@@ -759,6 +760,9 @@ async function startListener(dictionary: Dictionary): Promise<void> {
   // Closures below (and handleRecognitionResult above) capture this non-null
   // binding; the callback only ever fires once a recognizer exists.
   const recognition = recognitionOrNull;
+  // Engines that support biasing (the native host's) hear about each card's
+  // accepted answers; this seeds the first card before listening starts.
+  recognition.setHints?.(answerHints(context));
 
   // Refresh subjects + language and clear transcript when the card changes.
   async function onCardChange(
@@ -785,8 +789,10 @@ async function startListener(dictionary: Dictionary): Promise<void> {
         prefetchUpcoming();
         subjects = await loadSubjects(newContext.prompt, newContext.category);
         context = site.getContext(subjects);
+        recognition.setHints?.(answerHints(context));
         restoreIdleIndicator();
       } else {
+        recognition.setHints?.(answerHints(context));
         // Sites without subject fetches (BunPro) still need the indicator
         // refreshed — e.g. flipping between supported and unsupported cards.
         restoreIdleIndicator();
@@ -949,6 +955,7 @@ async function startListener(dictionary: Dictionary): Promise<void> {
   if (initialSubjectsPromise) {
     subjects = await initialSubjectsPromise;
     context = site.getContext(subjects);
+    recognition.setHints?.(answerHints(context));
     restoreIdleIndicator();
     retryPendingTranscript();
   }
