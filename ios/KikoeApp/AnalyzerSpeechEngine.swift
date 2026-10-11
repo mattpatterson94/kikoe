@@ -26,6 +26,16 @@ final class AnalyzerSpeechEngine: SpeechEngine {
     /// belong to an ended utterance and are dropped.
     private var fedSeconds: Double = 0
     private var cutoffSeconds: Double = 0
+    /// Both transcribers finalize in short segments (fastResults /
+    /// frequentFinalization), so one word can arrive as two finals: まちが
+    /// then い. A finished segment is held here and the next one's text is
+    /// appended to it; the joined utterance goes to the page as final only
+    /// once no more speech follows (see utteranceGap).
+    private var utterance: (transcripts: [String], start: Double)?
+    private var flushTask: Task<Void, Never>?
+    private static let utteranceGap: Duration = .milliseconds(600)
+    /// Speech that started but never finalized shouldn't hold the utterance forever.
+    private static let volatileTimeout: Duration = .seconds(2)
 
     init(mic: MicCapture, useDictation: Bool) {
         self.mic = mic
@@ -59,6 +69,7 @@ final class AnalyzerSpeechEngine: SpeechEngine {
     }
 
     func reset() {
+        dropUtterance()
         guard let analyzer else { return }
         cutoffSeconds = fedSeconds
         // Close the current segment so speech after the cut starts a new
@@ -76,6 +87,7 @@ final class AnalyzerSpeechEngine: SpeechEngine {
     }
 
     private func teardown() {
+        dropUtterance()
         input?.finish()
         input = nil
         resultsTask?.cancel()
@@ -143,10 +155,7 @@ final class AnalyzerSpeechEngine: SpeechEngine {
                 for try await (text, alternatives, isFinal, start) in Self.results(of: module) {
                     guard let self, gen == self.generation else { return }
                     if start < self.cutoffSeconds { continue }
-                    let transcripts = dedupe([text] + alternatives)
-                    if transcripts.isEmpty { continue }
-                    self.onEvent?(.result(transcripts: transcripts, isFinal: isFinal,
-                                          resultId: "analyzer:\(gen):\(start)"))
+                    self.receive([text] + alternatives, isFinal: isFinal, start: start, generation: gen)
                 }
             } catch {
                 NSLog("[kikoe] analyzer results ended: \(error)")
@@ -160,6 +169,39 @@ final class AnalyzerSpeechEngine: SpeechEngine {
             return
         }
         try await analyzer.start(inputSequence: stream)
+    }
+
+    /// Joins this segment onto any held one and reports it as an interim;
+    /// a finished segment is held until utteranceGap passes with no more speech.
+    private func receive(_ texts: [String], isFinal: Bool, start: Double, generation gen: Int) {
+        let segment = dedupe(texts)
+        guard !segment.isEmpty else { return }
+        // Each finished segment ends in its own 。 or full stop; drop it
+        // where the next segment joins on.
+        let separator = (locale ?? "").hasPrefix("ja") ? "" : " "
+        let prefix = utterance?.transcripts.first.map {
+            String($0.reversed().drop { ".,!?;:。、！？".contains($0) }.reversed()) + separator
+        } ?? ""
+        let transcripts = dedupe(segment.map { prefix + $0 })
+        let id = utterance?.start ?? start
+        onEvent?(.result(transcripts: transcripts, isFinal: false, resultId: "analyzer:\(gen):\(id)"))
+
+        flushTask?.cancel()
+        if isFinal { utterance = (transcripts, id) }
+        guard utterance != nil else { return }
+        let wait = isFinal ? Self.utteranceGap : Self.volatileTimeout
+        flushTask = Task { [weak self] in
+            try? await Task.sleep(for: wait)
+            guard !Task.isCancelled, let self, gen == self.generation, let held = self.utterance else { return }
+            self.utterance = nil
+            self.onEvent?(.result(transcripts: held.transcripts, isFinal: true, resultId: "analyzer:\(gen):\(held.start)"))
+        }
+    }
+
+    private func dropUtterance() {
+        flushTask?.cancel()
+        flushTask = nil
+        utterance = nil
     }
 
     private func feed(_ buffer: AVAudioPCMBuffer) {

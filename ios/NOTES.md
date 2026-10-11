@@ -161,6 +161,11 @@ measured: hours of real reviews on a device. That still needs doing.
   - On a device this calls for a VAD/energy gate, or SpeechTranscriber's own
     finalisation (`.fastResults`; `DictationTranscriber` has
     `.frequentFinalization`).
+  - The app uses those, but they finalize in short segments, so one word
+    can arrive as two finals (まちが, い) and miss a command. The Analyzer
+    engine joins back-to-back segments and posts the utterance as final
+    only after 600 ms with no new segment. Alternatives only vary the
+    latest segment; earlier ones contribute their top guess.
 - **Error noise:**
   - Server SFSpeech emits `203 Empty recognition` / `203 Retry` constantly in
     silence. These are now restarted quietly instead of being surfaced as
