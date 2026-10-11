@@ -1851,6 +1851,17 @@ describe('startListener ippatsu mode (one-shot auto-submit on a miss)', () => {
     expect(document.getElementById('user-response').value).toBe('aaa');
   });
 
+  // The Japanese recognizer transcribes the English "incorrect", "wrong" and
+  // "mistake" as katakana, so they must still mark a reading card wrong.
+  test.each(['インコレクト', 'インコレクト。', 'いんこれくと', 'ロング', 'ミステイク', 'ミステーク'])(
+    '"%s" on a reading question marks the card wrong',
+    async (transcript) => {
+      const native = await loadCard('Reading', {});
+      native.onresult({ resultIndex: 0, results: [finalResult(transcript)] });
+      expect(document.getElementById('user-response').value).toBe('あああ');
+    },
+  );
+
   test('muting cancels a matched interim instead of submitting it once muted', async () => {
     const native = await loadCard('Reading', {});
     vi.useFakeTimers();

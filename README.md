@@ -130,7 +130,7 @@ Once installed and configured, the extension activates automatically on any Wani
 | Say (English) | Say (Japanese) | Action |
 | ------------- | -------------- | ------ |
 | `next` | `次` / `つぎ` / `ねくすと` / `ネクスト` | Advance to the next card |
-| `wrong` / `incorrect` / `mistake` | `間違い` / `まちがい` / `不正解` / `ふせいかい` / `だめ` / `ダメ` / `駄目` | Mark the current answer wrong |
+| `wrong` / `incorrect` / `mistake` | `間違い` / `まちがい` / `不正解` / `ふせいかい` / `だめ` / `ダメ` / `駄目` / `インコレクト` / `いんこれくと` / `ロング` / `ろんぐ` / `ミステイク` / `ミステーク` / `みすていく` | Mark the current answer wrong |
 | `pause` / `stop listening` | `ストップ` | Mute the mic (click the Muted chip to resume) |
 | `help` / `commands` | `ヘルプ` / `へるぷ` / `コマンド` | Show or hide the command cheat sheet |
 <!-- END GENERATED voice-commands -->
