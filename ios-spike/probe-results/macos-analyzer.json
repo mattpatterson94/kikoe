@@ -1,0 +1,872 @@
+[
+  {
+    "transcripts" : [
+      "はい"
+    ],
+    "engine" : "DictationTranscriber",
+    "hints" : false,
+    "prompt" : "会",
+    "reading" : "かい"
+  },
+  {
+    "hints" : false,
+    "prompt" : "計",
+    "transcripts" : [
+      "Hey",
+      "He"
+    ],
+    "reading" : "けい",
+    "engine" : "DictationTranscriber"
+  },
+  {
+    "reading" : "どう",
+    "hints" : false,
+    "transcripts" : [
+      "どう",
+      "ど"
+    ],
+    "engine" : "DictationTranscriber",
+    "prompt" : "道"
+  },
+  {
+    "transcripts" : [
+      "光",
+      "こ"
+    ],
+    "prompt" : "口",
+    "engine" : "DictationTranscriber",
+    "hints" : false,
+    "reading" : "こう"
+  },
+  {
+    "prompt" : "四",
+    "transcripts" : [
+      "4"
+    ],
+    "reading" : "し",
+    "engine" : "DictationTranscriber",
+    "hints" : false
+  },
+  {
+    "transcripts" : [
+      "金",
+      "木"
+    ],
+    "reading" : "き",
+    "engine" : "DictationTranscriber",
+    "prompt" : "木",
+    "hints" : false
+  },
+  {
+    "engine" : "DictationTranscriber",
+    "hints" : false,
+    "prompt" : "中",
+    "reading" : "ちゅう",
+    "transcripts" : [
+      "チル"
+    ]
+  },
+  {
+    "engine" : "DictationTranscriber",
+    "prompt" : "上",
+    "reading" : "じょう",
+    "hints" : false,
+    "transcripts" : [
+      "上",
+      "今",
+      "超",
+      "今日"
+    ]
+  },
+  {
+    "transcripts" : [
+      "1,000",
+      "せ",
+      "西",
+      "生"
+    ],
+    "engine" : "DictationTranscriber",
+    "hints" : false,
+    "reading" : "せい",
+    "prompt" : "生"
+  },
+  {
+    "hints" : false,
+    "transcripts" : [
+      "日"
+    ],
+    "prompt" : "日",
+    "engine" : "DictationTranscriber",
+    "reading" : "にち"
+  },
+  {
+    "reading" : "ぎょう",
+    "engine" : "DictationTranscriber",
+    "transcripts" : [
+      "業務",
+      "行"
+    ],
+    "hints" : false,
+    "prompt" : "業"
+  },
+  {
+    "transcripts" : [
+      "よ",
+      "よう"
+    ],
+    "hints" : false,
+    "prompt" : "用",
+    "engine" : "DictationTranscriber",
+    "reading" : "よう"
+  },
+  {
+    "reading" : "そう",
+    "transcripts" : [
+      "そう"
+    ],
+    "hints" : false,
+    "engine" : "DictationTranscriber",
+    "prompt" : "早"
+  },
+  {
+    "hints" : false,
+    "reading" : "ご",
+    "engine" : "DictationTranscriber",
+    "prompt" : "後",
+    "transcripts" : [
+      "5"
+    ]
+  },
+  {
+    "prompt" : "火",
+    "reading" : "か",
+    "engine" : "DictationTranscriber",
+    "hints" : false,
+    "transcripts" : [
+      "が"
+    ]
+  },
+  {
+    "reading" : "け",
+    "engine" : "DictationTranscriber",
+    "hints" : false,
+    "prompt" : "気",
+    "transcripts" : [
+
+    ]
+  },
+  {
+    "prompt" : "下",
+    "transcripts" : [
+      "下"
+    ],
+    "engine" : "DictationTranscriber",
+    "hints" : false,
+    "reading" : "げ"
+  },
+  {
+    "reading" : "すう",
+    "engine" : "DictationTranscriber",
+    "prompt" : "数",
+    "hints" : false,
+    "transcripts" : [
+      "する"
+    ]
+  },
+  {
+    "hints" : false,
+    "engine" : "DictationTranscriber",
+    "reading" : "く",
+    "prompt" : "工",
+    "transcripts" : [
+      "9"
+    ]
+  },
+  {
+    "transcripts" : [
+      "秋",
+      "手",
+      "主",
+      "し",
+      "周",
+      "死ね"
+    ],
+    "prompt" : "手",
+    "engine" : "DictationTranscriber",
+    "reading" : "しゅ",
+    "hints" : false
+  },
+  {
+    "reading" : "かい",
+    "hints" : true,
+    "engine" : "DictationTranscriber",
+    "prompt" : "会",
+    "transcripts" : [
+      "はい"
+    ]
+  },
+  {
+    "prompt" : "計",
+    "reading" : "けい",
+    "hints" : true,
+    "engine" : "DictationTranscriber",
+    "transcripts" : [
+      "Hey",
+      "けい",
+      "He"
+    ]
+  },
+  {
+    "reading" : "どう",
+    "prompt" : "道",
+    "hints" : true,
+    "engine" : "DictationTranscriber",
+    "transcripts" : [
+      "どう",
+      "ど"
+    ]
+  },
+  {
+    "prompt" : "口",
+    "engine" : "DictationTranscriber",
+    "hints" : true,
+    "transcripts" : [
+      "光",
+      "こ",
+      "こう"
+    ],
+    "reading" : "こう"
+  },
+  {
+    "reading" : "し",
+    "transcripts" : [
+      "4",
+      "し"
+    ],
+    "engine" : "DictationTranscriber",
+    "hints" : true,
+    "prompt" : "四"
+  },
+  {
+    "engine" : "DictationTranscriber",
+    "transcripts" : [
+      "金",
+      "木",
+      "き"
+    ],
+    "hints" : true,
+    "prompt" : "木",
+    "reading" : "き"
+  },
+  {
+    "reading" : "ちゅう",
+    "hints" : true,
+    "transcripts" : [
+      "チル"
+    ],
+    "engine" : "DictationTranscriber",
+    "prompt" : "中"
+  },
+  {
+    "hints" : true,
+    "prompt" : "上",
+    "transcripts" : [
+      "上",
+      "今",
+      "超"
+    ],
+    "reading" : "じょう",
+    "engine" : "DictationTranscriber"
+  },
+  {
+    "prompt" : "生",
+    "hints" : true,
+    "transcripts" : [
+      "1,000",
+      "せ",
+      "西",
+      "生"
+    ],
+    "reading" : "せい",
+    "engine" : "DictationTranscriber"
+  },
+  {
+    "prompt" : "日",
+    "transcripts" : [
+      "日",
+      "にち"
+    ],
+    "reading" : "にち",
+    "engine" : "DictationTranscriber",
+    "hints" : true
+  },
+  {
+    "hints" : true,
+    "reading" : "ぎょう",
+    "engine" : "DictationTranscriber",
+    "transcripts" : [
+      "業務",
+      "行",
+      "業"
+    ],
+    "prompt" : "業"
+  },
+  {
+    "engine" : "DictationTranscriber",
+    "prompt" : "用",
+    "hints" : true,
+    "transcripts" : [
+      "よう",
+      "よ",
+      "用"
+    ],
+    "reading" : "よう"
+  },
+  {
+    "transcripts" : [
+      "そう"
+    ],
+    "engine" : "DictationTranscriber",
+    "hints" : true,
+    "prompt" : "早",
+    "reading" : "そう"
+  },
+  {
+    "engine" : "DictationTranscriber",
+    "prompt" : "後",
+    "hints" : true,
+    "reading" : "ご",
+    "transcripts" : [
+      "5"
+    ]
+  },
+  {
+    "transcripts" : [
+      "が"
+    ],
+    "engine" : "DictationTranscriber",
+    "reading" : "か",
+    "hints" : true,
+    "prompt" : "火"
+  },
+  {
+    "prompt" : "気",
+    "engine" : "DictationTranscriber",
+    "transcripts" : [
+
+    ],
+    "hints" : true,
+    "reading" : "け"
+  },
+  {
+    "engine" : "DictationTranscriber",
+    "hints" : true,
+    "reading" : "げ",
+    "prompt" : "下",
+    "transcripts" : [
+      "下",
+      "げ"
+    ]
+  },
+  {
+    "engine" : "DictationTranscriber",
+    "reading" : "すう",
+    "prompt" : "数",
+    "hints" : true,
+    "transcripts" : [
+      "する"
+    ]
+  },
+  {
+    "hints" : true,
+    "prompt" : "工",
+    "engine" : "DictationTranscriber",
+    "reading" : "く",
+    "transcripts" : [
+      "9"
+    ]
+  },
+  {
+    "reading" : "しゅ",
+    "engine" : "DictationTranscriber",
+    "prompt" : "手",
+    "transcripts" : [
+
+    ],
+    "hints" : true
+  },
+  {
+    "hints" : false,
+    "transcripts" : [
+      "はい。",
+      "は",
+      "か",
+      "会"
+    ],
+    "prompt" : "会",
+    "engine" : "SpeechTranscriber",
+    "reading" : "かい"
+  },
+  {
+    "engine" : "SpeechTranscriber",
+    "reading" : "けい",
+    "transcripts" : [
+      "ケイ。",
+      "ケ",
+      "け"
+    ],
+    "hints" : false,
+    "prompt" : "計"
+  },
+  {
+    "transcripts" : [
+      "どう ？",
+      "ど"
+    ],
+    "engine" : "SpeechTranscriber",
+    "hints" : false,
+    "prompt" : "道",
+    "reading" : "どう"
+  },
+  {
+    "transcripts" : [
+      "こう。",
+      "こ",
+      "5"
+    ],
+    "prompt" : "口",
+    "engine" : "SpeechTranscriber",
+    "reading" : "こう",
+    "hints" : false
+  },
+  {
+    "prompt" : "四",
+    "hints" : false,
+    "engine" : "SpeechTranscriber",
+    "reading" : "し",
+    "transcripts" : [
+      "し。",
+      "4。",
+      "市。",
+      "死。",
+      "し"
+    ]
+  },
+  {
+    "reading" : "き",
+    "hints" : false,
+    "prompt" : "木",
+    "transcripts" : [
+      "木。",
+      "き。",
+      "金。",
+      "木",
+      "好木。"
+    ],
+    "engine" : "SpeechTranscriber"
+  },
+  {
+    "engine" : "SpeechTranscriber",
+    "prompt" : "中",
+    "hints" : false,
+    "reading" : "ちゅう",
+    "transcripts" : [
+      "チル。",
+      "チ",
+      "ち"
+    ]
+  },
+  {
+    "transcripts" : [
+      "上。",
+      "上",
+      "ジ"
+    ],
+    "engine" : "SpeechTranscriber",
+    "hints" : false,
+    "prompt" : "上",
+    "reading" : "じょう"
+  },
+  {
+    "hints" : false,
+    "prompt" : "生",
+    "transcripts" : [
+      "せー。",
+      "せ",
+      "生"
+    ],
+    "reading" : "せい",
+    "engine" : "SpeechTranscriber"
+  },
+  {
+    "hints" : false,
+    "prompt" : "日",
+    "transcripts" : [
+      "日。",
+      "日",
+      "日日。",
+      "ち。",
+      "に日。"
+    ],
+    "reading" : "にち",
+    "engine" : "SpeechTranscriber"
+  },
+  {
+    "reading" : "ぎょう",
+    "transcripts" : [
+      "業務。",
+      "業",
+      "行",
+      "ギ"
+    ],
+    "engine" : "SpeechTranscriber",
+    "hints" : false,
+    "prompt" : "業"
+  },
+  {
+    "hints" : false,
+    "prompt" : "用",
+    "engine" : "SpeechTranscriber",
+    "transcripts" : [
+      "よう。",
+      "よ"
+    ],
+    "reading" : "よう"
+  },
+  {
+    "reading" : "そう",
+    "prompt" : "早",
+    "hints" : false,
+    "engine" : "SpeechTranscriber",
+    "transcripts" : [
+      "そう。",
+      "そ",
+      "うそ",
+      "あそ"
+    ]
+  },
+  {
+    "engine" : "SpeechTranscriber",
+    "transcripts" : [
+      "5。",
+      "5",
+      "ご。",
+      "後。",
+      "5ー。"
+    ],
+    "prompt" : "後",
+    "hints" : false,
+    "reading" : "ご"
+  },
+  {
+    "hints" : false,
+    "prompt" : "火",
+    "reading" : "か",
+    "engine" : "SpeechTranscriber",
+    "transcripts" : [
+      "か。",
+      "が。",
+      "か",
+      "とか。",
+      "が"
+    ]
+  },
+  {
+    "hints" : false,
+    "reading" : "け",
+    "transcripts" : [
+      "へ。",
+      "へ",
+      "毛",
+      "け",
+      "手",
+      "屁"
+    ],
+    "prompt" : "気",
+    "engine" : "SpeechTranscriber"
+  },
+  {
+    "prompt" : "下",
+    "hints" : false,
+    "reading" : "げ",
+    "transcripts" : [
+      "下。",
+      "げ。",
+      "ゲ。",
+      "下",
+      "げ"
+    ],
+    "engine" : "SpeechTranscriber"
+  },
+  {
+    "hints" : false,
+    "reading" : "すう",
+    "transcripts" : [
+      "する。",
+      "す",
+      "ス"
+    ],
+    "engine" : "SpeechTranscriber",
+    "prompt" : "数"
+  },
+  {
+    "hints" : false,
+    "reading" : "く",
+    "engine" : "SpeechTranscriber",
+    "prompt" : "工",
+    "transcripts" : [
+      "9。",
+      "く。",
+      "9",
+      "ク。",
+      "。"
+    ]
+  },
+  {
+    "prompt" : "手",
+    "engine" : "SpeechTranscriber",
+    "reading" : "しゅ",
+    "hints" : false,
+    "transcripts" : [
+      "しゅ。",
+      "し"
+    ]
+  },
+  {
+    "reading" : "かい",
+    "transcripts" : [
+      "はい。",
+      "は",
+      "か",
+      "会"
+    ],
+    "hints" : true,
+    "engine" : "SpeechTranscriber",
+    "prompt" : "会"
+  },
+  {
+    "reading" : "けい",
+    "engine" : "SpeechTranscriber",
+    "hints" : true,
+    "prompt" : "計",
+    "transcripts" : [
+      "ケイ。",
+      "ケ",
+      "け"
+    ]
+  },
+  {
+    "prompt" : "道",
+    "transcripts" : [
+      "どう ？",
+      "ど"
+    ],
+    "engine" : "SpeechTranscriber",
+    "hints" : true,
+    "reading" : "どう"
+  },
+  {
+    "reading" : "こう",
+    "prompt" : "口",
+    "engine" : "SpeechTranscriber",
+    "hints" : true,
+    "transcripts" : [
+      "こう。",
+      "こ",
+      "5"
+    ]
+  },
+  {
+    "prompt" : "四",
+    "hints" : true,
+    "reading" : "し",
+    "transcripts" : [
+      "し。",
+      "4。",
+      "市。",
+      "死。",
+      "し"
+    ],
+    "engine" : "SpeechTranscriber"
+  },
+  {
+    "transcripts" : [
+      "木。",
+      "き。",
+      "金。",
+      "木",
+      "好木。"
+    ],
+    "prompt" : "木",
+    "hints" : true,
+    "engine" : "SpeechTranscriber",
+    "reading" : "き"
+  },
+  {
+    "transcripts" : [
+      "チル。",
+      "チ",
+      "ち"
+    ],
+    "reading" : "ちゅう",
+    "prompt" : "中",
+    "engine" : "SpeechTranscriber",
+    "hints" : true
+  },
+  {
+    "prompt" : "上",
+    "reading" : "じょう",
+    "hints" : true,
+    "transcripts" : [
+      "上。",
+      "上",
+      "ジ"
+    ],
+    "engine" : "SpeechTranscriber"
+  },
+  {
+    "hints" : true,
+    "transcripts" : [
+      "せー。",
+      "せ",
+      "生"
+    ],
+    "engine" : "SpeechTranscriber",
+    "reading" : "せい",
+    "prompt" : "生"
+  },
+  {
+    "engine" : "SpeechTranscriber",
+    "hints" : true,
+    "reading" : "にち",
+    "prompt" : "日",
+    "transcripts" : [
+      "日。",
+      "日",
+      "日日。",
+      "ち。",
+      "に日。"
+    ]
+  },
+  {
+    "engine" : "SpeechTranscriber",
+    "transcripts" : [
+      "業務。",
+      "業",
+      "行",
+      "ギ"
+    ],
+    "reading" : "ぎょう",
+    "prompt" : "業",
+    "hints" : true
+  },
+  {
+    "engine" : "SpeechTranscriber",
+    "reading" : "よう",
+    "transcripts" : [
+      "よう。",
+      "よ"
+    ],
+    "hints" : true,
+    "prompt" : "用"
+  },
+  {
+    "transcripts" : [
+      "そう。",
+      "そ",
+      "うそ",
+      "あそ"
+    ],
+    "prompt" : "早",
+    "engine" : "SpeechTranscriber",
+    "reading" : "そう",
+    "hints" : true
+  },
+  {
+    "transcripts" : [
+      "5。",
+      "5",
+      "ご。",
+      "後。",
+      "5ー。"
+    ],
+    "engine" : "SpeechTranscriber",
+    "hints" : true,
+    "reading" : "ご",
+    "prompt" : "後"
+  },
+  {
+    "transcripts" : [
+      "か。",
+      "が。",
+      "か",
+      "とか。",
+      "が"
+    ],
+    "hints" : true,
+    "prompt" : "火",
+    "reading" : "か",
+    "engine" : "SpeechTranscriber"
+  },
+  {
+    "engine" : "SpeechTranscriber",
+    "hints" : true,
+    "transcripts" : [
+      "へ。",
+      "へ",
+      "毛",
+      "け",
+      "手",
+      "屁"
+    ],
+    "reading" : "け",
+    "prompt" : "気"
+  },
+  {
+    "reading" : "げ",
+    "engine" : "SpeechTranscriber",
+    "prompt" : "下",
+    "transcripts" : [
+      "下。",
+      "げ。",
+      "ゲ。",
+      "下",
+      "げ"
+    ],
+    "hints" : true
+  },
+  {
+    "hints" : true,
+    "prompt" : "数",
+    "transcripts" : [
+      "する。",
+      "す",
+      "ス"
+    ],
+    "engine" : "SpeechTranscriber",
+    "reading" : "すう"
+  },
+  {
+    "engine" : "SpeechTranscriber",
+    "transcripts" : [
+      "9。",
+      "く。",
+      "9",
+      "ク。",
+      "。"
+    ],
+    "prompt" : "工",
+    "reading" : "く",
+    "hints" : true
+  },
+  {
+    "hints" : true,
+    "prompt" : "手",
+    "transcripts" : [
+      "しゅ。",
+      "し"
+    ],
+    "engine" : "SpeechTranscriber",
+    "reading" : "しゅ"
+  }
+]

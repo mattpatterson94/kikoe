@@ -45,6 +45,10 @@ describe('answerHints', () => {
       .toEqual(['かい', 'え', '会']);
   });
 
+  test('non-Japanese prompts such as BunPro card ids are not hinted', () => {
+    expect(answerHints({ type: 'reading', prompt: '806:0', readings: ['おとこ'] })).toEqual(['おとこ']);
+  });
+
   test('meaning cards hint the accepted meanings', () => {
     expect(answerHints({ type: 'meaning', prompt: '会', readings: ['かい'], meanings: ['Meeting', 'Meet'] }))
       .toEqual(['Meeting', 'Meet']);

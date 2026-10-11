@@ -41,6 +41,10 @@ export function getNativeSpeechHandler(): MessageHandler | null {
 // answers in the language being spoken. Reading cards also get the prompt
 // itself, since Japanese recognizers commonly emit the kanji spelling of a
 // word rather than its kana, and the matcher already converts that back.
+// Hiragana, katakana and CJK ideographs. BunPro's prompt is a card id
+// ("806:0"), not text the user could say, so only Japanese prompts are hinted.
+const JAPANESE_RE = /[\u3040-\u30ff\u3400-\u9fff\uf900-\ufaff]/;
+
 export function answerHints(ctx: {
   type?: string | null;
   prompt?: string | null;
@@ -49,7 +53,7 @@ export function answerHints(ctx: {
 } | null | undefined): string[] {
   if (!ctx) return [];
   const hints = ctx.type === 'reading'
-    ? [...(ctx.readings ?? []), ...(ctx.prompt ? [ctx.prompt] : [])]
+    ? [...(ctx.readings ?? []), ...(ctx.prompt && JAPANESE_RE.test(ctx.prompt) ? [ctx.prompt] : [])]
     : [...(ctx.meanings ?? [])];
   return [...new Set(hints.map(h => h.trim()).filter(Boolean))];
 }
