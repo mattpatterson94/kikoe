@@ -10,13 +10,12 @@ struct IndicatorPill: View {
 
     var body: some View {
         Button(action: action) {
+            // The mic glyph is tall and narrow; a step down makes it read
+            // the same size as the More button's circle.
             Image(systemName: symbol)
-                .font(.body.weight(.semibold))
+                .font(.subheadline)
                 .foregroundStyle(indicator.needsAttention ? indicator.attentionColor : indicator.micColor)
-                .frame(minWidth: 44, minHeight: 44)
-                .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
         .accessibilityLabel(indicator.label)
         .accessibilityHint(indicator.state == "no-token" ? "Opens the WaniKani token page" : "Mutes or resumes listening")
     }
