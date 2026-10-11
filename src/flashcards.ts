@@ -143,6 +143,12 @@ function correctionKey(s: string): string {
   return trimTrailingPunctuation(s).toLowerCase();
 }
 
+// The "→ answer" shown after the heard words, or nothing when the answer
+// only differs from them in case or end punctuation (Brothers → brothers).
+function shownAsMatch(answer: string, raw: string): string | undefined {
+  return correctionKey(answer) === correctionKey(raw) ? undefined : answer;
+}
+
 function buildCorrectionLookup(pairs: readonly (Partial<Correction> | null)[] | undefined): Record<string, string[]> {
   const lookup: Record<string, string[]> = {};
   for (const pair of pairs || []) {
@@ -412,7 +418,7 @@ export function checkAnswer(
           return {
             success: true,
             answer,
-            transcript: { raw, matched: answer !== raw ? answer : undefined },
+            transcript: { raw, matched: shownAsMatch(answer, raw) },
           };
         }
       }
@@ -487,7 +493,7 @@ export function checkAnswer(
           return {
             success: true,
             answer,
-            transcript: { raw, matched: answer !== raw ? answer : undefined },
+            transcript: { raw, matched: shownAsMatch(answer, raw) },
           };
         }
       }

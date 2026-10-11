@@ -69,6 +69,21 @@ describe('meaning questions', () => {
     expect(r.answer).toBe('cold hearted');
   });
 
+  test('shows no "→ answer" when the answer only differs in case or end punctuation', () => {
+    const ctx = { type: 'meaning', prompt: '兄弟', category: 'vocabulary', meanings: ['Brothers'] };
+    const r = checkAnswer(ctx, makeTransformers(), 'Brothers.');
+    expectSuccess(r);
+    expect(r.answer).toBe('brothers');
+    expect(r.transcript.matched).toBeUndefined();
+  });
+
+  test('still shows "→ answer" when matching changed the words', () => {
+    const ctx = { type: 'meaning', prompt: '村', category: 'vocabulary', meanings: ['village'] };
+    const r = checkAnswer(ctx, makeTransformers(), 'The village');
+    expectSuccess(r);
+    expect(r.transcript.matched).toBe('village');
+  });
+
   test('strips leading article before matching', () => {
     const ctx = { type: 'meaning', prompt: '村', category: 'vocabulary', meanings: ['village'] };
     const r = checkAnswer(ctx, makeTransformers(), 'the village');
