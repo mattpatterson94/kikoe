@@ -437,6 +437,7 @@ async function startListener(dictionary: Dictionary): Promise<void> {
         fuzzyMeaning,
         corrections,
         strictKanjiReadings: getSettings().strict_kanji_readings,
+        particleSounds: SITE === 'bunpro',
       });
       if (result.success && result.answer) return result;
       const priority = REASON_PRIORITY[result.transcript.reason ?? ''] ?? 0;

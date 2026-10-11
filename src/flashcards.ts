@@ -109,6 +109,10 @@ export interface CheckOptions {
   fuzzyMeaning?: boolean;
   corrections?: readonly (Partial<Correction> | null)[];
   strictKanjiReadings?: boolean;
+  // Accept a particle answer's pronunciation (わ for は). Only safe where
+  // answers are grammar clozes: on WaniKani a lone は is the reading of 歯,
+  // 葉 and 刃, where わ is simply wrong.
+  particleSounds?: boolean;
 }
 
 // CJK ideographs, including the extension A and compatibility blocks that
@@ -141,7 +145,9 @@ function buildCorrectionLookup(pairs: readonly (Partial<Correction> | null)[] | 
 export function normalize(s: string): string {
   const stripped = s.toLowerCase()
     .replace(/^(a|an|the)\s+/i, '')
-    .replace(/[.,!?;:]+$/, '');
+    .replace(/[.,!?;:]+$/, '')
+    // Speech recognition groups large numbers ("600,000"); answers may not.
+    .replace(/(\d),(?=\d{3}(?:\D|$))/g, '$1');
   if (isJapanese(stripped)) {
     return toHiragana(stripped.replaceAll(' ', ''));
   }
@@ -208,15 +214,42 @@ function kanaForms(kana: string): Set<string> {
   ]);
 }
 
+// Particles are spelled one way and said another: は is "wa", へ is "e", を is
+// "o". Speech recognition writes what it hears, so a BunPro cloze whose answer
+// is the particle は comes back as わ. The engine's ranked alternatives on the
+// final result sometimes include は anyway, but the interim result carries only
+// one guess, so without this the early-submit path never matches a particle
+// and the user waits out the engine's trailing-silence finalization instead.
+const PARTICLE_SOUNDS: Record<string, string> = { 'は': 'わ', 'へ': 'え', 'を': 'お' };
+
+// Particles that combine with a trailing topic は (には, では, からは, …).
+const TOPIC_COMBINABLE_PARTICLES = new Set(['に', 'で', 'と', 'から', 'まで', 'より', 'の', 'て']);
+
+// The spoken form of an accepted answer that is a particle, or null. Scoped to
+// answers that are unambiguously particles: elsewhere は and へ are ordinary
+// syllables (はし, へや), and accepting わし for はし would grade a wrong
+// reading as right. を is only ever a particle in modern spelling.
+function particlePronunciation(accepted: string): string | null {
+  if (PARTICLE_SOUNDS[accepted]) return PARTICLE_SOUNDS[accepted];
+  if (accepted.endsWith('は') && TOPIC_COMBINABLE_PARTICLES.has(accepted.slice(0, -1))) {
+    return `${accepted.slice(0, -1)}わ`;
+  }
+  if (accepted.includes('を')) return accepted.replaceAll('を', 'お');
+  return null;
+}
+
 // Match readings independent of whether the site supplies them in hiragana or
 // katakana. WaniKani readings are normally hiragana, while BunPro can expose a
 // katakana answer verbatim. Return the site's canonical spelling so that the
 // submitted answer is exactly one it advertised as accepted.
-function matchingReading(kana: string, acceptedReadings: string[]): string | null {
+// With particleSounds, a particle answer also matches its spoken form.
+function matchingReading(kana: string, acceptedReadings: string[], particleSounds = false): string | null {
   const candidateForms = kanaForms(kana);
-  return acceptedReadings.find(accepted => (
-    [...kanaForms(accepted)].some(form => candidateForms.has(form))
-  )) ?? null;
+  return acceptedReadings.find(accepted => {
+    const spoken = particleSounds ? particlePronunciation(accepted) : null;
+    const forms = [...kanaForms(accepted), ...(spoken ? kanaForms(spoken) : [])];
+    return forms.some(form => candidateForms.has(form));
+  }) ?? null;
 }
 
 // Whether any candidate resolves to one of the accepted readings — used to
@@ -323,7 +356,7 @@ export function checkAnswer(
   opts: CheckOptions = {},
 ): CheckResult {
   const { type } = context;
-  const { fuzzyMeaning = false, corrections = [], strictKanjiReadings = false } = opts;
+  const { fuzzyMeaning = false, corrections = [], strictKanjiReadings = false, particleSounds = false } = opts;
   const customLookup = buildCorrectionLookup(corrections);
   const candidates = generateCandidates(transformers, raw);
 
@@ -353,7 +386,7 @@ export function checkAnswer(
       // isJapanese would also match kanji, but toHiragana can't convert kanji
       // to kana — submitting kanji would always be rejected by WaniKani.
       if (isKana(c.data)) {
-        const answer = matchingReading(c.data, acceptedReadings);
+        const answer = matchingReading(c.data, acceptedReadings, particleSounds);
         if (answer) {
           return {
             success: true,
@@ -365,21 +398,28 @@ export function checkAnswer(
       // User corrections first, so they can override the built-in homonyms.
       // kanaForms also converts a romaji intended value ("shiri" → しり).
       for (const intended of customLookup[c.data.toLowerCase()] || []) {
-        const answer = matchingReading(intended, acceptedReadings);
+        const answer = matchingReading(intended, acceptedReadings, particleSounds);
         if (answer) {
           return { success: true, answer, transcript: { raw, matched: answer } };
         }
       }
       const h = homonyms[c.data.toLowerCase()];
       const readings = Array.isArray(h) ? h : (h ? [h] : []);
-      const matched = readings.map(reading => matchingReading(reading, acceptedReadings)).find(Boolean);
+      const matched = readings.map(reading => matchingReading(reading, acceptedReadings, particleSounds)).find(Boolean);
       if (matched) {
         return { success: true, answer: matched, transcript: { raw, matched } };
       }
     }
+    // An accepted answer that isn't kana at all (a BunPro cloze of "600000")
+    // can only match the transcript literally, give or take the punctuation
+    // and digit grouping the recognizer adds.
+    const literal = acceptedReadings.find(accepted => normalize(accepted) === normalize(raw));
+    if (literal) {
+      return { success: true, answer: literal, transcript: { raw } };
+    }
     // Fallback: try converting raw (works for romaji like "shita" → "した").
     for (const fallback of kanaForms(raw)) {
-      const answer = isKana(fallback) ? matchingReading(fallback, acceptedReadings) : null;
+      const answer = isKana(fallback) ? matchingReading(fallback, acceptedReadings, particleSounds) : null;
       if (answer) {
         return { success: true, answer, transcript: { raw } };
       }

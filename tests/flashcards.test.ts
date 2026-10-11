@@ -225,6 +225,47 @@ describe('reading questions', () => {
     expect(r.answer).toBe('カタカナ');
   });
 
+  // Speech recognition writes particles as they sound (は → わ), so a BunPro
+  // cloze answered with a particle never matched until the final result's
+  // lower-ranked alternatives happened to include the particle spelling.
+  describe('particle pronunciations (particleSounds)', () => {
+    const particle = (readings: string[]) => ({ type: 'reading', prompt: 'bunpro:particle', readings });
+
+    test.each([
+      [['は'], 'わ', 'は'],
+      [['へ'], 'え', 'へ'],
+      [['を'], 'お', 'を'],
+      [['を'], 'o', 'を'],
+      [['には'], 'にわ', 'には'],
+      [['では'], 'dewa', 'では'],
+      [['からは'], 'からわ', 'からは'],
+      [['をも'], 'おも', 'をも'],
+    ])('accepted %j matches spoken "%s"', (readings, heard, expected) => {
+      const r = checkAnswer(particle(readings), makeTransformers(), heard, { particleSounds: true });
+      expectSuccess(r);
+      expect(r.answer).toBe(expected);
+    });
+
+    test('the particle spelling itself still matches', () => {
+      const r = checkAnswer(particle(['は']), makeTransformers(), 'は', { particleSounds: true });
+      expectSuccess(r);
+      expect(r.answer).toBe('は');
+    });
+
+    test('off by default, so WaniKani does not accept わ for 歯 (は)', () => {
+      const ctx = { type: 'reading', prompt: '歯', category: 'vocabulary', readings: ['は'] };
+      expectFailure(checkAnswer(ctx, makeTransformers(), 'わ'));
+    });
+
+    test.each([
+      [['はし'], 'わし'],
+      [['へや'], 'えや'],
+      [['はは'], 'はわ'],
+    ])('accepted %j does not match "%s": は/へ inside a word are not particles', (readings, heard) => {
+      expectFailure(checkAnswer(particle(readings), makeTransformers(), heard, { particleSounds: true }));
+    });
+  });
+
   // Bug reproduction: SR returns kanji (何月) for a compound JMdict doesn't
   // list, so no whole-word lookup can produce the kana reading.
   test('REGRESSION: converts kanji compounds missing from JMdict (何月 → なんがつ)', () => {
@@ -659,5 +700,28 @@ describe('full transformer pipeline', () => {
     const r = checkAnswer(ctx, transformers, 'センダイ');
     expectSuccess(r);
     expect(r.answer).toBe('せんだい');
+  });
+});
+
+// ── numbers with digit grouping ──────────────────────────────────────────────
+
+// Speech recognition formats large numbers with thousands separators and a
+// sentence-final period ("600,000."), while an accepted answer may be written
+// ungrouped ("600000").
+describe('grouped numbers', () => {
+  const transformers = [new ToHiragana(), new Numerals()];
+
+  test.each(['600,000.', '600,000', '600000'])('meaning "600000" matches heard "%s"', (heard) => {
+    const ctx = { type: 'meaning', meanings: ['600000'] };
+    const r = checkAnswer(ctx, transformers, heard);
+    expectSuccess(r);
+    expect(r.answer).toBe('600000');
+  });
+
+  test.each(['600,000.', '600,000', '600000'])('reading "600000" matches heard "%s"', (heard) => {
+    const ctx = { type: 'reading', readings: ['600000'] };
+    const r = checkAnswer(ctx, transformers, heard);
+    expectSuccess(r);
+    expect(r.answer).toBe('600000');
   });
 });
