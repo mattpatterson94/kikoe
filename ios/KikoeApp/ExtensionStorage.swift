@@ -1,4 +1,5 @@
 import Foundation
+import Security
 
 extension Notification.Name {
     /// Posted after every write, with `area` and chrome.storage.onChanged-
@@ -13,10 +14,17 @@ extension Notification.Name {
 /// Files rather than UserDefaults because the local area holds the WaniKani
 /// subject cache, which outgrows what UserDefaults is meant for. The first
 /// read of an area migrates the blob the spike kept in UserDefaults.
+///
+/// The WaniKani API token is the one secret, so it lives in the Keychain
+/// instead of the file. Callers can't tell: it's merged into reads and
+/// split out of writes, under the same key.
 @MainActor
 enum ExtensionStorage {
     static let areas = ["sync", "local"]
     private static var cache: [String: [String: Any]] = [:]
+    private static let secretKeys = ["apiToken"]
+    /// What the Keychain holds, to skip rewriting an unchanged secret.
+    private static var secrets: [String: String] = [:]
 
     private static var directory: URL {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
@@ -42,15 +50,35 @@ enum ExtensionStorage {
             save(obj, area: area)
             UserDefaults.standard.removeObject(forKey: legacyDefaultsKey(area))
         }
+        if area == "sync" {
+            // A token still in the file predates the Keychain: move it.
+            let inFile = secretKeys.filter { stored[$0] != nil }
+            for key in secretKeys {
+                if let value = Keychain.read(key) {
+                    secrets[key] = value
+                    if stored[key] == nil { stored[key] = value }
+                }
+            }
+            if !inFile.isEmpty { save(stored, area: area) }
+        }
         cache[area] = stored
         return stored
     }
 
     private static func save(_ dict: [String: Any], area: String) {
         cache[area] = dict
+        var file = dict
+        if area == "sync" {
+            for key in secretKeys {
+                let value = (file.removeValue(forKey: key) as? String) ?? ""
+                guard value != (secrets[key] ?? "") else { continue }
+                if value.isEmpty { Keychain.delete(key) } else { Keychain.write(key, value) }
+                secrets[key] = value
+            }
+        }
         do {
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-            let data = try JSONSerialization.data(withJSONObject: dict)
+            let data = try JSONSerialization.data(withJSONObject: file)
             try data.write(to: fileURL(area), options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
         } catch {
             NSLog("[kikoe] failed to save \(area) storage: \(error)")
@@ -109,5 +137,45 @@ enum ExtensionStorage {
     private static func notify(_ changes: [String: Any], area: String) {
         NotificationCenter.default.post(name: .kikoeStorageChanged, object: nil,
                                         userInfo: ["area": area, "changes": changes])
+    }
+}
+
+/// Generic-password items for this app, readable after the first unlock so
+/// a page restored in the background can still look subjects up.
+private enum Keychain {
+    private static let service = "com.mattdoesdev.kikoe.storage"
+
+    private static func query(_ account: String) -> [String: Any] {
+        [kSecClass as String: kSecClassGenericPassword,
+         kSecAttrService as String: service,
+         kSecAttrAccount as String: account]
+    }
+
+    static func read(_ account: String) -> String? {
+        var q = query(account)
+        q[kSecReturnData as String] = true
+        q[kSecMatchLimit as String] = kSecMatchLimitOne
+        var result: AnyObject?
+        guard SecItemCopyMatching(q as CFDictionary, &result) == errSecSuccess,
+              let data = result as? Data else { return nil }
+        return String(data: data, encoding: .utf8)
+    }
+
+    static func write(_ account: String, _ value: String) {
+        let data = Data(value.utf8)
+        let status = SecItemUpdate(query(account) as CFDictionary, [kSecValueData as String: data] as CFDictionary)
+        guard status == errSecItemNotFound else {
+            if status != errSecSuccess { NSLog("[kikoe] keychain update failed: \(status)") }
+            return
+        }
+        var add = query(account)
+        add[kSecValueData as String] = data
+        add[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+        let added = SecItemAdd(add as CFDictionary, nil)
+        if added != errSecSuccess { NSLog("[kikoe] keychain add failed: \(added)") }
+    }
+
+    static func delete(_ account: String) {
+        SecItemDelete(query(account) as CFDictionary)
     }
 }
