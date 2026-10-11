@@ -1,3 +1,4 @@
+import { isJapanese } from 'wanakana';
 import { checkAnswer, trimTrailingPunctuation } from './flashcards';
 import type { CheckResult } from './flashcards';
 import { createRecognition, setLanguage } from './recognition';
@@ -169,6 +170,12 @@ debugLog('debug mode on — settings:', getSettings());
 document.addEventListener('kikoe:settingsChanged', (e) => {
   updateSettings((e as CustomEvent<Partial<Settings>>).detail);
 });
+
+/** Whether a transcript is all kana/kanji (ignoring spaces), not romaji or English. */
+function looksJapanese(raw: string): boolean {
+  const text = raw.replace(/\s+/gu, '');
+  return text !== '' && isJapanese(text);
+}
 
 // If the user repeats themselves ("night night"), collapse to the first half.
 function deduplicate(raw: string): string {
@@ -683,7 +690,9 @@ async function startListener(dictionary: Dictionary): Promise<void> {
     // Reading results are logged after matching so a successful romaji or
     // English-looking recognition guess never flashes in the UI. Failures
     // still show the raw guess below, where it can drive correction creation.
-    if (ctx?.type !== 'reading') logTranscript(getSettings(), { raw });
+    // Kana or kanji can't be that kind of misleading guess, so those show
+    // straight away, giving feedback while the user is still speaking.
+    if (ctx?.type !== 'reading' || looksJapanese(raw)) logTranscript(getSettings(), { raw });
 
     // Interim results are usually display-only, but the engine only finalizes
     // a result after about a second of trailing silence, so waiting for the

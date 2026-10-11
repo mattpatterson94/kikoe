@@ -1474,6 +1474,12 @@ describe('startListener transcript failure reason hints', () => {
     return alternatives;
   }
 
+  function interimResult(...transcripts) {
+    const alternatives = transcripts.map(t => ({ transcript: t }));
+    alternatives.isFinal = false;
+    return alternatives;
+  }
+
   function interceptSubjectRequest() {
     let respond;
     const ready = new Promise((resolve) => {
@@ -1547,6 +1553,25 @@ describe('startListener transcript failure reason hints', () => {
     });
     expect(container.textContent).toContain('さむい');
     expect(container.textContent).not.toContain('samui');
+  });
+
+  test('a Japanese interim on a reading card shows while the user is still speaking', async () => {
+    const native = await loadReadingSubjects();
+    native.onresult({ resultIndex: 0, results: [interimResult('さ')] });
+
+    const container = document.getElementById('kikoe-transcript-container');
+    await vi.waitFor(() => {
+      if (!container.textContent.includes('さ')) throw new Error('interim not shown yet');
+    });
+  });
+
+  test('a romaji interim on a reading card stays hidden', async () => {
+    const native = await loadReadingSubjects();
+    native.onresult({ resultIndex: 0, results: [interimResult('sam')] });
+    await new Promise(r => setTimeout(r, 50));
+
+    const container = document.getElementById('kikoe-transcript-container');
+    expect(container?.textContent ?? '').not.toContain('sam');
   });
 
   test('confirming a no-match correction submits the intended answer', async () => {
