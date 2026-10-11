@@ -246,12 +246,26 @@ final class PageSession: NSObject, ObservableObject {
     // MARK: - Speech
 
     func deliverSpeech(_ payload: [String: Any]) {
+        // New speech clears the last result chip, so the listening pill
+        // underneath is all that shows. A chip the page posted moments ago
+        // is this same utterance's live text, so it stays.
+        if payload["isFinal"] as? Bool == false, let shown = transcriptShownAt,
+           Date().timeIntervalSince(shown) > 1 {
+            clearTranscript()
+        }
         dispatch("kikoe:nativeSpeech", detail: payload)
     }
 
     // MARK: - Overlays
 
     private var transcriptTimer: Task<Void, Never>?
+    private var transcriptShownAt: Date?
+
+    private func clearTranscript() {
+        transcriptTimer?.cancel()
+        transcriptShownAt = nil
+        transcript = nil
+    }
     private var hintTimer: Task<Void, Never>?
 
     private func handleOverlay(_ body: [String: Any]) {
@@ -272,18 +286,19 @@ final class PageSession: NSObject, ObservableObject {
                 detail: body["detail"] as? String,
                 error: body["error"] as? Bool ?? false,
                 correction: correction)
+            transcriptShownAt = Date()
             transcriptTimer?.cancel()
-            // The DOM chips fade after a few seconds; a correction offer
-            // stays a little longer so there's time to tap it.
-            let seconds: UInt64 = correction == nil ? 5 : 10
+            // The result chip fades quickly since the listening pill below it
+            // already shows Kikoe is ready again; a correction offer stays a
+            // little longer so there's time to tap it.
+            let seconds: UInt64 = correction == nil ? 3 : 8
             transcriptTimer = Task { [weak self] in
                 try? await Task.sleep(nanoseconds: seconds * 1_000_000_000)
                 guard !Task.isCancelled else { return }
-                self?.transcript = nil
+                self?.clearTranscript()
             }
         case "clearTranscript":
-            transcriptTimer?.cancel()
-            transcript = nil
+            clearTranscript()
         case "helpButton":
             helpButtonVisible = body["visible"] as? Bool ?? false
         case "help":
@@ -327,7 +342,7 @@ final class PageSession: NSObject, ObservableObject {
     /// Same event the DOM bubble's confirm() fires: content.ts saves the
     /// correction to sync storage and app.ts submits the intended answer.
     func confirmCorrection(_ correction: TranscriptBubble.Correction) {
-        transcript = nil
+        clearTranscript()
         dispatch("kikoe:addCorrection", detail: ["heard": correction.heard, "intended": correction.intended])
     }
 
@@ -338,7 +353,7 @@ final class PageSession: NSObject, ObservableObject {
 
     private func resetOverlays() {
         indicator = nil
-        transcript = nil
+        clearTranscript()
         helpButtonVisible = false
         help = nil
         hint = nil

@@ -121,34 +121,43 @@ struct SiteMenu: View {
     }
 }
 
-/// The floating transcript bubble, shown for the whole review rather than
-/// only after speech: between answers it says whether Kikoe is listening,
-/// with a live level meter so there's a constant sign the mic hears you.
-/// Tapping that idle state does what the pill does; tapping a "save as a
-/// correction" bubble opens the correction dialog.
+/// The floating transcript: a listening pill shown for the whole review
+/// (mic state, a live level meter and "Listening"/"Muted"/a problem), with
+/// the last result as a separate chip beside it. The pill is never replaced,
+/// so it's always clear Kikoe has gone back to listening. Tapping the pill
+/// does what the nav-bar mic does; tapping a "save as a correction" chip
+/// opens the correction sheet.
 struct TranscriptView: View {
     let indicator: IndicatorState
     let bubble: TranscriptBubble?
     @ObservedObject var level: MicLevel
     /// The language picked from the More menu for this card, if any.
     var languageOverride: String?
+    /// At the bottom the result sits above the pill; at the top, below it.
+    var resultAbove = true
     let onMic: () -> Void
     let onCorrection: (TranscriptBubble.Correction) -> Void
 
     var body: some View {
-        Group {
-            if let bubble {
-                heard(bubble).id(bubble.id)
-            } else {
-                Button(action: onMic) { status }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(statusText)
-                    .accessibilityHint(indicator.state == "no-token" ? "Opens the WaniKani token page" : "Mutes or resumes listening")
-            }
+        VStack(spacing: 8) {
+            if resultAbove { result }
+            Button(action: onMic) { status }
+                .buttonStyle(.plain)
+                .accessibilityLabel(statusText)
+                .accessibilityHint(indicator.state == "no-token" ? "Opens the WaniKani token page" : "Mutes or resumes listening")
+            if !resultAbove { result }
         }
-        .transition(.opacity)
         .animation(.easeOut(duration: 0.2), value: bubble)
         .animation(.easeOut(duration: 0.2), value: indicator)
+    }
+
+    /// What was just heard and how it went. It fades on its own (see
+    /// PageSession) while the pill keeps showing that Kikoe is listening.
+    @ViewBuilder private var result: some View {
+        if let bubble {
+            heard(bubble).id(bubble.id)
+                .transition(.opacity.combined(with: .scale(scale: 0.95, anchor: resultAbove ? .bottom : .top)))
+        }
     }
 
     private func heard(_ bubble: TranscriptBubble) -> some View {
@@ -288,40 +297,27 @@ struct HelpSheet: View {
     }
 }
 
-/// Asks before saving a speech correction: what was heard, what it will
-/// count as from now on, and one clear way to save. A small sheet with an
-/// opaque background, so the page's colours can't wash out the text the way
-/// they did through the glass of a confirmation popover.
+/// Tapping a "no match" chip: one line saying what will change, then
+/// Not Now / Save side by side, in a small opaque sheet (a glass dialog let
+/// the page's colour show through the text).
 struct CorrectionSheet: View {
     let correction: TranscriptBubble.Correction
     let onSave: () -> Void
     let onCancel: () -> Void
-    @State private var height: CGFloat = 320
+    @State private var height: CGFloat = 200
 
     var body: some View {
         VStack(spacing: 20) {
             VStack(spacing: 6) {
-                Text("Save a Correction?").font(.title3.weight(.semibold))
-                Text("Next time Kikoe hears this, it counts as your answer.")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                Text("Count “\(correction.heard)” as \(Text(correction.intended).bold())?")
+                    .font(.title3)
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
+                Text("Kikoe will remember this.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
             }
-
-            HStack(spacing: 12) {
-                column("Heard", correction.heard, emphasised: false)
-                Image(systemName: "arrow.right")
-                    .font(.body.weight(.semibold))
-                    .foregroundStyle(.tertiary)
-                    .accessibilityHidden(true)
-                column("Counts as", correction.intended, emphasised: true)
-            }
-            .padding(16)
-            .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-            .accessibilityElement(children: .combine)
-
-            SheetButtons(primary: "Save Correction", secondary: "Not Now", onPrimary: onSave, onSecondary: onCancel)
+            SheetButtons(primary: "Save", secondary: "Not Now", onPrimary: onSave, onSecondary: onCancel)
         }
         .padding(.horizontal, 24)
         .padding(.top, 28)
@@ -331,23 +327,10 @@ struct CorrectionSheet: View {
         .presentationDragIndicator(.hidden)
         .presentationBackground(Color(.systemBackground))
     }
-
-    private func column(_ title: String, _ value: String, emphasised: Bool) -> some View {
-        VStack(alignment: .leading, spacing: 3) {
-            Text(title.uppercased())
-                .font(.caption2.weight(.semibold))
-                .foregroundStyle(.secondary)
-            Text(value)
-                .font(.body.weight(emphasised ? .semibold : .regular))
-                .lineLimit(2)
-                .minimumScaleFactor(0.8)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
 }
 
-/// A full-width prominent action over a plain one, each a full-height
-/// target with room between them, as at the foot of a system sheet.
+/// A plain action beside a prominent one, each a full-height target, as at
+/// the foot of a system alert.
 struct SheetButtons: View {
     let primary: String
     let secondary: String
@@ -355,17 +338,17 @@ struct SheetButtons: View {
     let onSecondary: () -> Void
 
     var body: some View {
-        VStack(spacing: 10) {
-            Button(action: onPrimary) {
-                Text(primary).font(.body.weight(.semibold)).frame(maxWidth: .infinity, minHeight: 30)
-            }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.large)
+        HStack(spacing: 12) {
             Button(role: .cancel, action: onSecondary) {
                 Text(secondary).font(.body.weight(.medium)).frame(maxWidth: .infinity, minHeight: 30)
             }
             .buttonStyle(.bordered)
             .tint(.secondary)
+            .controlSize(.large)
+            Button(action: onPrimary) {
+                Text(primary).font(.body.weight(.semibold)).frame(maxWidth: .infinity, minHeight: 30)
+            }
+            .buttonStyle(.borderedProminent)
             .controlSize(.large)
         }
     }

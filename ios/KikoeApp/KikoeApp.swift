@@ -130,6 +130,7 @@ struct SessionScreen: View {
             bubble: session.transcript,
             level: speech.mic.level,
             languageOverride: speech.languageOverride,
+            resultAbove: bubbleAtBottom,
             onMic: { session.sendAction("indicatorTapped") },
             onCorrection: { pendingCorrection = $0 })
             .environment(\.colorScheme, settings.transcriptScheme ?? colorScheme)
@@ -154,9 +155,12 @@ struct SessionScreen: View {
             SiteMenu(app: app)
         }
         ToolbarItem(placement: .topBarTrailing) {
-            SessionMenu(session: session, speech: SpeechService.shared,
+            SessionMenu(listening: speech.listening, helpButtonVisible: session.helpButtonVisible,
+                        reload: { session.reload() },
                         chooseLanguage: { choosingLanguage = true },
+                        showHelp: { session.sendAction("helpButtonTapped") },
                         openSettings: { app.showSettings = true })
+                .equatable()
         }
     }
 }
@@ -164,25 +168,35 @@ struct SessionScreen: View {
 /// The nav bar's More menu: ways out when something goes wrong mid-review,
 /// then the voice-command help (when the help button setting is on) and
 /// Settings.
-struct SessionMenu: View {
-    @ObservedObject var session: PageSession
-    @ObservedObject var speech: SpeechService
+///
+/// It only takes plain values and is compared with `.equatable()`, so the
+/// screen re-rendering for every transcript and level change doesn't rebuild
+/// it. A Menu rebuilt while a tap is landing drops the tap, which made the
+/// button need a second press.
+struct SessionMenu: View, Equatable {
+    let listening: Bool
+    let helpButtonVisible: Bool
+    let reload: () -> Void
     let chooseLanguage: () -> Void
+    let showHelp: () -> Void
     let openSettings: () -> Void
+
+    static func == (lhs: SessionMenu, rhs: SessionMenu) -> Bool {
+        lhs.listening == rhs.listening && lhs.helpButtonVisible == rhs.helpButtonVisible
+    }
 
     var body: some View {
         Menu {
-            Button { session.reload() } label: {
+            Button(action: reload) {
                 Label("Reload Page", systemImage: "arrow.clockwise")
             }
             Button(action: chooseLanguage) {
                 Label("Listen In…", systemImage: "character.bubble")
-                Text(languageSummary)
             }
-            .disabled(!speech.listening)
+            .disabled(!listening)
             Divider()
-            if session.helpButtonVisible {
-                Button { session.sendAction("helpButtonTapped") } label: {
+            if helpButtonVisible {
+                Button(action: showHelp) {
                     Label("Voice Commands", systemImage: "questionmark.circle")
                 }
             }
@@ -193,15 +207,6 @@ struct SessionMenu: View {
             Image(systemName: "ellipsis.circle")
         }
         .accessibilityLabel("More")
-    }
-
-    /// Shown under "Listen In": what Automatic picked, or that this card is
-    /// overridden.
-    private var languageSummary: String {
-        if let lang = speech.languageOverride {
-            return "\(SpeechLanguage.name(lang)) for this card"
-        }
-        return speech.pageLocale.isEmpty ? "Automatic" : "Automatic: \(SpeechLanguage.name(speech.pageLocale))"
     }
 }
 
