@@ -16,9 +16,9 @@ function lookup(dictionary: Dictionary, s: string): DictionaryEntry[] {
 
 // Irregular day-of-month readings (六日 → むいか, 二十日 → はつか, …) are
 // whole-word JMdict entries keyed by the kanji spelling, but that spelling
-// only exists after kansuji conversion — too late for BasicDictionary's
-// lookup, which only ever sees the original raw (digit) input. Do the same
-// lookup here once the kanji form is known.
+// only exists after kansuji conversion. Running a stage early (see `order`)
+// lets BasicDictionary see that spelling too, but the lookup stays here so
+// this generator resolves day counters on its own.
 function dictionaryReadings(dictionary: Dictionary, kanjiForm: string): string[] {
   return lookup(dictionary, kanjiForm)
     .filter((entry): entry is WordEntry => entry.type === 'word')
@@ -26,7 +26,12 @@ function dictionaryReadings(dictionary: Dictionary, kanjiForm: string): string[]
 }
 
 export class Numerals implements CandidateGenerator {
-  order = 0;
+  // Runs a stage ahead of the dictionary transformers so they see the kanji
+  // form it produces. Speech recognition writes counted words with digits
+  // (三十代 comes back as 30代), and only the kanji spelling can be read by
+  // the dictionary/compound lookups — in the same stage they only ever saw
+  // the digit form, so the card could never match.
+  order = -1;
   dictionary: Dictionary;
 
   constructor(dictionary: Dictionary = {}) {
