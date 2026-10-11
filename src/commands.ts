@@ -26,7 +26,7 @@ export const SHARED_COMMANDS: CommandSpec[] = [
   {
     id: 'wrong',
     en: ['wrong', 'incorrect', 'mistake'],
-    ja: ['間違い', 'まちがい', '不正解', 'ふせいかい', 'だめ', 'ダメ', '駄目'],
+    ja: ['間違い', 'まちがい', '不正解', 'ふせいかい', 'だめ', 'ダメ', '駄目', 'インコレクト', 'いんこれくと', 'ロング', 'ろんぐ', 'ミステイク', 'ミステーク', 'みすていく'],
     description: 'Mark the current answer wrong',
   },
   {
