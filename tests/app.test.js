@@ -1268,6 +1268,36 @@ describe('startListener BunPro Reveal & Grade cards', () => {
     }
   });
 
+  // The interim carries one guess, written as heard: わ, never は. Without the
+  // particle pronunciation this waited out the engine's finalization instead.
+  test('a particle cloze submits from an interim heard as its pronunciation', async () => {
+    addMetadata({
+      'data-meta-input-mode': 'manual',
+      'data-meta-question-mode': 'cloze',
+      'data-meta-answers-array': JSON.stringify(['は']),
+    });
+    const input = document.createElement('input');
+    input.id = 'js-manual-input';
+    document.body.appendChild(input);
+    const submit = document.createElement('button');
+    submit.className = 'InputManual__button';
+    document.body.appendChild(submit);
+    const submitSpy = vi.spyOn(submit, 'click');
+    stampConfig({ hasApiToken: true });
+    await importApp();
+
+    const native = MockSpeechRecognition.instances[0];
+    vi.useFakeTimers();
+    try {
+      native.onresult({ resultIndex: 0, results: [interimResult('わ')] });
+      vi.advanceTimersByTime(900);
+      expect(input.value).toBe('は');
+      expect(submitSpy).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   test('a hiragana transcript submits BunPro\'s canonical katakana answer', async () => {
     addMetadata({
       'data-meta-input-mode': 'manual',
@@ -1881,6 +1911,17 @@ describe('startListener ippatsu mode (one-shot auto-submit on a miss)', () => {
     native.onresult({ resultIndex: 0, results: [finalResult('mistake')] });
     expect(document.getElementById('user-response').value).toBe('aaa');
   });
+
+  // The Japanese recognizer transcribes the English "incorrect", "wrong" and
+  // "mistake" as katakana, so they must still mark a reading card wrong.
+  test.each(['インコレクト', 'インコレクト。', 'いんこれくと', 'ロング', 'ミステイク', 'ミステーク'])(
+    '"%s" on a reading question marks the card wrong',
+    async (transcript) => {
+      const native = await loadCard('Reading', {});
+      native.onresult({ resultIndex: 0, results: [finalResult(transcript)] });
+      expect(document.getElementById('user-response').value).toBe('あああ');
+    },
+  );
 
   test('muting cancels a matched interim instead of submitting it once muted', async () => {
     const native = await loadCard('Reading', {});

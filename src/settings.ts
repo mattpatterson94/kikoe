@@ -19,7 +19,7 @@ export interface Settings {
   transcript_position: 'top' | 'bottom';
   show_help_button: boolean;
   keep_screen_awake: boolean;
-  // Experimental. See checkAnswer in src/flashcards.ts.
+  // See checkAnswer in src/flashcards.ts.
   strict_kanji_readings: boolean;
   // Not user-facing: flipped to true (via content.ts) after the one-time
   // help-discovery hint has been shown, so it never reappears.
@@ -38,7 +38,7 @@ export const defaults: Settings = {
   transcript_position: 'top',
   show_help_button: true,
   keep_screen_awake: true,
-  strict_kanji_readings: false,
+  strict_kanji_readings: true,
   help_hint_shown: false,
 };
 

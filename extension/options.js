@@ -9,7 +9,7 @@ const defaults = {
   transcript_position: 'top',
   show_help_button: true,
   keep_screen_awake: true,
-  strict_kanji_readings: false,
+  strict_kanji_readings: true,
   debug: false,
   customCorrections: [],
 };
@@ -270,7 +270,24 @@ function populateForm(settings) {
   renderCorrections(settings.customCorrections);
 }
 
+// Mirrors migrateSettings in content.ts, which can't be imported here. Runs
+// before the form is populated so a pre-migration value is never shown or
+// re-saved.
+const settingsVersionKey = 'settings_version';
+const settingsVersion = 1;
+
+async function migrateSettings() {
+  const stored = await chrome.storage.sync.get([settingsVersionKey, 'strict_kanji_readings']);
+  const version = stored[settingsVersionKey] ?? 0;
+  if (version >= settingsVersion) return;
+  const patch = { [settingsVersionKey]: settingsVersion };
+  // v1: strict kanji readings became the default; flip the old stored false.
+  if (version < 1 && stored.strict_kanji_readings === false) patch.strict_kanji_readings = true;
+  await chrome.storage.sync.set(patch);
+}
+
 async function load() {
+  await migrateSettings();
   const [stored, discovery] = await Promise.all([
     chrome.storage.sync.get(Object.keys(defaults)),
     chrome.storage.local.get(apiTokenDiscoveryStatusKey),
