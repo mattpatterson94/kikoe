@@ -57,6 +57,7 @@ struct SessionScreen: View {
     @AppStorage(Pref.developerMode) private var developerMode = false
     @AppStorage(Pref.showDebugBar) private var showDebugBar = false
     @State private var pendingCorrection: TranscriptBubble.Correction?
+    @State private var choosingLanguage = false
 
     var body: some View {
         NavigationStack {
@@ -101,16 +102,16 @@ struct SessionScreen: View {
                             .presentationDetents([.medium, .large])
                     }
                 }
-                .confirmationDialog(
-                    "Create a speech correction?",
-                    isPresented: Binding(get: { pendingCorrection != nil }, set: { if !$0 { pendingCorrection = nil } }),
-                    titleVisibility: .visible,
-                    presenting: pendingCorrection
-                ) { correction in
-                    Button("Save and use “\(correction.intended)”") { session.confirmCorrection(correction) }
-                    Button("Cancel", role: .cancel) {}
-                } message: { correction in
-                    Text("Heard: \(correction.heard)\nIntended answer: \(correction.intended)\n\nFrom now on, hearing “\(correction.heard)” counts as “\(correction.intended)”.")
+                .sheet(isPresented: $choosingLanguage) {
+                    LanguageSheet(speech: speech) { choosingLanguage = false }
+                }
+                .sheet(isPresented: Binding(get: { pendingCorrection != nil }, set: { if !$0 { pendingCorrection = nil } })) {
+                    if let correction = pendingCorrection {
+                        CorrectionSheet(
+                            correction: correction,
+                            onSave: { session.confirmCorrection(correction); pendingCorrection = nil },
+                            onCancel: { pendingCorrection = nil })
+                    }
                 }
         }
     }
@@ -153,7 +154,9 @@ struct SessionScreen: View {
             SiteMenu(app: app)
         }
         ToolbarItem(placement: .topBarTrailing) {
-            SessionMenu(session: session, speech: SpeechService.shared) { app.showSettings = true }
+            SessionMenu(session: session, speech: SpeechService.shared,
+                        chooseLanguage: { choosingLanguage = true },
+                        openSettings: { app.showSettings = true })
         }
     }
 }
@@ -164,6 +167,7 @@ struct SessionScreen: View {
 struct SessionMenu: View {
     @ObservedObject var session: PageSession
     @ObservedObject var speech: SpeechService
+    let chooseLanguage: () -> Void
     let openSettings: () -> Void
 
     var body: some View {
@@ -171,18 +175,10 @@ struct SessionMenu: View {
             Button { session.reload() } label: {
                 Label("Reload Page", systemImage: "arrow.clockwise")
             }
-            Picker(selection: Binding(
-                get: { speech.languageOverride ?? "auto" },
-                set: { speech.overrideLanguage($0 == "auto" ? nil : $0) }
-            )) {
-                Text("Automatic").tag("auto")
-                Text("Japanese").tag(SpeechLanguage.japanese)
-                Text("English").tag(SpeechLanguage.english)
-            } label: {
-                Label("Listen In", systemImage: "character.bubble")
+            Button(action: chooseLanguage) {
+                Label("Listen In…", systemImage: "character.bubble")
                 Text(languageSummary)
             }
-            .pickerStyle(.menu)
             .disabled(!speech.listening)
             Divider()
             if session.helpButtonVisible {

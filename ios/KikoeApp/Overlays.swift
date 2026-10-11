@@ -287,3 +287,160 @@ struct HelpSheet: View {
         }
     }
 }
+
+/// Asks before saving a speech correction: what was heard, what it will
+/// count as from now on, and one clear way to save. A small sheet with an
+/// opaque background, so the page's colours can't wash out the text the way
+/// they did through the glass of a confirmation popover.
+struct CorrectionSheet: View {
+    let correction: TranscriptBubble.Correction
+    let onSave: () -> Void
+    let onCancel: () -> Void
+    @State private var height: CGFloat = 320
+
+    var body: some View {
+        VStack(spacing: 20) {
+            VStack(spacing: 6) {
+                Text("Save a Correction?").font(.title3.weight(.semibold))
+                Text("Next time Kikoe hears this, it counts as your answer.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            HStack(spacing: 12) {
+                column("Heard", correction.heard, emphasised: false)
+                Image(systemName: "arrow.right")
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(.tertiary)
+                    .accessibilityHidden(true)
+                column("Counts as", correction.intended, emphasised: true)
+            }
+            .padding(16)
+            .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .accessibilityElement(children: .combine)
+
+            SheetButtons(primary: "Save Correction", secondary: "Not Now", onPrimary: onSave, onSecondary: onCancel)
+        }
+        .padding(.horizontal, 24)
+        .padding(.top, 28)
+        .padding(.bottom, 12)
+        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height = $0 }
+        .presentationDetents([.height(height)])
+        .presentationDragIndicator(.hidden)
+        .presentationBackground(Color(.systemBackground))
+    }
+
+    private func column(_ title: String, _ value: String, emphasised: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(title.uppercased())
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(.secondary)
+            Text(value)
+                .font(.body.weight(emphasised ? .semibold : .regular))
+                .lineLimit(2)
+                .minimumScaleFactor(0.8)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+/// A full-width prominent action over a plain one, each a full-height
+/// target with room between them, as at the foot of a system sheet.
+struct SheetButtons: View {
+    let primary: String
+    let secondary: String
+    let onPrimary: () -> Void
+    let onSecondary: () -> Void
+
+    var body: some View {
+        VStack(spacing: 10) {
+            Button(action: onPrimary) {
+                Text(primary).font(.body.weight(.semibold)).frame(maxWidth: .infinity, minHeight: 30)
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.large)
+            Button(role: .cancel, action: onSecondary) {
+                Text(secondary).font(.body.weight(.medium)).frame(maxWidth: .infinity, minHeight: 30)
+            }
+            .buttonStyle(.bordered)
+            .tint(.secondary)
+            .controlSize(.large)
+        }
+    }
+}
+
+/// Listen In, from the More menu: which language the recognizer listens in
+/// for this card. A small opaque sheet with large rows rather than a nested
+/// menu, whose glass let the page show through the text.
+struct LanguageSheet: View {
+    @ObservedObject var speech: SpeechService
+    let onDone: () -> Void
+    @State private var height: CGFloat = 360
+
+    private var options: [(id: String?, title: String, detail: String?)] {
+        let auto = speech.pageLocale.isEmpty ? nil : "\(SpeechLanguage.name(speech.pageLocale)) for this card"
+        return [
+            (nil, "Automatic", auto),
+            (SpeechLanguage.japanese, "Japanese", nil),
+            (SpeechLanguage.english, "English", nil),
+        ]
+    }
+
+    var body: some View {
+        VStack(spacing: 20) {
+            VStack(spacing: 6) {
+                Text("Listen In").font(.title3.weight(.semibold))
+                Text("If Kikoe picked the wrong language, choose one for this card. The next card goes back to Automatic.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            VStack(spacing: 0) {
+                ForEach(Array(options.enumerated()), id: \.offset) { index, option in
+                    if index > 0 { Divider().padding(.leading, 16) }
+                    Button {
+                        speech.overrideLanguage(option.id)
+                        onDone()
+                    } label: {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(option.title).font(.body).foregroundStyle(.primary)
+                                if let detail = option.detail {
+                                    Text(detail).font(.footnote).foregroundStyle(.secondary)
+                                }
+                            }
+                            Spacer()
+                            if speech.languageOverride == option.id {
+                                Image(systemName: "checkmark").font(.body.weight(.semibold)).foregroundStyle(.tint)
+                            }
+                        }
+                        .padding(.horizontal, 16)
+                        .frame(minHeight: 52)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityAddTraits(speech.languageOverride == option.id ? .isSelected : [])
+                }
+            }
+            .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+
+            Button(action: onDone) {
+                Text("Done").font(.body.weight(.medium)).frame(maxWidth: .infinity, minHeight: 30)
+            }
+            .buttonStyle(.bordered)
+            .tint(.secondary)
+            .controlSize(.large)
+        }
+        .padding(.horizontal, 24)
+        .padding(.top, 28)
+        .padding(.bottom, 12)
+        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height = $0 }
+        .presentationDetents([.height(height)])
+        .presentationDragIndicator(.hidden)
+        .presentationBackground(Color(.systemBackground))
+    }
+}
