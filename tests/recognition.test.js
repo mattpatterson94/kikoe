@@ -50,6 +50,8 @@ describe('createRecognition', () => {
   test('exposes restart by aborting the active recognition session', () => {
     const recognition = createRecognition('ja-JP', vi.fn());
     const native = recognitionInstances[0];
+    recognition.start();
+    native.nativeStart.mockClear();
 
     recognition.restart();
 
@@ -61,23 +63,117 @@ describe('createRecognition', () => {
     vi.stubGlobal('webkitSpeechRecognition', MockSpeechRecognitionWithoutAbort);
     const recognition = createRecognition('ja-JP', vi.fn());
     const native = recognitionInstances[0];
+    recognition.start();
+    native.nativeStart.mockClear();
 
     recognition.restart();
 
     expect(native.nativeStop).toHaveBeenCalledTimes(1);
   });
 
-  test('restart still auto-restarts the recognizer once the session ends', () => {
+  test('restart starts directly when no session is running', () => {
     const recognition = createRecognition('ja-JP', vi.fn());
     const native = recognitionInstances[0];
-
-    recognition.restart();
-    // Chrome reports its own abort as an error before ending the session.
-    native.onerror({ error: 'aborted' });
+    recognition.start();
+    native.onend();
+    native.nativeStart.mockClear();
+    native.nativeStart.mockImplementationOnce(() => {});
+    recognition.pause();
     native.onend();
 
+    recognition.restart();
+
+    expect(native.nativeAbort).not.toHaveBeenCalled();
     expect(native.nativeStart).toHaveBeenCalledTimes(1);
-    expect(recognition.isPaused()).toBe(false);
+  });
+
+  // iOS 27 WebKit throws InvalidStateError for a start() issued from onend;
+  // swallowing it left the mic dead after the first answer.
+  test('retries a start refused while no session is running', () => {
+    vi.useFakeTimers();
+    try {
+      const recognition = createRecognition('ja-JP', vi.fn());
+      const native = recognitionInstances[0];
+      recognition.start();
+      native.nativeStart.mockClear();
+      native.nativeStart.mockImplementationOnce(() => {
+        throw new DOMException('already started', 'InvalidStateError');
+      });
+      // A healthy-length session, so onend restarts without backoff.
+      vi.advanceTimersByTime(1500);
+
+      native.onend();
+      expect(native.nativeStart).toHaveBeenCalledTimes(1);
+
+      vi.advanceTimersByTime(300);
+      expect(native.nativeStart).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test('does not retry a start refused because a session is already running', () => {
+    vi.useFakeTimers();
+    try {
+      const recognition = createRecognition('ja-JP', vi.fn());
+      const native = recognitionInstances[0];
+      recognition.start();
+      native.nativeStart.mockClear();
+      native.nativeStart.mockImplementation(() => {
+        throw new DOMException('already started', 'InvalidStateError');
+      });
+
+      recognition.resume();
+      vi.advanceTimersByTime(1000);
+
+      expect(native.nativeStart).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test('pausing cancels a pending start retry', () => {
+    vi.useFakeTimers();
+    try {
+      const recognition = createRecognition('ja-JP', vi.fn());
+      const native = recognitionInstances[0];
+      recognition.start();
+      native.nativeStart.mockClear();
+      native.nativeStart.mockImplementationOnce(() => {
+        throw new DOMException('already started', 'InvalidStateError');
+      });
+      // A healthy-length session, so onend restarts without backoff.
+      vi.advanceTimersByTime(1500);
+
+      native.onend();
+      recognition.pause();
+      vi.advanceTimersByTime(1000);
+
+      expect(native.nativeStart).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test('restart still auto-restarts the recognizer once the session ends', () => {
+    vi.useFakeTimers();
+    try {
+      const recognition = createRecognition('ja-JP', vi.fn());
+      const native = recognitionInstances[0];
+      recognition.start();
+      native.nativeStart.mockClear();
+      vi.advanceTimersByTime(1500);
+
+      recognition.restart();
+      // Chrome reports its own abort as an error before ending the session.
+      native.onerror({ error: 'aborted' });
+      native.onend();
+
+      expect(native.nativeStart).toHaveBeenCalledTimes(1);
+      expect(recognition.isPaused()).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   // pause() is not a latency-sensitive path (blur, mute, help panel), and
@@ -249,7 +345,7 @@ describe('createRecognition', () => {
       expect(onError).not.toHaveBeenCalled();
     });
 
-    test.each(['not-allowed', 'service-not-allowed', 'audio-capture'])(
+    test.each(['not-allowed', 'service-not-allowed'])(
       'stops auto-restart after a %s error',
       (errorType) => {
         const recognition = createRecognition('ja-JP', vi.fn());
@@ -262,6 +358,54 @@ describe('createRecognition', () => {
         expect(recognition.isPaused()).toBe(true);
       }
     );
+
+    // iOS 27 Safari raises audio-capture transiently; treating it as fatal
+    // left the mic dead until a page reload.
+    test('retries with backoff after an audio-capture error instead of stopping', () => {
+      vi.useFakeTimers();
+      try {
+        const recognition = createRecognition('ja-JP', vi.fn());
+        const native = recognitionInstances[0];
+
+        native.onerror({ error: 'audio-capture' });
+        native.onend();
+
+        expect(recognition.isPaused()).toBe(false);
+        expect(native.nativeStart).not.toHaveBeenCalled();
+        vi.advanceTimersByTime(2000);
+        expect(native.nativeStart).toHaveBeenCalledTimes(1);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    test('calls onRecover when capture starts again after a reported error', () => {
+      const onRecover = vi.fn();
+      createRecognition('ja-JP', vi.fn(), vi.fn(), onRecover);
+      const native = recognitionInstances[0];
+
+      native.onaudiostart();
+      expect(onRecover).not.toHaveBeenCalled();
+
+      native.onerror({ error: 'audio-capture' });
+      native.onaudiostart();
+      expect(onRecover).toHaveBeenCalledTimes(1);
+
+      // Only once per error, not on every routine session cycle afterwards.
+      native.onaudiostart();
+      expect(onRecover).toHaveBeenCalledTimes(1);
+    });
+
+    test('does not call onRecover for errors that were never reported', () => {
+      const onRecover = vi.fn();
+      createRecognition('ja-JP', vi.fn(), vi.fn(), onRecover);
+      const native = recognitionInstances[0];
+
+      native.onerror({ error: 'no-speech' });
+      native.onaudiostart();
+
+      expect(onRecover).not.toHaveBeenCalled();
+    });
 
     test('does not stop auto-restart for a transient network error', () => {
       const recognition = createRecognition('ja-JP', vi.fn());

@@ -126,18 +126,21 @@ describe('startListener recognition error handling', () => {
     expect(native.nativeStart.mock.calls.length).toBe(callsBeforeError);
   });
 
-  test('missing microphone shows no-mic and stops the restart loop', async () => {
+  // Not fatal any more (iOS 27 Safari raises it transiently) — the retry
+  // itself is covered in recognition.test.js; here, the indicator must not
+  // stay stuck on "no microphone" once capture is back.
+  test('audio-capture error shows no-mic and clears once capture resumes', async () => {
     stampConfig();
     await importApp();
 
     const native = MockSpeechRecognition.instances[0];
-    const callsBeforeError = native.nativeStart.mock.calls.length;
     native.onerror({ error: 'audio-capture' });
-    native.onend();
 
     const label = document.getElementById('kikoe-idle-label');
     expect(label.textContent).toMatch(/no microphone found/i);
-    expect(native.nativeStart.mock.calls.length).toBe(callsBeforeError);
+
+    native.onaudiostart();
+    expect(label.textContent).not.toMatch(/no microphone found/i);
   });
 
   test('network error shows reconnecting and does not crash', async () => {
@@ -695,6 +698,50 @@ describe('startListener mute/pause control', () => {
     const label = document.getElementById('kikoe-idle-label');
     expect(label.textContent).toBe('Muted');
     expect(native.nativeStop.mock.calls.length).toBeGreaterThan(stopsBefore);
+  });
+
+  // On iOS 27, taking the screen wake lock while recognition is capturing
+  // cuts off the mic for good ('audio-capture', then silent sessions).
+  test('gives up the wake lock after it costs the microphone', async () => {
+    const sentinels = [];
+    const request = vi.fn(async () => {
+      const sentinel = new EventTarget();
+      sentinel.released = false;
+      sentinel.release = vi.fn(async () => { sentinel.released = true; });
+      sentinels.push(sentinel);
+      return sentinel;
+    });
+    vi.stubGlobal('navigator', { ...navigator, wakeLock: { request } });
+    setReviewCardDOM();
+    stampConfig({ hasApiToken: true, settings: { keep_screen_awake: true } });
+    await importApp();
+    await vi.waitFor(() => expect(request).toHaveBeenCalledTimes(1));
+
+    const native = MockSpeechRecognition.instances[0];
+    native.onerror({ error: 'audio-capture' });
+    await vi.waitFor(() => expect(sentinels[0].release).toHaveBeenCalled());
+
+    // Mute then unmute would normally re-request the lock.
+    const indicator = document.getElementById('kikoe-idle');
+    indicator.click();
+    indicator.click();
+    await Promise.resolve();
+    expect(request).toHaveBeenCalledTimes(1);
+  });
+
+  test('keeps the wake lock through errors other than audio-capture', async () => {
+    const release = vi.fn(async () => {});
+    const request = vi.fn(async () => Object.assign(new EventTarget(), { released: false, release }));
+    vi.stubGlobal('navigator', { ...navigator, wakeLock: { request } });
+    setReviewCardDOM();
+    stampConfig({ hasApiToken: true, settings: { keep_screen_awake: true } });
+    await importApp();
+    await vi.waitFor(() => expect(request).toHaveBeenCalledTimes(1));
+
+    MockSpeechRecognition.instances[0].onerror({ error: 'network' });
+    await Promise.resolve();
+
+    expect(release).not.toHaveBeenCalled();
   });
 
   test('clicking the idle indicator toggles mute then resume', async () => {

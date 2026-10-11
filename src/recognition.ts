@@ -4,12 +4,22 @@
 // reading is often still present among the engine's lower-ranked guesses, so
 // ask for several and let the caller check all of them instead of only the
 // top pick.
+import { debugLog } from './logger';
+
 const MAX_ALTERNATIVES = 5;
 
-// Errors after which retrying without backoff would just hot-loop against a
-// permission dialog or a missing device — the auto-restart in onend must stop.
+// Errors after which retrying would just hot-loop against a permission
+// dialog — the auto-restart in onend must stop.
+//
+// 'audio-capture' is deliberately not here. It used to be, on the theory that
+// it meant "no microphone", but Safari on iOS 27 raises it transiently — an
+// audio-session interruption, or a restart that lands before the previous
+// session has released the mic — and treating it as fatal left the
+// recognizer dead for good while the indicator claimed there was no
+// microphone. The restart backoff below already keeps a genuinely missing
+// device from spinning, so it's retried like any other unhealthy session.
 const FATAL_ERRORS = new Set<SpeechRecognitionErrorCode>([
-  'not-allowed', 'service-not-allowed', 'audio-capture',
+  'not-allowed', 'service-not-allowed',
 ]);
 
 // Unhealthy sessions back off geometrically instead of restarting
@@ -39,6 +49,19 @@ const MIN_HEALTHY_SESSION_MS = 1000;
 const LIVENESS_TIMEOUT_MS = 45000;
 const LIVENESS_CHECK_INTERVAL_MS = 5000;
 
+// WebKit (seen on iOS 27) can still consider the previous session live while
+// it dispatches 'end', so a start() issued from onend throws InvalidStateError.
+// Swallowing that left nothing running and nothing scheduled to try again —
+// the mic worked for one answer and then went dead. A start refused while no
+// session of ours is running is retried after this delay instead.
+const START_RETRY_MS = 250;
+
+// Checked by name rather than instanceof Error: DOMException only inherits
+// from Error in some environments.
+function isInvalidStateError(err: unknown): boolean {
+  return typeof err === 'object' && err !== null && 'name' in err && err.name === 'InvalidStateError';
+}
+
 export type TranscriptCallback = (transcripts: string[], isFinal: boolean, resultId: string) => void;
 
 // The native recognizer, extended with pause/resume/restart controls that
@@ -54,6 +77,7 @@ export function createRecognition(
   lang: string | (() => string),
   callback: TranscriptCallback,
   onError?: (error: SpeechRecognitionErrorCode) => void,
+  onRecover?: () => void,
 ): KikoeRecognition | null {
   if (!('webkitSpeechRecognition' in window)) {
     console.error('[kikoe] web speech not supported by this browser!');
@@ -75,9 +99,19 @@ export function createRecognition(
   let unhealthyRestarts = 0;
   let sessionStartedAt = 0;
   let sawErrorThisSession = false;
+  // Set once an error has been reported to onError, and cleared by the next
+  // capture that actually starts — so the caller can retract whatever error
+  // state it showed without waiting for the user to say something.
+  let errorReported = false;
   // Last sign of life from the engine, for the liveness watchdog below.
   let lastActivityAt = Date.now();
   let sessionId = 0;
+  // Whether a session we started is still running — true from a successful
+  // start() until its 'end'. Distinguishes an InvalidStateError that means
+  // "already listening" (harmless) from one that means "the engine refused
+  // and nothing is listening" (must retry).
+  let sessionActive = false;
+  let startRetryTimer: ReturnType<typeof setTimeout> | undefined;
   const start = recognition.start.bind(recognition);
   const stop = recognition.stop.bind(recognition);
   // stop() keeps the session alive until the engine has finished processing
@@ -89,14 +123,22 @@ export function createRecognition(
   const abort = typeof recognition.abort === 'function' ? recognition.abort.bind(recognition) : null;
 
   function safeStart(): void {
+    clearTimeout(startRetryTimer);
     recognition.lang = getLang();
     sessionStartedAt = Date.now();
     sawErrorThisSession = false;
     try {
       start();
       sessionId++;
+      sessionActive = true;
+      debugLog('recognition started', recognition.lang);
     } catch (err) {
-      if (!(err instanceof Error) || err.name !== 'InvalidStateError') throw err;
+      if (!isInvalidStateError(err)) throw err;
+      if (sessionActive) return;
+      debugLog('recognition start refused; retrying');
+      startRetryTimer = setTimeout(() => {
+        if (shouldAutoRestart && !sessionActive) safeStart();
+      }, START_RETRY_MS);
     }
   }
 
@@ -104,7 +146,7 @@ export function createRecognition(
     try {
       stop();
     } catch (err) {
-      if (!(err instanceof Error) || err.name !== 'InvalidStateError') throw err;
+      if (!isInvalidStateError(err)) throw err;
     }
   }
 
@@ -116,14 +158,19 @@ export function createRecognition(
     try {
       abort();
     } catch (err) {
-      if (!(err instanceof Error) || err.name !== 'InvalidStateError') throw err;
+      if (!isInvalidStateError(err)) throw err;
     }
   }
 
   // Capture beginning is a sign of life even when nothing is said, so it
   // keeps a silent-but-healthy recognizer from tripping the watchdog.
   recognition.onaudiostart = () => {
+    debugLog('recognition audio started');
     lastActivityAt = Date.now();
+    if (errorReported) {
+      errorReported = false;
+      onRecover?.();
+    }
   };
 
   recognition.onresult = (event) => {
@@ -148,6 +195,7 @@ export function createRecognition(
       return;
     }
     console.error('[kikoe] error occurred in recognition:', event.error);
+    debugLog('recognition error', event.error);
 
     if (FATAL_ERRORS.has(event.error)) {
       shouldAutoRestart = false;
@@ -155,10 +203,13 @@ export function createRecognition(
       sawErrorThisSession = true;
     }
 
+    errorReported = true;
     onError?.(event.error);
   };
 
   recognition.onend = () => {
+    sessionActive = false;
+    debugLog('recognition ended', { paused: !shouldAutoRestart });
     // A session is unhealthy if it reported an error or barely ran at all.
     // Anything else — including the engine's ordinary idle timeout during
     // silence — resets the streak and restarts without delay.
@@ -201,6 +252,7 @@ export function createRecognition(
 
   recognition.pause = () => {
     shouldAutoRestart = false;
+    clearTimeout(startRetryTimer);
     safeStop();
   };
 
@@ -210,9 +262,13 @@ export function createRecognition(
     safeStart();
   };
 
+  // With no session running there's no 'end' coming for onend to restart
+  // from, so aborting would do nothing — start directly instead. That's the
+  // case the liveness watchdog exists for.
   recognition.restart = () => {
     shouldAutoRestart = true;
-    safeAbort();
+    if (sessionActive) safeAbort();
+    else safeStart();
   };
 
   recognition.isPaused = () => {
