@@ -13,7 +13,7 @@ import type { RecognitionControls, TranscriptCallback } from './recognition';
 
 export const NATIVE_SPEECH_EVENT = 'kikoe:nativeSpeech';
 
-interface MessageHandler {
+export interface MessageHandler {
   postMessage(message: unknown): void;
 }
 

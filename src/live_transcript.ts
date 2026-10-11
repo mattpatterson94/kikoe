@@ -1,4 +1,5 @@
 import type { Settings } from './settings';
+import { isNativeUi, onNativeUiAction, postNativeUi } from './native_ui';
 
 const STYLE_ID = 'kikoe-transcript-styles';
 const TRANSCRIPT_FADE_DELAY_MS = 5000;
@@ -194,6 +195,8 @@ export function ensureCornerContainer(): HTMLElement {
 }
 
 export function createTranscriptContainer(settings: Settings): void {
+  // The native host draws the transcript itself (see native_ui.ts).
+  if (isNativeUi()) return;
   injectStyles();
   const container = document.createElement('div');
   container.id = 'kikoe-transcript-container';
@@ -204,6 +207,11 @@ export function createTranscriptContainer(settings: Settings): void {
 let COUNTER = 1;
 
 export function clearTranscript(): void {
+  if (isNativeUi()) {
+    nativeLastRaw = null;
+    postNativeUi({ type: 'clearTranscript' });
+    return;
+  }
   const container = document.querySelector('div#kikoe-transcript-container');
   if (!container) return;
   container.textContent = '';
@@ -226,6 +234,10 @@ function scheduleRemoval(el: HTMLElement): void {
 // clicks the indicator — used to let the mic be muted/unmuted by click
 // instead of only by voice command or tab visibility.
 export function showIdleIndicator(settings: Settings, onToggle?: () => void): void {
+  if (isNativeUi()) {
+    showNativeIndicator(onToggle);
+    return;
+  }
   if (!settings.transcript) return;
   if (document.getElementById('kikoe-idle')) return;
 
@@ -272,7 +284,57 @@ export function showIdleIndicator(settings: Settings, onToggle?: () => void): vo
 
 const ERROR_STYLED_STATES = new Set(['error', 'mic-denied', 'no-mic', 'unsupported-browser', 'cannot-read-page']);
 
+function indicatorLabel(state: string): string {
+  if (state === 'loading') return 'Loading…';
+  if (state === 'retrying') return 'Retrying…';
+  if (state === 'restarting') return 'Restarting…';
+  if (state === 'reconnecting') return 'Reconnecting…';
+  if (state === 'paused') return 'Paused';
+  if (state === 'muted') return 'Muted';
+  if (state === 'no-token') return '⚠ No API token';
+  if (state === 'unsupported') return '⚠ Unsupported card type';
+  if (state === 'unsupported-browser') return '⚠ Voice recognition not supported by this browser';
+  if (state === 'mic-denied') return '⚠ Microphone access denied';
+  if (state === 'no-mic') return '⚠ No microphone found';
+  if (state === 'error') return '⚠ Subjects failed to load';
+  if (state === 'cannot-read-page') return "⚠ Can't read this page";
+  return 'Listening';
+}
+
+// The native indicator is part of the app's chrome, so unlike the DOM chip
+// it shows whether or not the transcript setting is on.
+let nativeIndicatorState = 'listening';
+
+function postNativeIndicator(state: string): void {
+  nativeIndicatorState = state;
+  postNativeUi({
+    type: 'indicator',
+    state,
+    label: indicatorLabel(state),
+    tone: ERROR_STYLED_STATES.has(state) ? 'error' : state === 'muted' ? 'muted' : 'normal',
+  });
+}
+
+function showNativeIndicator(onToggle?: () => void): void {
+  if (onToggle) {
+    // Same routing as the DOM chip's click: with no token, the token is the
+    // problem, not the mic.
+    onNativeUiAction('indicatorTapped', () => {
+      if (nativeIndicatorState === 'no-token') {
+        document.dispatchEvent(new CustomEvent('kikoe:openApiTokenPage'));
+      } else {
+        onToggle();
+      }
+    });
+  }
+  postNativeIndicator('listening');
+}
+
 export function setIdleIndicatorState(state: string): void {
+  if (isNativeUi()) {
+    postNativeIndicator(state);
+    return;
+  }
   const label = document.getElementById('kikoe-idle-label');
   if (!label) return;
   const chip = document.getElementById('kikoe-idle');
@@ -286,20 +348,7 @@ export function setIdleIndicatorState(state: string): void {
         : 'Toggle voice input');
     }
   }
-  if (state === 'loading') label.textContent = 'Loading…';
-  else if (state === 'retrying') label.textContent = 'Retrying…';
-  else if (state === 'restarting') label.textContent = 'Restarting…';
-  else if (state === 'reconnecting') label.textContent = 'Reconnecting…';
-  else if (state === 'paused') label.textContent = 'Paused';
-  else if (state === 'muted') label.textContent = 'Muted';
-  else if (state === 'no-token') label.textContent = '⚠ No API token';
-  else if (state === 'unsupported') label.textContent = '⚠ Unsupported card type';
-  else if (state === 'unsupported-browser') label.textContent = '⚠ Voice recognition not supported by this browser';
-  else if (state === 'mic-denied') label.textContent = '⚠ Microphone access denied';
-  else if (state === 'no-mic') label.textContent = '⚠ No microphone found';
-  else if (state === 'error') label.textContent = '⚠ Subjects failed to load';
-  else if (state === 'cannot-read-page') label.textContent = "⚠ Can't read this page";
-  else label.textContent = 'Listening';
+  label.textContent = indicatorLabel(state);
 }
 
 // Turns a checkAnswer failure reason into a short, actionable hint shown
@@ -340,8 +389,38 @@ function requestCorrection(transcript: TranscriptInfo): void {
   }));
 }
 
+// Raw text of the last bubble sent to the native host, for the same
+// repeated-interim dedup the DOM path does against its previous chip.
+let nativeLastRaw: string | null = null;
+
+function logNativeTranscript(settings: Settings, transcript: TranscriptInfo): void {
+  const hasNewInfo = transcript.matched || transcript.reason;
+  if (transcript.raw === nativeLastRaw && !hasNewInfo) return;
+  nativeLastRaw = transcript.raw;
+
+  const isError = transcript.raw.startsWith('!!');
+  const hint = transcript.matched ? null : reasonHint(transcript);
+  const correction = isCorrectionCandidate(transcript) && transcript.correction
+    ? { heard: transcript.correction.heard.trim(), intended: transcript.correction.intended.trim() }
+    : null;
+  postNativeUi({
+    type: 'transcript',
+    text: isError ? transcript.raw.replace(/^!!\s*|\s*!!$/g, '') : transcript.raw,
+    detail: transcript.matched ? `→ ${transcript.matched}` : hint ? `— ${hint}` : null,
+    error: isError,
+    position: settings.transcript_position === 'bottom' ? 'bottom' : 'top',
+    correction,
+  });
+}
+
 export function logTranscript(settings: Settings, transcript: TranscriptInfo | string | null | undefined): void {
   if (!settings.transcript) return;
+  if (isNativeUi()) {
+    logNativeTranscript(settings, typeof transcript === 'object' && transcript !== null
+      ? transcript
+      : { raw: String(transcript) });
+    return;
+  }
   const container = document.querySelector<HTMLElement>('div#kikoe-transcript-container');
   if (!container) return;
 

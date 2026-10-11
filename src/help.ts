@@ -1,6 +1,7 @@
 import type { Settings } from './settings';
 import type { CommandSpec } from './commands';
 import { themeClass, ensureCornerContainer } from './live_transcript';
+import { isNativeUi, onNativeUiAction, postNativeUi } from './native_ui';
 
 const STYLE_ID = 'kikoe-help-styles';
 const HINT_FADE_DELAY_MS = 8000;
@@ -17,6 +18,14 @@ const TIPS = [
   'Click the Listening chip (or say "pause") to mute the mic; click it again to resume.',
   'Kikoe listens for Japanese on reading questions and English on meaning questions, switching automatically.',
   'If a word keeps getting misheard, add a fix under Custom Corrections in the extension settings.',
+];
+
+// The same tips in the iOS app's terms: taps instead of clicks, and its own
+// settings screen instead of the extension's.
+const NATIVE_TIPS = [
+  'Tap the Listening indicator (or say "pause") to mute the mic; tap it again to resume.',
+  TIPS[1],
+  'If a word keeps getting misheard, tap its "no match" bubble to save a correction, or edit Corrections in Settings.',
 ];
 
 function injectStyles(): void {
@@ -123,6 +132,12 @@ function injectStyles(): void {
 // once at startup and again on every settings change, so toggling the option
 // takes effect without a reload. Saying "help" works regardless of the chip.
 export function updateHelpChip(settings: Settings, onActivate: () => void): void {
+  if (isNativeUi()) {
+    onNativeUiAction('helpButtonTapped', onActivate);
+    postNativeUi({ type: 'helpButton', visible: settings.show_help_button });
+    if (!settings.show_help_button) closeHelpPanel();
+    return;
+  }
   const existing = document.getElementById('kikoe-help-chip');
   if (!settings.show_help_button) {
     existing?.remove();
@@ -151,7 +166,12 @@ export function updateHelpChip(settings: Settings, onActivate: () => void): void
   ensureCornerContainer().prepend(chip);
 }
 
+// Whether the native help sheet is showing; the host reports dismissal back
+// as a helpDismissed action.
+let nativeHelpOpen = false;
+
 export function isHelpPanelOpen(): boolean {
+  if (isNativeUi()) return nativeHelpOpen;
   return !!document.getElementById('kikoe-help-panel');
 }
 
@@ -185,6 +205,20 @@ function displayPhrases(spec: CommandSpec): string {
 
 export function openHelpPanel(settings: Settings, view: HelpView, onClose?: () => void): void {
   if (isHelpPanelOpen()) return;
+  if (isNativeUi()) {
+    nativeHelpOpen = true;
+    onCloseCallback = onClose ?? null;
+    onNativeUiAction('helpDismissed', () => closeHelpPanel());
+    postNativeUi({
+      type: 'help',
+      open: true,
+      language: view.language,
+      commands: view.commands.map((spec) => ({ phrases: displayPhrases(spec), description: spec.description })),
+      tips: NATIVE_TIPS,
+      guideUrl: README_URL,
+    });
+    return;
+  }
   injectStyles();
   onCloseCallback = onClose ?? null;
 
@@ -253,6 +287,10 @@ export function openHelpPanel(settings: Settings, view: HelpView, onClose?: () =
 // onClose, even if the panel element was already removed by a host-page
 // re-render — otherwise recognition would stay paused with no panel showing.
 export function closeHelpPanel(): void {
+  if (isNativeUi()) {
+    if (nativeHelpOpen) postNativeUi({ type: 'help', open: false });
+    nativeHelpOpen = false;
+  }
   document.removeEventListener('keydown', onDocumentKeydown, true);
   document.removeEventListener('click', onDocumentClick, true);
   document.getElementById('kikoe-help-panel')?.remove();
@@ -264,6 +302,10 @@ export function closeHelpPanel(): void {
 // One-time discovery nudge shown on the first session after the feature
 // lands (gated by the help_hint_shown flag — see app.ts / content.ts).
 export function showHelpHint(settings: Settings): void {
+  if (isNativeUi()) {
+    postNativeUi({ type: 'helpHint', text: 'New: say "help" or tap ? for voice commands' });
+    return;
+  }
   if (document.getElementById('kikoe-help-hint')) return;
   injectStyles();
   const el = document.createElement('div');
