@@ -232,14 +232,6 @@ export function submitAnswer(input: string): boolean {
   return true;
 }
 
-// The card markWrong() last submitted a placeholder answer for, so
-// bunpro_speed.ts can tell Kikoe's own deliberate miss (ippatsu burning a
-// shot, the "wrong" command) apart from a real answer BunPro happened to grade
-// wrong. Pinned to the card rather than a bare boolean: a flag left unconsumed
-// — the click never registered, the card advanced first — must not be read as
-// a self-submitted miss on a later one.
-let selfWrongCardId: number | string | null = null;
-
 function currentCardId(): number | string | null {
   const meta = getMetadata();
   if (!meta) return null;
@@ -248,22 +240,7 @@ function currentCardId(): number | string | null {
 
 export function markWrong(): boolean {
   const incorrect = getLanguage() === 'en-US' ? 'aaa' : 'あああ';
-  if (!submitAnswer(incorrect)) return false;
-  // Reuse submitAnswer's pre-click snapshot rather than re-reading the DOM:
-  // by now the click has already run BunPro's grading synchronously, so the
-  // metadata element may have been re-rendered and currentCardId() can come
-  // back null — which would silently drop the flag and never open item info.
-  selfWrongCardId = lastSubmittedCardId;
-  return true;
-}
-
-// Reads and clears in one go: the flag applies to the next result to land and
-// nothing after it, whether or not that result turns out to be the matching
-// card's.
-export function takeSelfSubmittedWrongCardId(): number | string | null {
-  const id = selfWrongCardId;
-  selfWrongCardId = null;
-  return id;
+  return submitAnswer(incorrect);
 }
 
 // Best-effort: only needed for accounts without BunPro's native Lightning
@@ -292,13 +269,72 @@ export function gradeBad(): boolean {
   return clickLabeledButton(RevealLabels.bad);
 }
 
+// Opening the info panel scrolls the page down to it, which on a phone or
+// tablet carries the card itself off screen. Pin the page where it was for a
+// moment: block scrollIntoView, the usual way a panel brings itself into view,
+// and put the window back if it moves anyway. Held long enough to cover a
+// panel that renders a beat after the click, and no longer, so it can't fight
+// the user scrolling on purpose afterwards.
+const SCROLL_HOLD_MS = 1500;
+
+// The hold in progress, if any. A second hold while one is running only
+// restarts its timer: stacking them would have the later one save the no-op
+// as the "original" scrollIntoView and restore that for good.
+let scrollHoldTimer: ReturnType<typeof setTimeout> | undefined;
+let releaseScroll = (): void => {};
+
+function holdScroll(): void {
+  if (scrollHoldTimer !== undefined) {
+    clearTimeout(scrollHoldTimer);
+    scrollHoldTimer = setTimeout(releaseScroll, SCROLL_HOLD_MS);
+    return;
+  }
+  const x = window.scrollX;
+  const y = window.scrollY;
+  // 'instant' rather than the default: a page with smooth scrolling in its CSS
+  // would otherwise animate each restore and visibly wobble.
+  const restore = () => {
+    if (window.scrollX !== x || window.scrollY !== y) {
+      window.scrollTo({ left: x, top: y, behavior: 'instant' });
+    }
+  };
+  const scrollIntoView = Element.prototype.scrollIntoView;
+  Element.prototype.scrollIntoView = function () {};
+  window.addEventListener('scroll', restore);
+  releaseScroll = () => {
+    Element.prototype.scrollIntoView = scrollIntoView;
+    window.removeEventListener('scroll', restore);
+    scrollHoldTimer = undefined;
+  };
+  scrollHoldTimer = setTimeout(releaseScroll, SCROLL_HOLD_MS);
+}
+
 // Opening item info is idempotent by construction: once the panel is open
 // BunPro's button reads "Hide Info", which no longer matches InfoLabels, so a
 // repeat call can't toggle it back shut.
 export function clickInfo(): void {
-  if (clickLabeledButton(InfoLabels)) return;
-  const hint = document.querySelector<HTMLButtonElement>(Selectors.Hint);
-  if (hint) hint.click();
+  const button = findLabeledButton(InfoLabels) ?? document.querySelector<HTMLButtonElement>(Selectors.Hint);
+  if (!button) return;
+  holdScroll();
+  button.click();
+}
+
+function bareLabel(text: string): string {
+  return text.replace(/[^\p{L}\s]/gu, '').trim().toLowerCase();
+}
+
+// The graded card's "✓ Answer" button, which swaps what the card shows from
+// the answer given to the correct one. Matched on the whole label, ignoring
+// the tick: the word-boundary match the other buttons use would also catch a
+// Reveal & Grade card's "Show Answer".
+export function clickAnswer(): boolean {
+  for (const button of document.querySelectorAll('button')) {
+    if (bareLabel(button.textContent ?? '') === 'answer' || bareLabel(button.title) === 'answer') {
+      button.click();
+      return true;
+    }
+  }
+  return false;
 }
 
 // The BunPro counterpart of wanikani.ts's canReadPage. BunPro's own class

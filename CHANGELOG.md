@@ -16,11 +16,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the correct one. Only the card Kikoe itself answered is affected: a new card
   that hasn't yet cleared the previous one's state still accepts an answer, so a
   fast reply is never dropped.
-- On BunPro, "Show item info on wrong answer" now only opens the panel for a
-  miss Kikoe itself submitted — ippatsu burning a shot, or the "wrong" command
-  — rather than for every wrong answer. A real answer that BunPro simply graded
-  wrong leaves the card alone, since BunPro is already showing the correct
-  answer there and clicking into the card re-renders on top of that reveal.
+- On BunPro, "Show item info on wrong answer" now also switches the card to the
+  correct answer, by pressing BunPro's ✓ Answer button once the info panel is
+  open, and the panel no longer scrolls the page down to itself. Opening the
+  panel used to re-render the card over BunPro's reveal and jump the page away
+  from it, so on a phone or tablet the answer ended up off screen and hidden.
   WaniKani is unchanged.
 
 ### Fixed

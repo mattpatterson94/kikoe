@@ -1,7 +1,7 @@
 import {
   getLanguage, getContext, didContextChange,
-  inputAnswer, submitAnswer, markWrong, takeSelfSubmittedWrongCardId,
-  clickNext, clickInfo,
+  inputAnswer, submitAnswer, markWrong,
+  clickNext, clickInfo, clickAnswer,
   reveal, gradeGood, gradeBad,
   createCardWatcher, canReadPage,
 } from '../src/bunpro';
@@ -344,44 +344,7 @@ describe('inputAnswer on a graded card', () => {
   });
 });
 
-// ── takeSelfSubmittedWrongCardId ──────────────────────────────────────────────
-
-describe('takeSelfSubmittedWrongCardId', () => {
-  // The flag is module state that outlives a single test, as it outlives a
-  // single card in the page — drain whatever an earlier test left behind.
-  beforeEach(() => { takeSelfSubmittedWrongCardId(); });
-
-  test('is null until markWrong submits', () => {
-    addMetadata();
-    expect(takeSelfSubmittedWrongCardId()).toBeNull();
-  });
-
-  test('reports the card markWrong submitted for', () => {
-    addMetadata();
-    addInput();
-    markWrong();
-    expect(takeSelfSubmittedWrongCardId()).toBe(806);
-  });
-
-  test('clears after a single read', () => {
-    addMetadata();
-    addInput();
-    markWrong();
-    expect(takeSelfSubmittedWrongCardId()).toBe(806);
-    expect(takeSelfSubmittedWrongCardId()).toBeNull();
-  });
-
-  // A miss the user typed themselves must stay indistinguishable from any
-  // other card Kikoe never touched.
-  test('stays null when markWrong could not submit', () => {
-    addMetadata();
-    // No input/button on the page, so the submission never lands.
-    expect(markWrong()).toBe(false);
-    expect(takeSelfSubmittedWrongCardId()).toBeNull();
-  });
-});
-
-// ── clickNext / clickInfo ─────────────────────────────────────────────────────
+// ── clickNext / clickInfo / clickAnswer────────────────────────────────────────
 
 describe('clickNext', () => {
   test('clicks a button whose title mentions "Next question"', () => {
@@ -444,6 +407,14 @@ describe('gradeGood / gradeBad', () => {
 });
 
 describe('clickInfo', () => {
+  // clickInfo holds the page's scroll on a timer; run it out so one test's
+  // hold can't leak into the next.
+  beforeEach(() => { vi.useFakeTimers(); });
+  afterEach(() => {
+    vi.runOnlyPendingTimers();
+    vi.useRealTimers();
+  });
+
   // The button a graded card actually renders, alongside Undo/Alternatives.
   test('clicks the "Show Info" button on a graded card', () => {
     const button = addButton('Show Info');
@@ -479,6 +450,117 @@ describe('clickInfo', () => {
 
   test('does not throw when no info button is present', () => {
     expect(() => clickInfo()).not.toThrow();
+  });
+});
+
+describe('clickInfo scroll hold', () => {
+  const realScrollIntoView = Element.prototype.scrollIntoView;
+  let scrollIntoView;
+  let scrollTo;
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    // jsdom implements neither, so stand them in.
+    scrollIntoView = vi.fn();
+    Element.prototype.scrollIntoView = scrollIntoView;
+    scrollTo = vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    vi.runOnlyPendingTimers();
+    vi.useRealTimers();
+    scrollTo.mockRestore();
+    Element.prototype.scrollIntoView = realScrollIntoView;
+    setWindowScroll(0);
+  });
+
+  function setWindowScroll(y) {
+    Object.defineProperty(window, 'scrollY', { value: y, configurable: true });
+  }
+
+  // Stands in for BunPro's panel bringing itself into view as it opens.
+  function addInfoButtonThatScrolls() {
+    const panel = document.createElement('div');
+    document.body.appendChild(panel);
+    const button = addButton('Show Info');
+    button.addEventListener('click', () => panel.scrollIntoView());
+    return { button, panel };
+  }
+
+  test('stops the opening panel from scrolling itself into view', () => {
+    addInfoButtonThatScrolls();
+    clickInfo();
+    expect(scrollIntoView).not.toHaveBeenCalled();
+  });
+
+  test('gives scrollIntoView back once the hold ends', () => {
+    const { panel } = addInfoButtonThatScrolls();
+    clickInfo();
+    vi.advanceTimersByTime(1500);
+    panel.scrollIntoView();
+    expect(scrollIntoView).toHaveBeenCalledTimes(1);
+  });
+
+  test('puts the window back if the page scrolls anyway', () => {
+    addButton('Show Info');
+    setWindowScroll(120);
+    clickInfo();
+    setWindowScroll(900);
+    window.dispatchEvent(new Event('scroll'));
+    expect(scrollTo).toHaveBeenCalledWith({ left: 0, top: 120, behavior: 'instant' });
+  });
+
+  test('leaves the user free to scroll after the hold', () => {
+    addButton('Show Info');
+    clickInfo();
+    vi.advanceTimersByTime(1500);
+    setWindowScroll(900);
+    window.dispatchEvent(new Event('scroll'));
+    expect(scrollTo).not.toHaveBeenCalled();
+  });
+
+  test('an overlapping hold does not leave scrollIntoView disabled', () => {
+    const { panel } = addInfoButtonThatScrolls();
+    clickInfo();
+    vi.advanceTimersByTime(500);
+    clickInfo();
+    vi.advanceTimersByTime(1500);
+    panel.scrollIntoView();
+    expect(scrollIntoView).toHaveBeenCalledTimes(1);
+  });
+
+  test('does not hold the scroll when there is no button to click', () => {
+    const panel = document.createElement('div');
+    document.body.appendChild(panel);
+    clickInfo();
+    panel.scrollIntoView();
+    expect(scrollIntoView).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('clickAnswer', () => {
+  // The graded card's button renders a tick icon beside the word.
+  test('clicks the "✓ Answer" button', () => {
+    const button = addButton('✓ Answer');
+    expect(clickAnswer()).toBe(true);
+    expect(button.clicked).toBe(true);
+  });
+
+  test('matches by title as well as text', () => {
+    const button = addButton('', 'Answer');
+    expect(clickAnswer()).toBe(true);
+    expect(button.clicked).toBe(true);
+  });
+
+  test('does not mistake a Reveal & Grade "Show Answer" button for it', () => {
+    const reveal = addButton('Show Answer');
+    expect(clickAnswer()).toBe(false);
+    expect(reveal.clicked).toBeUndefined();
+  });
+
+  test('returns false when there is no Answer button', () => {
+    addButton('Show Info');
+    expect(clickAnswer()).toBe(false);
   });
 });
 
