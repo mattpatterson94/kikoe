@@ -43,7 +43,30 @@ interface SubjectCollection {
   pages?: { next_url?: string | null };
 }
 
+// One-shot migrations of stored settings, tracked by a version number in
+// sync storage. Mirrored in extension/options.js (plain JS, so it can't import
+// this) — the options page can be opened before any WaniKani tab runs the
+// content script, and must not show or re-save pre-migration values.
+export const SETTINGS_VERSION_KEY = 'settings_version';
+export const SETTINGS_VERSION = 1;
+
+export async function migrateSettings(): Promise<void> {
+  const stored = await chrome.storage.sync.get([SETTINGS_VERSION_KEY, 'strict_kanji_readings']) as {
+    settings_version?: number;
+    strict_kanji_readings?: boolean;
+  };
+  const version = stored.settings_version ?? 0;
+  if (version >= SETTINGS_VERSION) return;
+  const patch: Record<string, unknown> = { [SETTINGS_VERSION_KEY]: SETTINGS_VERSION };
+  // v1: strict kanji readings left experimental and became the default.
+  // Saving the options page stores every field, so most users have an
+  // explicit false they never chose — flip it once.
+  if (version < 1 && stored.strict_kanji_readings === false) patch.strict_kanji_readings = true;
+  await chrome.storage.sync.set(patch);
+}
+
 export async function getSettings(): Promise<StoredSettings> {
+  await migrateSettings();
   const keys = Object.keys(defaults);
   const stored = await chrome.storage.sync.get(keys);
   return { ...defaults, ...stored };

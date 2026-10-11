@@ -1,5 +1,8 @@
 import {
   getSettings,
+  migrateSettings,
+  SETTINGS_VERSION,
+  SETTINGS_VERSION_KEY,
   buildSafeConfig,
   getApiToken,
   extractApiTokenFromDocument,
@@ -107,6 +110,39 @@ describe('getSettings', () => {
     const settings = await getSettings();
     expect(settings.transcript).toBe(defaults.transcript);
     expect(settings.transcript_position).toBe(defaults.transcript_position);
+  });
+});
+
+// ── migrateSettings ───────────────────────────────────────────────────────────
+
+describe('migrateSettings', () => {
+  test('v1 flips a stored strict_kanji_readings false to true', async () => {
+    syncStore.strict_kanji_readings = false;
+    const settings = await getSettings();
+    expect(settings.strict_kanji_readings).toBe(true);
+    expect(syncStore.strict_kanji_readings).toBe(true);
+    expect(syncStore[SETTINGS_VERSION_KEY]).toBe(SETTINGS_VERSION);
+  });
+
+  test('a fresh install just records the version and keeps the default', async () => {
+    await migrateSettings();
+    expect(syncStore).toEqual({ [SETTINGS_VERSION_KEY]: SETTINGS_VERSION });
+    expect((await getSettings()).strict_kanji_readings).toBe(true);
+  });
+
+  test('runs only once, so turning the setting off afterwards sticks', async () => {
+    syncStore.strict_kanji_readings = false;
+    await migrateSettings();
+    syncStore.strict_kanji_readings = false;
+    const settings = await getSettings();
+    expect(settings.strict_kanji_readings).toBe(false);
+  });
+
+  test('leaves other stored settings untouched', async () => {
+    syncStore.strict_kanji_readings = false;
+    syncStore.turbo = false;
+    await migrateSettings();
+    expect(syncStore.turbo).toBe(false);
   });
 });
 

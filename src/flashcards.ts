@@ -119,6 +119,10 @@ function containsKanji(s: string): boolean {
   return KANJI_RE.test(s);
 }
 
+function isSingleKanji(s: string): boolean {
+  return [...s].length === 1 && containsKanji(s);
+}
+
 // User-defined corrections from settings: an array of { heard, intended }
 // pairs. Multiple pairs may share a heard string (like the built-in
 // '9': ['きゅう', 'く', 'くう'] homonym), so the lookup maps
@@ -330,17 +334,20 @@ export function checkAnswer(
   if (type === 'reading') {
     const acceptedReadings = (context.readings || []);
 
-    // On a kanji card the question *is* which reading to produce, so a
-    // transcript that came back as kanji can't answer it. Japanese speech
-    // recognition writes spoken readings back as kanji (say うえ, hear 上),
-    // and the dictionary transformers then expand that kanji into every
-    // reading it has — one of which is always the accepted one. Matching on
-    // that grades the card correct whichever reading was actually spoken.
-    // The kana is the only evidence of what the user said, so when strict
-    // mode is on, require it rather than reconstructing a reading from the
-    // prompt character. Vocabulary is unaffected: resolving 大人 → おとな is
-    // the dictionary's job there, and the word has one pronunciation.
-    if (strictKanjiReadings && context.category === 'kanji' && containsKanji(raw)) {
+    // When the prompt is a single kanji, the question *is* which reading to
+    // produce, so a transcript that came back as kanji can't answer it.
+    // Japanese speech recognition writes spoken readings back as kanji (say
+    // うえ or じょう, hear 上), and the dictionary transformers then expand
+    // that kanji into every reading it has — one of which is always the
+    // accepted one. Matching on that grades the card correct whichever
+    // reading was actually spoken. The kana is the only evidence of what the
+    // user said, so when strict mode is on, require it rather than
+    // reconstructing a reading from the prompt character. This covers kanji
+    // cards and one-kanji vocabulary (上 うえ, 人 ひと, 日 ひ), which have the
+    // same ambiguity. Longer vocabulary is unaffected: the recogniser picking
+    // 大人 is itself evidence the user said おとな.
+    const singleKanjiPrompt = context.category === 'kanji' || isSingleKanji(context.prompt ?? '');
+    if (strictKanjiReadings && singleKanjiPrompt && containsKanji(raw)) {
       return {
         success: false,
         error: false,
