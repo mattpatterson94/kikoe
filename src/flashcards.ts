@@ -367,9 +367,12 @@ function generateCandidates(transformers: CandidateGenerator[], raw: string): Ca
 export function checkAnswer(
   context: QuestionContext,
   transformers: CandidateGenerator[],
-  raw: string,
+  transcript: string,
   opts: CheckOptions = {},
 ): CheckResult {
+  // Some recognizers (iOS SpeechTranscriber) end every final with a full
+  // stop, and 麦。 or 大人。 would otherwise miss the dictionary entirely.
+  const raw = trimTrailingPunctuation(transcript);
   const { type } = context;
   const { fuzzyMeaning = false, corrections = [], strictKanjiReadings = false, particleSounds = false } = opts;
   const customLookup = buildCorrectionLookup(corrections);

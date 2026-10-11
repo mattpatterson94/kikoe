@@ -205,6 +205,13 @@ describe('reading questions', () => {
     expect(r.answer).toBe('せんだい');
   });
 
+  test.each(['仙台。', 'せんだい。', '仙台！'])('ignores the full stop iOS adds to %s', (heard) => {
+    const dict: Dictionary = { '仙台': [{ type: 'word', kana: ['せんだい'] }] };
+    const r = checkAnswer(ctx, makeTransformers(dict), heard);
+    expectSuccess(r);
+    expect(r.answer).toBe('せんだい');
+  });
+
   test('converts katakana input to hiragana', () => {
     const r = checkAnswer(ctx, makeTransformers(dictionary), 'センダイ');
     expectSuccess(r);
