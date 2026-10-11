@@ -24,12 +24,13 @@ enum Site: String, CaseIterable, Identifiable {
         }
     }
 
-    /// Stands in for the site's logo, which isn't ours to ship: 鰐 (wani)
-    /// and 文 (bun), on the site's tint.
-    var glyph: String {
+    /// The site's own icon (its apple-touch-icon / favicon), in the asset
+    /// catalog. Fine for a personal build; an App Store release would need
+    /// the sites' permission to show their marks.
+    var iconAsset: String {
         switch self {
-        case .wanikani: "鰐"
-        case .bunpro: "文"
+        case .wanikani: "SiteWaniKani"
+        case .bunpro: "SiteBunPro"
         }
     }
 
@@ -52,14 +53,12 @@ enum Site: String, CaseIterable, Identifiable {
         }
     }
 
-    /// Accent for the site switcher. Neither site publishes brand colours
-    /// (BunPro's manifest says "white"; WaniKani has none), so these are
-    /// picked to read as each site: WaniKani's radical-pink and the
-    /// orange-red of BunPro's logo.
+    /// Accent taken from each site's icon: WaniKani's mask-icon colour
+    /// (#1C46F5) and the red of BunPro's favicon.
     var tint: Color {
         switch self {
-        case .wanikani: Color(red: 1.0, green: 0.0, blue: 0.67)
-        case .bunpro: Color(red: 0.93, green: 0.36, blue: 0.20)
+        case .wanikani: Color(red: 0.11, green: 0.27, blue: 0.96)
+        case .bunpro: Color(red: 0.83, green: 0.38, blue: 0.36)
         }
     }
 

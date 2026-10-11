@@ -1,3 +1,4 @@
+import Accelerate
 import AVFoundation
 import Speech
 
@@ -55,6 +56,8 @@ final class MicCapture {
     private let audioEngine = AVAudioEngine()
     private var consumer: ((AVAudioPCMBuffer) -> Void)?
     private(set) var isRunning = false
+    /// Live input level for the listening bar's meter.
+    let level = MicLevel()
 
     var inputFormat: AVAudioFormat { audioEngine.inputNode.outputFormat(forBus: 0) }
 
@@ -76,7 +79,11 @@ final class MicCapture {
         input.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak self] buffer, _ in
             // Tap runs on a realtime audio thread; hop to main to keep the
             // consumer handoff simple. Fine for a spike.
-            Task { @MainActor in self?.consumer?(buffer) }
+            let rms = MicLevel.rms(buffer)
+            Task { @MainActor in
+                self?.level.push(rms)
+                self?.consumer?(buffer)
+            }
         }
         audioEngine.prepare()
         try audioEngine.start()
@@ -98,6 +105,29 @@ final class MicCapture {
         audioEngine.stop()
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
         isRunning = false
+        level.value = 0
+    }
+}
+
+/// How loud the microphone is right now, 0...1, smoothed for display: it
+/// jumps up with speech and eases back down, like a VU meter. Separate from
+/// MicCapture so only the meter redraws ~45 times a second.
+@MainActor
+final class MicLevel: ObservableObject {
+    @Published var value: Float = 0
+
+    func push(_ rms: Float) {
+        // -50 dBFS (a quiet room) to -12 dBFS (speaking close to the phone).
+        let db = 20 * log10(max(rms, 1e-6))
+        let target = min(max((db + 50) / 38, 0), 1)
+        value = target > value ? target : value * 0.82 + target * 0.18
+    }
+
+    nonisolated static func rms(_ buffer: AVAudioPCMBuffer) -> Float {
+        guard let samples = buffer.floatChannelData?[0], buffer.frameLength > 0 else { return 0 }
+        var result: Float = 0
+        vDSP_rmsqv(samples, 1, &result, vDSP_Length(buffer.frameLength))
+        return result
     }
 }
 

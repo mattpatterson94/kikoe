@@ -138,7 +138,10 @@ final class SyncSettings: ObservableObject {
         ExtensionStorage.set(area: "sync", items: patch)
     }
 
-    /// Mirrors src/settings.ts `defaults`.
+    /// Mirrors src/settings.ts `defaults`, except the transcript sits at the
+    /// bottom: on a phone that's where the thumb and eye already are, and
+    /// the native bar reads this value itself, so the page's own default
+    /// doesn't matter here.
     static let defaults: [String: Any] = [
         "debug": false,
         "turbo": true,
@@ -147,7 +150,7 @@ final class SyncSettings: ObservableObject {
         "ippatsu_reading": false,
         "transcript": true,
         "transcript_theme": "system",
-        "transcript_position": "top",
+        "transcript_position": "bottom",
         "show_help_button": true,
         "keep_screen_awake": true,
         "strict_kanji_readings": true,

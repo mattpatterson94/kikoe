@@ -36,6 +36,12 @@ final class SpeechService: ObservableObject {
     /// Set when the chosen engine can't serve the page's language and the
     /// service fell back to SFSpeechRecognizer for this run.
     @Published private(set) var fallbackReason: String?
+    /// The language the page asked for, before any override.
+    @Published private(set) var pageLocale = ""
+    /// Set from the nav bar menu when the page picked the wrong language for
+    /// a card (a meaning heard as Japanese, say). Lasts for that card only:
+    /// new hints or a new language from the page mean the card changed.
+    @Published private(set) var languageOverride: String?
 
     let mic = MicCapture()
     private(set) var engine: SpeechEngine
@@ -67,16 +73,24 @@ final class SpeechService: ObservableObject {
         if type == "start" {
             owner = session
             let lang = body["lang"] as? String ?? "ja-JP"
-            pageHints = body["hints"] as? [String] ?? []
-            Task { await start(lang: lang) }
+            let hints = body["hints"] as? [String] ?? []
+            if lang != pageLocale || hints != pageHints { languageOverride = nil }
+            pageLocale = lang
+            pageHints = hints
+            Task { await start(lang: languageOverride ?? lang) }
             return
         }
         guard session === owner else { return }
         switch type {
         case "hints":
             pageHints = body["hints"] as? [String] ?? []
-            currentHints = effectiveHints
-            engine.updateHints(effectiveHints)
+            if languageOverride != nil {
+                languageOverride = nil
+                relisten(in: pageLocale)
+            } else {
+                currentHints = effectiveHints
+                engine.updateHints(effectiveHints)
+            }
         case "stop":
             stop()
         case "reset":
@@ -91,7 +105,24 @@ final class SpeechService: ObservableObject {
         if session === owner { stop() }
     }
 
-    private var effectiveHints: [String] { sendHints ? pageHints : [] }
+    /// The page's hints are answers in the page's language, so they'd only
+    /// mislead a recognizer switched to the other one.
+    private var effectiveHints: [String] { sendHints && languageOverride == nil ? pageHints : [] }
+
+    /// Listen in `lang` for the rest of this card; nil goes back to the
+    /// page's choice.
+    func overrideLanguage(_ lang: String?) {
+        languageOverride = lang == pageLocale ? nil : lang
+        relisten(in: languageOverride ?? pageLocale)
+    }
+
+    private func relisten(in lang: String) {
+        guard listening, !lang.isEmpty else { return }
+        currentLocale = lang
+        currentHints = effectiveHints
+        // A start while running reconfigures without closing the mic.
+        engine.start(locale: lang, hints: effectiveHints)
+    }
 
     private func start(lang: String) async {
         if !permissionsGranted {

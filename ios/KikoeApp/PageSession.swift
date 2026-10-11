@@ -16,7 +16,6 @@ struct TranscriptBubble: Equatable, Identifiable {
     var text: String
     var detail: String?
     var error: Bool
-    var atBottom: Bool
     var correction: Correction?
 }
 
@@ -107,6 +106,13 @@ final class PageSession: NSObject, ObservableObject {
     }
 
     func goHome() { load(site.home) }
+
+    /// The way out when the page or recognition gets stuck: stop listening
+    /// and load the page again; app.ts starts afresh when it comes back.
+    func reload() {
+        SpeechService.shared.release(self)
+        if webView.url == nil { goHome() } else { webView.reload() }
+    }
 
     /// Called when the session's web view goes back on screen.
     func didBecomeVisible() {
@@ -265,7 +271,6 @@ final class PageSession: NSObject, ObservableObject {
                 text: body["text"] as? String ?? "",
                 detail: body["detail"] as? String,
                 error: body["error"] as? Bool ?? false,
-                atBottom: body["position"] as? String == "bottom",
                 correction: correction)
             transcriptTimer?.cancel()
             // The DOM chips fade after a few seconds; a correction offer

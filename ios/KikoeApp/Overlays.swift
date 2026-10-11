@@ -1,24 +1,21 @@
 import SwiftUI
 
-/// Listening / muted / problem pill in the nav bar. Tapping it does what
-/// tapping the DOM chip does: mute or unmute, or open the token page when
-/// the token is what's missing (app.ts decides).
+/// Listening / muted / problem pill in the nav bar: green while the mic is
+/// on, red while it's off. Tapping it does what tapping the DOM chip does:
+/// mute or unmute, or open the token page when the token is what's missing
+/// (app.ts decides).
 struct IndicatorPill: View {
     let indicator: IndicatorState
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 5) {
-                Image(systemName: symbol)
-                    .symbolEffect(.pulse, isActive: indicator.state == "listening")
-            }
-            .fixedSize()
-            .font(.footnote.weight(.medium))
-            .padding(.horizontal, 10)
-            .padding(.vertical, 5)
-            .foregroundStyle(foreground)
-            .background(background, in: Capsule())
+            Image(systemName: symbol)
+                .font(.footnote.weight(.semibold))
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+                .foregroundStyle(foreground)
+                .background(background, in: Capsule())
         }
         .buttonStyle(.plain)
         .accessibilityLabel(indicator.label)
@@ -27,17 +24,15 @@ struct IndicatorPill: View {
 
     private var symbol: String {
         if indicator.needsAttention { return "exclamationmark.triangle.fill" }
-        return indicator.tone == .muted ? "mic.slash.fill" : "mic.fill"
+        return indicator.micOn ? "mic.fill" : "mic.slash.fill"
     }
 
     private var foreground: Color {
-        if indicator.needsAttention { return .white }
-        return indicator.tone == .muted ? .secondary : .green
+        indicator.needsAttention ? .white : indicator.micColor
     }
 
     private var background: Color {
-        if indicator.needsAttention { return indicator.attentionColor }
-        return indicator.tone == .muted ? Color(.tertiarySystemFill) : Color.green.opacity(0.15)
+        indicator.needsAttention ? indicator.attentionColor : indicator.micColor.opacity(0.15)
     }
 }
 
@@ -46,6 +41,9 @@ extension IndicatorState {
     /// unsupported card): both need the user to do something.
     var needsAttention: Bool { tone == .error || label.hasPrefix("⚠") }
     var attentionColor: Color { tone == .error ? .red : .orange }
+    /// Muted and paused both mean the mic is off.
+    var micOn: Bool { tone != .muted && state != "paused" }
+    var micColor: Color { micOn ? .green : .red }
     var message: String {
         label.hasPrefix("⚠") ? String(label.dropFirst()).trimmingCharacters(in: .whitespaces) : label
     }
@@ -72,17 +70,20 @@ struct IndicatorBanner: View {
     }
 }
 
-/// A site's glyph on its tint, standing in for its logo.
+/// A site's own icon, in the rounded-square shape of a home-screen icon.
 struct SiteBadge: View {
     let site: Site
     var size: CGFloat = 22
 
     var body: some View {
-        Text(site.glyph)
-            .font(.system(size: size * 0.62, weight: .bold))
-            .foregroundStyle(.white)
+        let shape = RoundedRectangle(cornerRadius: size * 0.225, style: .continuous)
+        Image(site.iconAsset)
+            .resizable()
+            .interpolation(.high)
+            .scaledToFill()
             .frame(width: size, height: size)
-            .background(site.tint, in: RoundedRectangle(cornerRadius: size * 0.27, style: .continuous))
+            .clipShape(shape)
+            .overlay(shape.strokeBorder(.separator, lineWidth: 0.5))
             .accessibilityHidden(true)
     }
 }
@@ -129,40 +130,125 @@ struct SiteMenu: View {
     }
 }
 
-/// What the recognizer heard, floating over the page like the DOM chip.
-struct TranscriptView: View {
-    let bubble: TranscriptBubble
+/// Always-on strip above or below the page: a live meter showing the mic is
+/// hearing you, then what the recognizer made of it. Stands in for the DOM
+/// transcript chip, which comes and goes, so there's a constant sign that
+/// listening is working.
+struct ListeningBar: View {
+    let indicator: IndicatorState?
+    let bubble: TranscriptBubble?
+    @ObservedObject var level: MicLevel
+    /// The language picked from the More menu for this card, if any.
+    var languageOverride: String?
+    let onMic: () -> Void
     let onCorrection: (TranscriptBubble.Correction) -> Void
 
-    var body: some View {
-        let content = HStack(alignment: .firstTextBaseline, spacing: 6) {
-            if bubble.error { Image(systemName: "exclamationmark.triangle.fill") }
-            Text(bubble.text).font(.body.weight(.medium))
-            if let detail = bubble.detail {
-                Text(detail).font(.callout).foregroundStyle(bubble.error ? .white.opacity(0.8) : .secondary)
-            }
-            if bubble.correction != nil {
-                Image(systemName: "plus.bubble").foregroundStyle(.tint)
-                    .accessibilityLabel("Save as a correction")
-            }
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 9)
-        .foregroundStyle(bubble.error ? .white : .primary)
-        .background {
-            if bubble.error {
-                Capsule().fill(.red)
-            } else {
-                Capsule().fill(.regularMaterial)
-            }
-        }
-        .shadow(color: .black.opacity(0.12), radius: 8, y: 2)
+    private var live: Bool { indicator?.state == "listening" }
+    private var micTint: Color {
+        guard let indicator, !indicator.needsAttention else { return .secondary }
+        return indicator.micColor
+    }
 
-        if let correction = bubble.correction {
-            Button { onCorrection(correction) } label: { content }.buttonStyle(.plain)
-        } else {
-            content
+    var body: some View {
+        HStack(spacing: 12) {
+            Button(action: onMic) {
+                HStack(spacing: 6) {
+                    Image(systemName: (indicator?.micOn ?? true) ? "mic.fill" : "mic.slash.fill")
+                        .font(.body.weight(.semibold))
+                    LevelMeter(level: live ? CGFloat(level.value) : 0)
+                        .opacity(live ? 1 : 0.4)
+                }
+                .foregroundStyle(micTint)
+                .padding(.horizontal, 12)
+                .frame(minHeight: 44)
+                .background(micTint.opacity(0.15), in: Capsule())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(indicator?.micOn == false ? "Resume listening" : "Mute")
+            .accessibilityValue(indicator.map { $0.micOn && !$0.needsAttention ? "Listening" : $0.message } ?? "")
+
+            if bubble == nil, let indicator, indicator.needsAttention {
+                // The problem itself, tappable like the pill (the token page
+                // for a missing token). Replaces the banner while the bar is on.
+                Button(action: onMic) {
+                    Label(indicator.message, systemImage: "exclamationmark.triangle.fill")
+                        .font(.callout.weight(.semibold))
+                        .foregroundStyle(indicator.attentionColor)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            } else if let correction = bubble?.correction {
+                Button { onCorrection(correction) } label: { words }
+                    .buttonStyle(.plain)
+            } else {
+                words
+            }
         }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .animation(.easeOut(duration: 0.2), value: bubble)
+    }
+
+    @ViewBuilder
+    private var words: some View {
+        if let bubble {
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                if bubble.error {
+                    Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.red)
+                }
+                Text(bubble.text)
+                    .font(.body.weight(.medium))
+                    .foregroundStyle(bubble.error ? .red : .primary)
+                if let detail = bubble.detail {
+                    Text(detail).font(.callout).foregroundStyle(.secondary)
+                }
+                Spacer(minLength: 0)
+                if bubble.correction != nil {
+                    Image(systemName: "plus.bubble").foregroundStyle(.tint)
+                        .accessibilityLabel("Save as a correction")
+                }
+            }
+            .lineLimit(1)
+            .contentShape(Rectangle())
+            .id(bubble.id)
+            .transition(.opacity)
+        } else {
+            Text(placeholder)
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .transition(.opacity)
+        }
+    }
+
+    private var placeholder: String {
+        guard let indicator else { return "Kikoe listens during reviews" }
+        if indicator.state == "listening" {
+            if let lang = languageOverride { return "Listening in \(SpeechLanguage.name(lang)) for this card" }
+            return "Listening. Say your answer"
+        }
+        if indicator.state == "muted" { return "Muted. Tap the mic to listen" }
+        return indicator.message
+    }
+}
+
+/// Four bars that rise with the input level, the middle ones most, like the
+/// system's own dictation meter. Flat when the mic is off.
+struct LevelMeter: View {
+    let level: CGFloat
+    private let weights: [CGFloat] = [0.55, 1, 0.8, 0.45]
+
+    var body: some View {
+        HStack(spacing: 2.5) {
+            ForEach(weights.indices, id: \.self) { i in
+                Capsule()
+                    .frame(width: 3, height: 4 + 14 * level * weights[i])
+            }
+        }
+        .frame(height: 18)
+        .accessibilityHidden(true)
     }
 }
 

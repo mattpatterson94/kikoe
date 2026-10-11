@@ -14,6 +14,7 @@ struct OnboardingView: View {
     @State private var sites: Set<Site> = Set(Site.allCases)
     @State private var permission: PermissionState = .current
     @State private var findTokenAfter = true
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         VStack(spacing: 0) {
@@ -24,7 +25,7 @@ struct OnboardingView: View {
                     .padding(.top, 48)
                     .frame(maxWidth: .infinity)
                     .id(step)
-                    .transition(.asymmetric(
+                    .transition(reduceMotion ? .opacity : .asymmetric(
                         insertion: .move(edge: .trailing).combined(with: .opacity),
                         removal: .move(edge: .leading).combined(with: .opacity)))
             }

@@ -53,6 +53,7 @@ struct SessionScreen: View {
     @ObservedObject var app: AppModel
     @ObservedObject var session: PageSession
     @ObservedObject private var settings = SyncSettings.shared
+    @ObservedObject private var speech = SpeechService.shared
     @AppStorage(Pref.developerMode) private var developerMode = false
     @AppStorage(Pref.showDebugBar) private var showDebugBar = false
     @State private var pendingCorrection: TranscriptBubble.Correction?
@@ -60,33 +61,43 @@ struct SessionScreen: View {
     var body: some View {
         NavigationStack {
             WebContainer(session: session)
-                .ignoresSafeArea(edges: .bottom)
+                // Edge to edge, except where the listening bar sits: the page
+                // makes room for it instead of scrolling under it.
+                .ignoresSafeArea(edges: showBar && barAtBottom ? [] : .bottom)
                 .overlay(alignment: .top) {
                     VStack(spacing: 8) {
                         if session.isLoading {
                             ProgressView().progressViewStyle(.linear).tint(session.site.tint)
                         }
-                        if let indicator = session.indicator, indicator.needsAttention {
+                        if !showBar, let indicator = session.indicator, indicator.needsAttention {
                             IndicatorBanner(indicator: indicator) { session.sendAction("indicatorTapped") }
-                                .transition(.move(edge: .top).combined(with: .opacity))
+                                .transition(slideIn)
                         }
                         if let hint = session.hint {
-                            HintToast(text: hint).transition(.move(edge: .top).combined(with: .opacity))
+                            HintToast(text: hint).transition(slideIn)
                         }
-                        if let bubble = session.transcript, !bubble.atBottom { transcript(bubble) }
                     }
                     .padding(.horizontal)
+                    .padding(.top, 8)
                 }
-                .overlay(alignment: .bottom) {
-                    if let bubble = session.transcript, bubble.atBottom {
-                        transcript(bubble).padding()
-                    }
-                }
-                .animation(.easeOut(duration: 0.2), value: session.transcript)
                 .animation(.easeOut(duration: 0.3), value: session.hint)
                 .animation(.easeOut(duration: 0.3), value: session.indicator)
                 .safeAreaInset(edge: .top, spacing: 0) {
-                    if developerMode && showDebugBar { DebugBar() }
+                    VStack(spacing: 0) {
+                        if developerMode && showDebugBar { DebugBar() }
+                        if showBar && !barAtBottom {
+                            listeningBar
+                                .background(.bar)
+                                .overlay(alignment: .bottom) { Divider() }
+                        }
+                    }
+                }
+                .safeAreaInset(edge: .bottom, spacing: 0) {
+                    if showBar && barAtBottom {
+                        listeningBar
+                            .background(.bar, ignoresSafeAreaEdges: .bottom)
+                            .overlay(alignment: .top) { Divider() }
+                    }
                 }
                 .toolbar { toolbar }
                 .navigationBarTitleDisplayMode(.inline)
@@ -114,13 +125,28 @@ struct SessionScreen: View {
         }
     }
 
-    private func transcript(_ bubble: TranscriptBubble) -> some View {
-        TranscriptView(bubble: bubble) { pendingCorrection = $0 }
+    /// The "Show live transcript" setting now means the always-on bar.
+    private var showBar: Bool { settings.bool("transcript").wrappedValue }
+    private var barAtBottom: Bool { settings.string("transcript_position").wrappedValue != "top" }
+
+    private var listeningBar: some View {
+        ListeningBar(
+            indicator: session.indicator,
+            bubble: session.transcript,
+            level: speech.mic.level,
+            languageOverride: speech.languageOverride,
+            onMic: { session.sendAction("indicatorTapped") },
+            onCorrection: { pendingCorrection = $0 })
             .environment(\.colorScheme, settings.transcriptScheme ?? colorScheme)
-            .transition(.opacity.combined(with: .scale(scale: 0.95)))
     }
 
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    /// Banners slide down from the nav bar, or just fade with Reduce Motion.
+    private var slideIn: AnyTransition {
+        reduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity)
+    }
 
     @ToolbarContentBuilder
     private var toolbar: some ToolbarContent {
@@ -139,9 +165,62 @@ struct SessionScreen: View {
                 }
                 .accessibilityLabel("Voice commands")
             }
-            Button { app.showSettings = true } label: { Image(systemName: "gearshape") }
-                .accessibilityLabel("Settings")
+            SessionMenu(session: session, speech: SpeechService.shared) { app.showSettings = true }
         }
+    }
+}
+
+/// The nav bar's More menu: ways out when something goes wrong mid-review,
+/// then Settings.
+struct SessionMenu: View {
+    @ObservedObject var session: PageSession
+    @ObservedObject var speech: SpeechService
+    let openSettings: () -> Void
+
+    var body: some View {
+        Menu {
+            Button { session.reload() } label: {
+                Label("Reload Page", systemImage: "arrow.clockwise")
+            }
+            Picker(selection: Binding(
+                get: { speech.languageOverride ?? "auto" },
+                set: { speech.overrideLanguage($0 == "auto" ? nil : $0) }
+            )) {
+                Text("Automatic").tag("auto")
+                Text("Japanese").tag(SpeechLanguage.japanese)
+                Text("English").tag(SpeechLanguage.english)
+            } label: {
+                Label("Listen In", systemImage: "character.bubble")
+                Text(languageSummary)
+            }
+            .pickerStyle(.menu)
+            .disabled(!speech.listening)
+            Divider()
+            Button(action: openSettings) {
+                Label("Settings", systemImage: "gearshape")
+            }
+        } label: {
+            Image(systemName: "ellipsis.circle")
+        }
+        .accessibilityLabel("More")
+    }
+
+    /// Shown under "Listen In": what Automatic picked, or that this card is
+    /// overridden.
+    private var languageSummary: String {
+        if let lang = speech.languageOverride {
+            return "\(SpeechLanguage.name(lang)) for this card"
+        }
+        return speech.pageLocale.isEmpty ? "Automatic" : "Automatic: \(SpeechLanguage.name(speech.pageLocale))"
+    }
+}
+
+enum SpeechLanguage {
+    static let japanese = "ja-JP"
+    static let english = "en-US"
+
+    static func name(_ locale: String) -> String {
+        locale.hasPrefix("ja") ? "Japanese" : "English"
     }
 }
 
