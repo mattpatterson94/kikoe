@@ -6,10 +6,18 @@
 // top pick.
 const MAX_ALTERNATIVES = 5;
 
-// Errors after which retrying without backoff would just hot-loop against a
-// permission dialog or a missing device — the auto-restart in onend must stop.
+// Errors after which retrying would just hot-loop against a permission
+// dialog — the auto-restart in onend must stop.
+//
+// 'audio-capture' is deliberately not here. It used to be, on the theory that
+// it meant "no microphone", but Safari on iOS 27 raises it transiently — an
+// audio-session interruption, or a restart that lands before the previous
+// session has released the mic — and treating it as fatal left the
+// recognizer dead for good while the indicator claimed there was no
+// microphone. The restart backoff below already keeps a genuinely missing
+// device from spinning, so it's retried like any other unhealthy session.
 const FATAL_ERRORS = new Set<SpeechRecognitionErrorCode>([
-  'not-allowed', 'service-not-allowed', 'audio-capture',
+  'not-allowed', 'service-not-allowed',
 ]);
 
 // Unhealthy sessions back off geometrically instead of restarting
@@ -54,6 +62,7 @@ export function createRecognition(
   lang: string | (() => string),
   callback: TranscriptCallback,
   onError?: (error: SpeechRecognitionErrorCode) => void,
+  onRecover?: () => void,
 ): KikoeRecognition | null {
   if (!('webkitSpeechRecognition' in window)) {
     console.error('[kikoe] web speech not supported by this browser!');
@@ -75,6 +84,10 @@ export function createRecognition(
   let unhealthyRestarts = 0;
   let sessionStartedAt = 0;
   let sawErrorThisSession = false;
+  // Set once an error has been reported to onError, and cleared by the next
+  // capture that actually starts — so the caller can retract whatever error
+  // state it showed without waiting for the user to say something.
+  let errorReported = false;
   // Last sign of life from the engine, for the liveness watchdog below.
   let lastActivityAt = Date.now();
   let sessionId = 0;
@@ -124,6 +137,10 @@ export function createRecognition(
   // keeps a silent-but-healthy recognizer from tripping the watchdog.
   recognition.onaudiostart = () => {
     lastActivityAt = Date.now();
+    if (errorReported) {
+      errorReported = false;
+      onRecover?.();
+    }
   };
 
   recognition.onresult = (event) => {
@@ -155,6 +172,7 @@ export function createRecognition(
       sawErrorThisSession = true;
     }
 
+    errorReported = true;
     onError?.(event.error);
   };
 

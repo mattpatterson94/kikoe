@@ -747,7 +747,12 @@ async function startListener(dictionary: Dictionary): Promise<void> {
     if (state) setIdleIndicatorState(state);
   }
 
-  const recognitionOrNull = createRecognition(() => site.getLanguage(), handleRecognitionResult, handleRecognitionError);
+  const recognitionOrNull = createRecognition(
+    () => site.getLanguage(),
+    handleRecognitionResult,
+    handleRecognitionError,
+    restoreIdleIndicator,
+  );
 
   if (!recognitionOrNull) {
     // No Web Speech support (e.g. Firefox) — nothing below this point can

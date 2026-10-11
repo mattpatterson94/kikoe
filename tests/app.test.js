@@ -126,18 +126,21 @@ describe('startListener recognition error handling', () => {
     expect(native.nativeStart.mock.calls.length).toBe(callsBeforeError);
   });
 
-  test('missing microphone shows no-mic and stops the restart loop', async () => {
+  // Not fatal any more (iOS 27 Safari raises it transiently) — the retry
+  // itself is covered in recognition.test.js; here, the indicator must not
+  // stay stuck on "no microphone" once capture is back.
+  test('audio-capture error shows no-mic and clears once capture resumes', async () => {
     stampConfig();
     await importApp();
 
     const native = MockSpeechRecognition.instances[0];
-    const callsBeforeError = native.nativeStart.mock.calls.length;
     native.onerror({ error: 'audio-capture' });
-    native.onend();
 
     const label = document.getElementById('kikoe-idle-label');
     expect(label.textContent).toMatch(/no microphone found/i);
-    expect(native.nativeStart.mock.calls.length).toBe(callsBeforeError);
+
+    native.onaudiostart();
+    expect(label.textContent).not.toMatch(/no microphone found/i);
   });
 
   test('network error shows reconnecting and does not crash', async () => {

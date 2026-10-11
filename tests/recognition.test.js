@@ -249,7 +249,7 @@ describe('createRecognition', () => {
       expect(onError).not.toHaveBeenCalled();
     });
 
-    test.each(['not-allowed', 'service-not-allowed', 'audio-capture'])(
+    test.each(['not-allowed', 'service-not-allowed'])(
       'stops auto-restart after a %s error',
       (errorType) => {
         const recognition = createRecognition('ja-JP', vi.fn());
@@ -262,6 +262,54 @@ describe('createRecognition', () => {
         expect(recognition.isPaused()).toBe(true);
       }
     );
+
+    // iOS 27 Safari raises audio-capture transiently; treating it as fatal
+    // left the mic dead until a page reload.
+    test('retries with backoff after an audio-capture error instead of stopping', () => {
+      vi.useFakeTimers();
+      try {
+        const recognition = createRecognition('ja-JP', vi.fn());
+        const native = recognitionInstances[0];
+
+        native.onerror({ error: 'audio-capture' });
+        native.onend();
+
+        expect(recognition.isPaused()).toBe(false);
+        expect(native.nativeStart).not.toHaveBeenCalled();
+        vi.advanceTimersByTime(2000);
+        expect(native.nativeStart).toHaveBeenCalledTimes(1);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    test('calls onRecover when capture starts again after a reported error', () => {
+      const onRecover = vi.fn();
+      createRecognition('ja-JP', vi.fn(), vi.fn(), onRecover);
+      const native = recognitionInstances[0];
+
+      native.onaudiostart();
+      expect(onRecover).not.toHaveBeenCalled();
+
+      native.onerror({ error: 'audio-capture' });
+      native.onaudiostart();
+      expect(onRecover).toHaveBeenCalledTimes(1);
+
+      // Only once per error, not on every routine session cycle afterwards.
+      native.onaudiostart();
+      expect(onRecover).toHaveBeenCalledTimes(1);
+    });
+
+    test('does not call onRecover for errors that were never reported', () => {
+      const onRecover = vi.fn();
+      createRecognition('ja-JP', vi.fn(), vi.fn(), onRecover);
+      const native = recognitionInstances[0];
+
+      native.onerror({ error: 'no-speech' });
+      native.onaudiostart();
+
+      expect(onRecover).not.toHaveBeenCalled();
+    });
 
     test('does not stop auto-restart for a transient network error', () => {
       const recognition = createRecognition('ja-JP', vi.fn());
