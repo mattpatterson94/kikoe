@@ -26,6 +26,9 @@ declare global {
 export type NativeSpeechCommand =
   | { type: 'start'; lang: string; hints: string[] }
   | { type: 'stop' }
+  // End the current recognition request and start a fresh one with the same
+  // locale and hints, discarding the rest of the utterance in flight.
+  | { type: 'reset' }
   | { type: 'hints'; hints: string[] };
 
 export type NativeSpeechEvent =
@@ -112,6 +115,9 @@ export function createNativeRecognition(
     restart: start,
     isPaused() {
       return paused;
+    },
+    endUtterance() {
+      if (!paused) post({ type: 'reset' });
     },
     setHints(next: string[]) {
       if (next.length === hints.length && next.every((h, i) => h === hints[i])) return;

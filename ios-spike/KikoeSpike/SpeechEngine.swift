@@ -25,6 +25,10 @@ protocol SpeechEngine: AnyObject {
     func start(locale: String, hints: [String])
     func updateHints(_ hints: [String])
     func stop()
+    /// End the utterance in progress and listen afresh with the same locale
+    /// and hints. Results still arriving for the ended utterance are dropped,
+    /// so the tail of an answer can't land on the next card.
+    func reset()
     /// Probe path: run pre-recorded buffers through a one-shot session and
     /// return the ranked alternatives of the final result.
     func transcribe(buffers: [AVAudioPCMBuffer], locale: String, hints: [String]) async throws -> [String]

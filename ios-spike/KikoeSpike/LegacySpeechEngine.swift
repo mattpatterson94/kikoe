@@ -23,6 +23,9 @@ final class LegacySpeechEngine: SpeechEngine {
     private var locale = "ja-JP"
     private var hints: [String] = []
     private var generation = 0
+    /// Requests older than this were ended by reset(); their late results are
+    /// dropped rather than delivered.
+    private var firstLiveGeneration = 0
     private var running = false
     private var settleTimer: Timer?
     private let settleInterval: TimeInterval = 0.8
@@ -65,6 +68,14 @@ final class LegacySpeechEngine: SpeechEngine {
         beginRequest()
     }
 
+    func reset() {
+        guard running else { return }
+        settleTimer?.invalidate()
+        task?.cancel()
+        firstLiveGeneration = generation + 1
+        beginRequest()
+    }
+
     func stop() {
         running = false
         settleTimer?.invalidate()
@@ -97,7 +108,7 @@ final class LegacySpeechEngine: SpeechEngine {
         var lastText = ""
         task = recognizer.recognitionTask(with: req) { [weak self] result, error in
             Task { @MainActor in
-                guard let self else { return }
+                guard let self, gen >= self.firstLiveGeneration else { return }
                 if let result {
                     let transcripts = dedupe(result.transcriptions.map(\.formattedString))
                     if !transcripts.isEmpty {

@@ -78,6 +78,8 @@ final class KikoeBridge: NSObject, ObservableObject, WKScriptMessageHandler, WKS
             engine.updateHints(effectiveHints)
         case "stop":
             stopListening()
+        case "reset":
+            engine.reset()
         default:
             break
         }

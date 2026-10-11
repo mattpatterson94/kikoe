@@ -21,6 +21,11 @@ final class AnalyzerSpeechEngine: SpeechEngine {
     private var locale: String?
     private var hints: [String] = []
     private var generation = 0
+    /// Audio time (seconds since the analyzer started) fed so far, and the
+    /// point reset() cut the stream at: results starting before the cut
+    /// belong to an ended utterance and are dropped.
+    private var fedSeconds: Double = 0
+    private var cutoffSeconds: Double = 0
 
     init(mic: MicCapture, useDictation: Bool) {
         self.mic = mic
@@ -51,6 +56,16 @@ final class AnalyzerSpeechEngine: SpeechEngine {
         guard hints != self.hints else { return }
         self.hints = hints
         Task { await applyContext() }
+    }
+
+    func reset() {
+        guard let analyzer else { return }
+        cutoffSeconds = fedSeconds
+        // Close the current segment so speech after the cut starts a new
+        // result instead of extending the dropped one.
+        Task {
+            do { try await analyzer.finalize(through: nil) } catch { NSLog("[kikoe] finalize failed: \(error)") }
+        }
     }
 
     func stop() {
@@ -119,12 +134,15 @@ final class AnalyzerSpeechEngine: SpeechEngine {
         self.input = continuation
         self.targetFormat = format
         self.converter = nil
+        self.fedSeconds = 0
+        self.cutoffSeconds = 0
         await applyContext()
 
         resultsTask = Task { [weak self] in
             do {
                 for try await (text, alternatives, isFinal, start) in Self.results(of: module) {
                     guard let self, gen == self.generation else { return }
+                    if start < self.cutoffSeconds { continue }
                     let transcripts = dedupe([text] + alternatives)
                     if transcripts.isEmpty { continue }
                     self.onEvent?(.result(transcripts: transcripts, isFinal: isFinal,
@@ -146,6 +164,7 @@ final class AnalyzerSpeechEngine: SpeechEngine {
 
     private func feed(_ buffer: AVAudioPCMBuffer) {
         guard let input, let targetFormat, let converted = convert(buffer, to: targetFormat) else { return }
+        fedSeconds += Double(converted.frameLength) / targetFormat.sampleRate
         input.yield(AnalyzerInput(buffer: converted))
     }
 

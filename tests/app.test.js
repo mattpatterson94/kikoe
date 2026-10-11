@@ -1755,10 +1755,13 @@ describe('startListener ippatsu mode (one-shot auto-submit on a miss)', () => {
 
       expect(document.getElementById('user-response').value).toBe('');
 
-      // The user carries on, and the revised text replaces the match.
+      // The user carries on: still nothing early, but the trailing words
+      // don't retract the match either — the backstop submits it.
       native.onresult({ resultIndex: 0, results: [interimResult('さむいですね')] });
-      vi.advanceTimersByTime(900);
+      vi.advanceTimersByTime(649);
       expect(document.getElementById('user-response').value).toBe('');
+      vi.advanceTimersByTime(101);
+      expect(document.getElementById('user-response').value).toBe('さむい');
     } finally {
       vi.useRealTimers();
     }
@@ -1787,13 +1790,71 @@ describe('startListener ippatsu mode (one-shot auto-submit on a miss)', () => {
     }
   });
 
-  test('an interim that is still being revised keeps waiting', async () => {
-    const native = await loadCard('Reading', {});
-    native.onresult({ resultIndex: 0, results: [interimResult('さむい')] });
-    // A different transcript for the same result — the user is still speaking.
-    native.onresult({ resultIndex: 0, results: [interimResult('さむいです')] });
+  // Trailing words or room noise folded into the same utterance used to
+  // cancel the pending submit, and the final then missed — or, with ippatsu,
+  // marked a correctly answered card wrong.
+  test('a match followed by junk interims and a junk final still submits the match', async () => {
+    const native = await loadCard('Reading', { ippatsu_reading: true });
+    vi.useFakeTimers();
+    try {
+      native.onresult({ resultIndex: 0, results: [interimResult('さむい')] });
+      native.onresult({ resultIndex: 0, results: [interimResult('さむいかな')] });
+      native.onresult({ resultIndex: 0, results: [interimResult('さむいかなあ')] });
+      expect(document.getElementById('user-response').value).toBe('');
 
-    expect(document.getElementById('user-response').value).toBe('');
+      native.onresult({ resultIndex: 0, results: [finalResult('さむいかなあ')] });
+      expect(document.getElementById('user-response').value).toBe('さむい');
+
+      // And nothing fires again when the backstop would have.
+      vi.advanceTimersByTime(900);
+      expect(document.getElementById('user-response').value).toBe('さむい');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test('a match followed by a junk interim submits at the backstop without a final', async () => {
+    const native = await loadCard('Meaning', {});
+    vi.useFakeTimers();
+    try {
+      native.onresult({ resultIndex: 0, results: [interimResult('Cold Hearted')] });
+      native.onresult({ resultIndex: 0, results: [interimResult('Cold Hearted the')] });
+      vi.advanceTimersByTime(900);
+      expect(document.getElementById('user-response').value).toBe('cold hearted');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test('a command in the final still outranks a pending matched interim', async () => {
+    const native = await loadCard('Reading', {});
+    vi.useFakeTimers();
+    try {
+      native.onresult({ resultIndex: 0, results: [interimResult('さむい')] });
+      native.onresult({ resultIndex: 0, results: [finalResult('mistake')] });
+      // 'mistake' marks the card wrong instead of submitting the match.
+      expect(document.getElementById('user-response').value).toBe('あああ');
+      vi.advanceTimersByTime(900);
+      expect(document.getElementById('user-response').value).toBe('あああ');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test('an interim that is still being revised does not submit early', async () => {
+    const native = await loadCard('Reading', {});
+    vi.useFakeTimers();
+    try {
+      native.onresult({ resultIndex: 0, results: [interimResult('さむい')] });
+      // A different transcript for the same result — the user is still speaking.
+      native.onresult({ resultIndex: 0, results: [interimResult('さむいです')] });
+
+      expect(document.getElementById('user-response').value).toBe('');
+      // Run the backstop out here so it can't fire into a later test's DOM.
+      vi.advanceTimersByTime(900);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   // Voice commands outrank answers, and several command words are themselves
@@ -1902,6 +1963,92 @@ describe('startListener ippatsu mode (one-shot auto-submit on a miss)', () => {
         throw new Error('miss not auto-submitted yet');
       }
     });
+  });
+});
+
+describe('startListener on the native host (iOS app)', () => {
+  // The host exposes its recognizer as the kikoeSpeech message handler and
+  // reports transcripts back as kikoe:nativeSpeech events.
+  let posted;
+
+  beforeEach(() => {
+    posted = [];
+    vi.stubGlobal('webkit', {
+      messageHandlers: { kikoeSpeech: { postMessage: vi.fn(m => posted.push(m)) } },
+    });
+    vi.spyOn(document, 'hasFocus').mockReturnValue(true);
+  });
+
+  function speak(transcripts, isFinal, resultId = 'legacy:1') {
+    document.dispatchEvent(new CustomEvent('kikoe:nativeSpeech', {
+      detail: { type: 'result', transcripts, isFinal, resultId },
+    }));
+  }
+
+  const subject = {
+    id: 1, object: 'vocabulary',
+    data: {
+      slug: '寒い', characters: '寒い',
+      readings: [{ reading: 'さむい', accepted_answer: true }],
+      meanings: [{ meaning: 'Cold Hearted', accepted_answer: true }],
+      auxiliary_meanings: [],
+    },
+  };
+
+  async function loadCard(type, settings = {}) {
+    document.body.innerHTML += `
+      <div class="character-header__characters">寒い</div>
+      <span class="quiz-input__question-category">Vocabulary</span>
+      <span class="quiz-input__question-type">${type}</span>
+      <input id="user-response" type="text" />
+      <button class="quiz-input__submit-button">Next</button>
+    `;
+    stampConfig({ hasApiToken: true, settings });
+    const ready = new Promise((resolve) => {
+      document.addEventListener('kikoe:subjectRequest', function handler(e) {
+        document.removeEventListener('kikoe:subjectRequest', handler);
+        const { prompt, category } = e.detail;
+        document.dispatchEvent(new CustomEvent('kikoe:subjectData', {
+          detail: { prompt, category, subjects: [subject], error: null },
+        }));
+        resolve();
+      });
+    });
+    await importApp();
+    await ready;
+    await vi.waitFor(() => {
+      if (document.getElementById('kikoe-idle-label')?.textContent !== 'Listening') {
+        throw new Error('subjects not loaded yet');
+      }
+    });
+  }
+
+  test('a matched interim submits immediately and ends the utterance', async () => {
+    await loadCard('Reading', { ippatsu_reading: true });
+    expect(posted.some(m => m.type === 'start')).toBe(true);
+    posted.length = 0;
+
+    speak(['さむい'], false);
+
+    // No settle floor or backstop wait.
+    expect(document.getElementById('user-response').value).toBe('さむい');
+    // The host is told to drop the rest of the utterance, so trailing speech
+    // can't reach the next card.
+    expect(posted).toContainEqual({ type: 'reset' });
+
+    // A trailing junk final for the same utterance changes nothing.
+    speak(['さむいかなあ'], true);
+    expect(document.getElementById('user-response').value).toBe('さむい');
+  });
+
+  test('a junk final with no match does not end the utterance early', async () => {
+    await loadCard('Reading');
+    posted.length = 0;
+
+    speak(['ぎぶりっしゅ'], true);
+
+    expect(document.getElementById('user-response').value).toBe('');
+    expect(posted).not.toContainEqual({ type: 'reset' });
   });
 });
 

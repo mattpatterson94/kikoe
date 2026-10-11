@@ -53,6 +53,9 @@ export interface RecognitionControls {
   restart(): void;
   isPaused(): boolean;
   setHints?(hints: string[]): void;
+  // Ends the in-progress utterance so speech still arriving for it is dropped
+  // rather than reaching the next card. Only the native host can do this.
+  endUtterance?(): void;
 }
 
 // The Web Speech recognizer, extended with pause/resume/restart controls that

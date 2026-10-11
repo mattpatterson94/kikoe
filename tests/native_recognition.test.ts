@@ -147,3 +147,25 @@ describe('createNativeRecognition', () => {
     expect(log).toHaveBeenCalled();
   });
 });
+
+describe('createNativeRecognition endUtterance', () => {
+  test('asks the host to reset the request while listening', () => {
+    const handler = makeHandler();
+    const recognition = createNativeRecognition(handler, () => 'ja-JP', vi.fn());
+    recognition.resume();
+    handler.postMessage.mockClear();
+
+    recognition.endUtterance?.();
+
+    expect(handler.postMessage).toHaveBeenCalledWith({ type: 'reset' });
+  });
+
+  test('sends nothing while paused', () => {
+    const handler = makeHandler();
+    const recognition = createNativeRecognition(handler, () => 'ja-JP', vi.fn());
+
+    recognition.endUtterance?.();
+
+    expect(handler.postMessage).not.toHaveBeenCalled();
+  });
+});

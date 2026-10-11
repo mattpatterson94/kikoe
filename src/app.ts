@@ -1,7 +1,7 @@
 import { checkAnswer } from './flashcards';
 import type { CheckResult } from './flashcards';
 import { createRecognition, setLanguage } from './recognition';
-import { answerHints } from './native_recognition';
+import { answerHints, getNativeSpeechHandler } from './native_recognition';
 import * as wanikani from './wanikani';
 import * as bunpro from './bunpro';
 import { detectSite } from './site';
@@ -54,6 +54,12 @@ const MATCHED_INTERIM_SUBMIT_MS = 900;
 // natural mid-phrase pause and below the backstop, so the common case still
 // submits well before MATCHED_INTERIM_SUBMIT_MS.
 const MATCHED_INTERIM_SETTLE_MS = 400;
+
+// Both waits above exist only because Web Speech keeps feeding the rest of an
+// utterance into whatever card is showing. The native host (ios/) can end the
+// recognition request on submit, so the tail of the utterance is dropped
+// instead of reaching the next card; there a matched interim submits at once.
+const IS_NATIVE_HOST = getNativeSpeechHandler() !== null;
 
 // window blur/focus exist as page-activity signals for the desktop case
 // visibilitychange misses: alt-tabbing to another app while the browser
@@ -474,12 +480,14 @@ async function startListener(dictionary: Dictionary): Promise<void> {
   function submitMatchedAnswer(answer: string): boolean {
     if (!site.submitAnswer(answer)) return false;
     submitted = true;
+    recognition.endUtterance?.();
     return true;
   }
 
   function submitWrongAnswer(): boolean {
     if (!site.markWrong()) return false;
     submitted = true;
+    recognition.endUtterance?.();
     return true;
   }
 
@@ -537,6 +545,12 @@ async function startListener(dictionary: Dictionary): Promise<void> {
     // The same in-progress result still matching the same text: the recognizer
     // has stopped revising it.
     const unchanged = pending?.resultId === resultId && pending.raws[0] === raws[0];
+
+    if (IS_NATIVE_HOST) {
+      pendingInterimSubmit = { ctx, raws, resultId, result, matchedAt: Date.now() };
+      submitMatchedInterim();
+      return;
+    }
 
     if (pending && unchanged) {
       // Not new speech, so this must not push the backstop further out — leave
@@ -626,14 +640,32 @@ async function startListener(dictionary: Dictionary): Promise<void> {
     restoreIdleIndicator();
     const raw = raws[0];
 
-    if (final) clearMatchedInterimTimer();
-
     // Reveal & Grade cards are command-only: match the state-appropriate
     // table first (reveal while the answer is hidden, good/bad once shown),
     // then fall back to the shared commands ('next', 'pause', …) and 'help'.
     // The whole checkAnswer path below is skipped, so no answer-priority
     // concern applies to 'help' here.
     const ctx = site.getContext(subjects);
+
+    // Once an interim has matched, whatever the recognizer hears after it —
+    // trailing words, room noise folded into the same utterance — must not
+    // undo the match: submit it now rather than grading the final, which
+    // would miss (or, with ippatsu, mark the card wrong). Commands still
+    // outrank answers, as they do on the final path below.
+    if (final && pendingInterimSubmit) {
+      if (matchCommand(raws)) {
+        clearMatchedInterimTimer();
+      } else {
+        submitMatchedInterim();
+        if (submitted) {
+          // This final is the one the interim belonged to (or a later one);
+          // either way it has been consumed here.
+          if (submittedInterimResultId === resultId) submittedInterimResultId = null;
+          debugLog('submitted matched interim in place of a non-matching final', { raws });
+          return;
+        }
+      }
+    }
 
     // A final result can arrive after the next card is visible but before the
     // debounced card watcher has reset `submitted`. Detect that transition at
@@ -680,7 +712,8 @@ async function startListener(dictionary: Dictionary): Promise<void> {
           return;
         }
       }
-      clearMatchedInterimTimer();
+      // A non-matching interim after a match is the tail of the utterance (or
+      // noise), not a retraction: leave the pending submit running.
       return;
     }
 
@@ -770,6 +803,10 @@ async function startListener(dictionary: Dictionary): Promise<void> {
   ): Promise<void> {
     const newContext = site.getContext(subjects);
     if (site.didContextChange(context, newContext)) {
+      // A submit already ended the utterance; a card that changed some other
+      // way (tapped through, skipped) still needs the native recognizer to
+      // drop speech meant for the card before.
+      if (!submitted) recognition.endUtterance?.();
       submitted = false;
       pendingRaws = null;
       // Speech matched against the card being left behind must not carry into
