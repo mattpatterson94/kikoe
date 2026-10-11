@@ -229,6 +229,17 @@ async function startListener(dictionary: Dictionary): Promise<void> {
   // outlived the grace window and wasn't the keyboard retracting — and read
   // that on touch. Desktop keeps reading hasFocus() live.
   let touchBlurred = false;
+  // Set once acquiring the screen wake lock has been seen to cut off the
+  // microphone. On iOS 27, requesting the lock while a recognition session is
+  // capturing makes that session fail with 'audio-capture', and every session
+  // started while the lock is held then reports 'audiostart' but hears
+  // nothing — the mic worked for the first answer and then went silently
+  // deaf. Verified on device: a recognizer started with no lock held hears
+  // fine, and the same one goes deaf the moment a lock is taken. There's no
+  // way to detect the conflict up front, so the first 'audio-capture' with
+  // Keep Screen Awake on gives up the lock for the rest of the page session;
+  // browsers where the two coexist never hit this and keep the lock.
+  let wakeLockBreaksMic = false;
 
   function restoreIdleIndicator(): void {
     if (micPermissionDenied) setIdleIndicatorState('mic-denied');
@@ -745,6 +756,13 @@ async function startListener(dictionary: Dictionary): Promise<void> {
   function handleRecognitionError(errorType: SpeechRecognitionErrorCode): void {
     const state = RECOGNITION_ERROR_STATES[errorType];
     if (state) setIdleIndicatorState(state);
+    if (errorType === 'audio-capture' && getSettings().keep_screen_awake && !wakeLockBreaksMic) {
+      // The recognizer's own auto-restart brings capture back once the lock
+      // is gone — see wakeLockBreaksMic.
+      wakeLockBreaksMic = true;
+      debugLog('microphone lost while holding the wake lock; no longer keeping the screen awake');
+      syncWakeLock();
+    }
   }
 
   const recognitionOrNull = createRecognition(
@@ -845,7 +863,7 @@ async function startListener(dictionary: Dictionary): Promise<void> {
   // re-evaluated on every activity change and settings update rather than
   // requested once.
   function syncWakeLock(): void {
-    if (!userMuted && !micPermissionDenied && isPageActive() && !helpOpen && getSettings().keep_screen_awake) {
+    if (!userMuted && !micPermissionDenied && isPageActive() && !helpOpen && getSettings().keep_screen_awake && !wakeLockBreaksMic) {
       acquireWakeLock();
     } else {
       releaseWakeLock();
