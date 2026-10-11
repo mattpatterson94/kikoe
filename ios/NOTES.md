@@ -66,7 +66,7 @@ on'yomi misrecognitions described at the top of `src/recognition.ts`.
 
 Build: `npm run build`, then open `ios/Kikoe.xcodeproj`.
 
-- The app is named "Kikoe", with bundle id `com.mattdoesdev.kikoe.wrapper` and
+- The app is named "Kikoe", with bundle id `com.mattdoesdev.kikoe.wrapper` (now `com.mattdoesdev.kikoe`, see Releasing) and
   team 5UNQUGVP8A on automatic signing. It installs next to the Safari
   extension app rather than replacing it.
 - The icon is the Safari app's own: a copy of the opaque
@@ -236,6 +236,23 @@ measured: hours of real reviews on a device. That still needs doing.
     JS sees no `kikoeChrome` and no `kikoeExt` handler, while `CustomEvent`
     details still cross worlds in both directions (`kikoe:addCorrection`
     page → content, `kikoe:subjectData`/`settingsChanged` content → page).
+
+## Releasing
+
+- The app ships as the iOS/iPadOS version of the existing Kikoe listing:
+  bundle id `com.mattdoesdev.kikoe`, the same as the Safari-extension app.
+  The macOS version stays the Safari extension (`scripts/build-safari-app.sh`).
+  iOS and macOS builds of that bundle id share build numbers, so pick one
+  above both (0.12.0 went up as build 100).
+- `ios/scripts/build.sh <build> --upload` builds the web bundles, syncs the
+  version, archives and uploads to App Store Connect with the account signed
+  in to Xcode. Without `--upload` it exports an .ipa to `ios/build/export`.
+- `KikoeApp/PrivacyInfo.xcprivacy` declares UserDefaults (CA92.1) and no data
+  collection or tracking. Update it if the app starts using another
+  required-reason API.
+- Review notes should stress the native functionality (on-device speech
+  recognition, native settings and overlays; guideline 4.2) and that the user
+  signs in to their own WaniKani/BunPro accounts (5.2.2).
 
 ## Release pipeline change
 

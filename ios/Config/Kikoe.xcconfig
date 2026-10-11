@@ -5,5 +5,5 @@
 #include "Version.xcconfig"
 
 DEVELOPMENT_TEAM = 5UNQUGVP8A
-PRODUCT_BUNDLE_IDENTIFIER = com.mattdoesdev.kikoe.wrapper
+PRODUCT_BUNDLE_IDENTIFIER = com.mattdoesdev.kikoe
 CURRENT_PROJECT_VERSION = 1

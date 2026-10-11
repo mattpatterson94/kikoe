@@ -7,8 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## [0.12.0] - 2026-10-11
+
+### Added
+
+- A native iOS and iPadOS app replaces the Safari extension on iPhone and
+  iPad. It opens WaniKani and BunPro reviews in its own browser and runs
+  Kikoe's matching there, but listens with Apple's on-device speech
+  recognition (SpeechAnalyzer, falling back to SFSpeechRecognizer) instead of
+  Safari, which has never given extensions reliable speech recognition. It
+  adds first-launch setup (apps, microphone permission, WaniKani API token),
+  native settings, a floating transcript bubble with a live mic level, a
+  "Listen In" override for a single card's language, and background noise
+  reduction using iOS voice processing. The WaniKani token is kept in the
+  Keychain. The macOS app is still the Safari extension.
+
 ### Changed
 
+- Strict kanji readings are now on by default and cover one-kanji vocabulary
+  (上, 人, 日) as well as kanji cards. Speech recognition writes a spoken
+  reading back as the kanji, which the dictionary expands into every reading,
+  so a kun'yomi card used to pass on the on'yomi and vice versa. Existing
+  settings are migrated once to turn it on.
+- Japanese live transcripts now show on reading cards while you speak, as
+  long as they're kana or kanji. Romaji and English interims stay hidden.
+- The transcript no longer shows "→ answer" when the accepted answer only
+  differs from what was heard in case or end punctuation.
 - Kikoe no longer types into a BunPro card it has already answered. Once BunPro
   grades, it shows its own answer reveal in the input, and writing there
   replaces that reveal with whatever Kikoe submitted — so a speech result
@@ -25,6 +49,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Answers with a trailing full stop (大人。, "Brothers.") now match.
+  Recognizers end many results with punctuation, which made the dictionary
+  lookup miss. Speech corrections are saved and matched without it too, so
+  older corrections that ended in a full stop match again.
+- BunPro particles match the way recognizers spell them (は as わ, へ as え,
+  を as お) when the answer is unambiguously a particle, and numbers written
+  with digit-group commas ("600,000.") match an answer written without them.
+- Counted words that recognizers write with digits (30代) now reach the
+  dictionary as kanji and match their reading.
+- The "incorrect", "wrong" and "mistake" commands work in Japanese mode, where
+  the recognizer writes them in katakana (インコレクト, ロング, ミステイク).
+- A matched live transcript is no longer cancelled by trailing speech that
+  doesn't match.
 - "Show item info on wrong answer" now works on BunPro. It looked for a button
   by a title attribute that no card renders, so it silently matched nothing and
   the setting did nothing there — the button a graded card shows is labelled
@@ -361,7 +398,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Vitest test suite: 118 tests covering candidates, flashcards, settings,
   the content script, WaniKani helpers, and the speed enhancer.
 
-[Unreleased]: https://github.com/mattpatterson94/kikoe/compare/v0.11.0...HEAD
+[Unreleased]: https://github.com/mattpatterson94/kikoe/compare/v0.12.0...HEAD
+[0.12.0]: https://github.com/mattpatterson94/kikoe/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/mattpatterson94/kikoe/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/mattpatterson94/kikoe/compare/v0.9.1...v0.10.0
 [0.9.1]: https://github.com/mattpatterson94/kikoe/compare/v0.9.0...v0.9.1
