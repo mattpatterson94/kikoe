@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Kikoe iOS Screenshots</title>
+  <!-- App Store frames for the native iOS app. Captures come from the
+       Simulator (raw/), staged with the mock review pages in this folder.
+       Rendered by render.js: ?device=iphone|ipad&shot=1..4 -->
+  <style>
+    :root {
+      --bg: #fbf3e4;
+      --ink: #11120f;
+      --muted: #4f5149;
+      --mint: #c7e6cc;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: var(--bg); }
+    .shot {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at 92% 2%, rgba(199, 230, 204, 0.95) 0 16vw, transparent calc(16vw + 1px)),
+        radial-gradient(circle at 4% 96%, rgba(199, 230, 204, 0.75) 0 22vw, transparent calc(22vw + 1px)),
+        linear-gradient(150deg, #fff9ec 0%, #fbf3e4 62%, #eef5e9 100%);
+      display: grid;
+      grid-template-rows: auto 1fr;
+      justify-items: center;
+      padding: 7vh 7vw 0;
+    }
+    .shot::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(17, 18, 15, 0.045) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(17, 18, 15, 0.045) 1px, transparent 1px);
+      background-size: 72px 72px;
+      mask-image: linear-gradient(to bottom, rgba(0,0,0,0.5), transparent 70%);
+    }
+    .header { position: relative; z-index: 1; width: 100%; display: grid; gap: 2.2vh; }
+    .brand { display: flex; align-items: center; gap: 0.9em; font-weight: 700; font-size: var(--brand); }
+    .brand img { width: 2.3em; height: 2.3em; border-radius: 24%; box-shadow: 0 12px 36px rgba(17,18,15,0.14); }
+    .tag {
+      justify-self: start;
+      padding: 0.3em 0.8em;
+      border: 3px solid var(--ink);
+      border-radius: 999px;
+      background: var(--mint);
+      font-weight: 800;
+      font-size: var(--tag);
+    }
+    h1 { white-space: pre-line; margin: 0; font-size: var(--title); line-height: 0.98; font-weight: 850; letter-spacing: -0.01em; }
+    p { margin: 0; color: var(--muted); font-size: var(--sub); line-height: 1.25; font-weight: 600; max-width: 22em; }
+    .device-wrap { position: relative; z-index: 1; align-self: end; display: flex; justify-content: center; }
+    .device {
+      background: #0b0b0b;
+      padding: var(--bezel);
+      border-radius: var(--radius);
+      box-shadow: 0 40px 120px rgba(17, 18, 15, 0.28), inset 0 0 0 3px rgba(255,255,255,0.08);
+      transform: translateY(var(--drop));
+    }
+    .device img { display: block; width: 100%; border-radius: calc(var(--radius) - var(--bezel)); }
+
+    .iphone { --brand: 40px; --tag: 34px; --title: 124px; --sub: 46px; }
+    .iphone .device { width: 57vw; --bezel: 20px; --radius: 104px; --drop: 0px; }
+    .iphone .device-wrap { margin-bottom: 4.5vh; }
+    .ipad .device-wrap { margin-bottom: 4vh; }
+    .ipad { --brand: 46px; --tag: 38px; --title: 132px; --sub: 50px; }
+    .ipad .device { width: 58vw; --bezel: 28px; --radius: 64px; --drop: 0px; }
+  </style>
+</head>
+<body>
+  <main class="shot">
+    <div class="header">
+      <div class="brand"><img src="../../../ios/KikoeApp/Assets.xcassets/AppIcon.appiconset/icon1024.png" alt=""><span>Kikoe</span></div>
+      <span class="tag" data-field="tag"></span>
+      <h1 data-field="title"></h1>
+      <p data-field="subtitle"></p>
+    </div>
+    <div class="device-wrap"><div class="device"><img data-capture alt=""></div></div>
+  </main>
+  <script>
+    const shots = {
+      1: {
+        tag: "WaniKani",
+        title: "Answer reviews\nout loud",
+        subtitle: "Say the reading or meaning. Kikoe hears it and submits it for you.",
+        capture: "wanikani",
+      },
+      2: {
+        tag: "BunPro",
+        title: "Grammar,\nhands-free",
+        subtitle: "Speak BunPro answers and keep the review moving.",
+        capture: "bunpro",
+      },
+      3: {
+        tag: "Voice commands",
+        title: "Say “next”\nor “wrong”",
+        subtitle: "Run the whole review by voice, in English or Japanese.",
+        capture: "commands",
+      },
+      4: {
+        tag: "Settings",
+        title: "Made for\nyour reviews",
+        subtitle: "Pick your apps, turbo mode, live transcript and noise reduction.",
+        capture: "settings",
+      },
+    };
+    const params = new URLSearchParams(location.search);
+    const device = params.get("device") || "iphone";
+    const shot = shots[params.get("shot") || "1"];
+    document.querySelector(".shot").classList.add(device);
+    for (const field of ["tag", "title", "subtitle"]) {
+      document.querySelector(`[data-field="${field}"]`).textContent = shot[field];
+    }
+    document.querySelector("[data-capture]").src = `raw/${device}-${shot.capture}.png`;
+  </script>
+</body>
+</html>

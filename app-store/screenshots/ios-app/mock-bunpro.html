@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Reviews</title>
+<style>
+  body { margin: 0; background: #1b1b1b; color: #eee; font-family: -apple-system, "Hiragino Sans", sans-serif; }
+  .card { background: #2e2e2e; padding: 16px 16px 20px; border-radius: 0 0 14px 14px; }
+  .icons { display: flex; gap: 22px; font-size: 18px; color: #ddd; padding: 4px 4px 0; justify-content: space-between }
+  .sentence { text-align: center; font-size: 28px; margin: 54px 0 12px; }
+  .blank { display: inline-block; min-width: 150px; border-bottom: 2px solid #eee; font-size: 16px; color: #aaa; padding: 0 8px 4px; vertical-align: 4px }
+  .ok { color: #7fd88f; font-size: 28px; border-color: #7fd88f }
+  .en { text-align: center; font-size: 16px; color: #ddd; }
+  .en b { color: #e0625f }
+  .hint { display: inline-block; margin: 150px 0 10px; border: 1px solid #555; border-radius: 8px; padding: 6px 10px; font-size: 15px }
+  .input { display: flex; border: 1px solid #555; border-radius: 10px; background: #2a3a2c; border-color: #4f9b5c }
+  .InputManual__input { flex: 1; border: 0; background: transparent; color: #9be3a6; font-size: 22px; text-align: center; padding: 14px; }
+  .InputManual__button { border: 0; background: transparent; color: #e0625f; font-size: 22px; width: 52px }
+</style></head>
+<body>
+<script>/* Screenshot staging: keep the recognizer from starting (no permission prompt). */
+(function(){var h=window.webkit&&window.webkit.messageHandlers.kikoeSpeech;if(h){var post=h.postMessage.bind(h);h.postMessage=function(m){if(m&&m.type==="start")return;return post(m);};}var u=window.webkit&&window.webkit.messageHandlers.kikoeUI;if(u){var postUi=u.postMessage.bind(u);u.postMessage=function(m){if(m&&m.type==="helpHint")return;return postUi(m);};}})();</script>
+  <div id="quiz-metadata-element" data-meta-loc="review" data-meta-is-correct="false" data-meta-is-post-attempt="false"
+       data-meta-info='{"id":431,"type":"grammar"}' data-meta-input-mode="manual" data-meta-question-mode="cloze"
+       data-meta-total-submissions-count="0" data-meta-answers-array='["ですね"]'></div>
+  <div class="card">
+    <div class="icons"><span>⇤ &nbsp;⚙&#xFE0E; &nbsp;◐ &nbsp;⌕</span><span>12/30 &nbsp; ▢ 158 &nbsp; ⚡</span></div>
+    <div class="sentence">美味しい<span class="blank ok">ですね</span>。</div>
+    <div class="en">It's delicious, <b>right?</b></div>
+    <div class="hint">Hint ●●○○</div>
+    <div class="input"><input id="js-manual-input" class="InputManual__input" type="text" autocomplete="off" value="ですね"><button class="InputManual__button" type="button">➤</button></div>
+  </div>
+</body>
+</html>

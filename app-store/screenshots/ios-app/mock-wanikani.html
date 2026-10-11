@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Reviews</title>
+<style>
+  body { margin: 0; font-family: "Helvetica Neue", -apple-system, sans-serif; background: #f4f4f4; color: #333; }
+  .header { background: linear-gradient(#b02ef0, #9a1fd9); color: #fff; }
+  .stats { display: flex; justify-content: space-between; padding: 12px 16px; font-size: 15px; }
+  .stats span { opacity: .95 }
+  .character-header__characters { text-align: center; font-size: 96px; font-weight: 300; padding: 18px 0 44px; font-family: "Hiragino Sans", sans-serif; }
+  .bar { text-align: center; padding: 12px; background: linear-gradient(#f6f6f6, #e4e4e4); font-size: 18px; color: #555; border-bottom: 1px solid #ddd; }
+  .bar b { font-weight: 700; color: #333 }
+  .row { margin: 10px; display: flex; background: #88cc00; border-radius: 3px; }
+  #user-response { flex: 1; border: 0; background: transparent; text-align: center; font-size: 24px; padding: 13px; color: #fff; font-family: "Hiragino Sans", sans-serif; }
+  .quiz-input__submit-button { border: 0; background: transparent; color: #fff; font-size: 22px; width: 48px; }
+  .actions { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin: 0 10px; }
+  .actions div { background: #fff; border: 1px solid #ddd; height: 40px; border-radius: 3px; display: grid; place-items: center; color: #888; font-size: 16px; }
+  .info { margin: 18px 10px; background: #fff; border: 1px solid #e3e3e3; border-radius: 3px; padding: 16px 18px; font-size: 15px; line-height: 1.5; color: #555 }
+  .info h3 { margin: 0 0 6px; font-size: 13px; letter-spacing: .08em; text-transform: uppercase; color: #999 }
+  .hidden { display: none }
+</style></head>
+<body>
+<script>/* Screenshot staging: keep the recognizer from starting (no permission prompt). */
+(function(){var h=window.webkit&&window.webkit.messageHandlers.kikoeSpeech;if(h){var post=h.postMessage.bind(h);h.postMessage=function(m){if(m&&m.type==="start")return;return post(m);};}var u=window.webkit&&window.webkit.messageHandlers.kikoeUI;if(u){var postUi=u.postMessage.bind(u);u.postMessage=function(m){if(m&&m.type==="helpHint")return;return postUi(m);};}})();</script>
+  <div class="header">
+    <div class="stats"><span>⌂</span><span>94% &nbsp; ✓ 37 &nbsp; ▢ 58</span></div>
+    <div class="character-header__characters">大人</div>
+  </div>
+  <div class="quiz-input__input-container">
+    <div class="bar"><span class="quiz-input__question-category">Vocabulary</span> <b class="quiz-input__question-type">Reading</b></div>
+    <div class="row"><input id="user-response" type="text" autocomplete="off" value="おとな"><button class="quiz-input__submit-button" type="button">›</button></div>
+  </div>
+  <div class="actions"><div>◷</div><div>✓</div><div>◉</div><div>↺</div><div>◀</div></div>
+  <div class="info"><h3>Meaning</h3>Adult, Grown-up<h3 style="margin-top:12px">Reading</h3>おとな</div>
+  <script type="application/json" id="quiz-queue">{"subject_ids": [2552, 2553, 2554]}</script>
+</body>
+</html>
