@@ -132,10 +132,21 @@ function isSingleKanji(s: string): boolean {
 // '9': ['きゅう', 'く', 'くう'] homonym), so the lookup maps
 // heard → [intended, ...]. Consulted before the built-in tables so users can
 // override shipped entries. Blank or malformed pairs are skipped.
+// Recognizers end utterances with a full stop or question mark whenever
+// they feel like it ("Brothers." one time, "brothers" the next), so a
+// correction is saved and looked up without trailing punctuation.
+export function trimTrailingPunctuation(s: string): string {
+  return s.trim().replace(/[\s.,!?;:。、！？]+$/u, '');
+}
+
+function correctionKey(s: string): string {
+  return trimTrailingPunctuation(s).toLowerCase();
+}
+
 function buildCorrectionLookup(pairs: readonly (Partial<Correction> | null)[] | undefined): Record<string, string[]> {
   const lookup: Record<string, string[]> = {};
   for (const pair of pairs || []) {
-    const heard = (pair?.heard ?? '').trim().toLowerCase();
+    const heard = correctionKey(pair?.heard ?? '');
     const intended = (pair?.intended ?? '').trim();
     if (!heard || !intended) continue;
     (lookup[heard] = lookup[heard] || []).push(intended);
@@ -270,7 +281,7 @@ function matchesAnyReading(
     if (isKana(c.data)) {
       if (matchingReading(c.data, acceptedReadings)) return true;
     }
-    for (const intended of customLookup[c.data.toLowerCase()] || []) {
+    for (const intended of customLookup[correctionKey(c.data)] || []) {
       if (matchingReading(intended, acceptedReadings)) return true;
     }
     const h = homonyms[c.data.toLowerCase()];
@@ -290,7 +301,7 @@ function matchesAnyMeaning(
 ): boolean {
   if (!normalizedMeanings.length) return false;
   for (const c of candidates) {
-    const custom = customLookup[c.data.toLowerCase()] || [];
+    const custom = customLookup[correctionKey(c.data)] || [];
     const corrected = meaningCorrections[c.data.toLowerCase()] ?? c.data;
     for (const text of [...custom, corrected]) {
       const norm = normalize(text);
@@ -404,7 +415,7 @@ export function checkAnswer(
       }
       // User corrections first, so they can override the built-in homonyms.
       // kanaForms also converts a romaji intended value ("shiri" → しり).
-      for (const intended of customLookup[c.data.toLowerCase()] || []) {
+      for (const intended of customLookup[correctionKey(c.data)] || []) {
         const answer = matchingReading(intended, acceptedReadings, particleSounds);
         if (answer) {
           return { success: true, answer, transcript: { raw, matched: answer } };
@@ -464,7 +475,7 @@ export function checkAnswer(
     for (const c of candidates) {
       // Apply SR corrections before normalizing — user corrections first,
       // so they can override the built-in table.
-      const custom = customLookup[c.data.toLowerCase()] || [];
+      const custom = customLookup[correctionKey(c.data)] || [];
       const corrected = meaningCorrections[c.data.toLowerCase()] ?? c.data;
       for (const text of [...custom, corrected]) {
         const norm = normalize(text);

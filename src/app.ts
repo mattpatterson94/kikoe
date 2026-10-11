@@ -1,4 +1,4 @@
-import { checkAnswer } from './flashcards';
+import { checkAnswer, trimTrailingPunctuation } from './flashcards';
 import type { CheckResult } from './flashcards';
 import { createRecognition, setLanguage } from './recognition';
 import { answerHints, getNativeSpeechHandler } from './native_recognition';
@@ -468,7 +468,7 @@ async function startListener(dictionary: Dictionary): Promise<void> {
     if (!transcript.raw || !intended) return transcript;
     return {
       ...transcript,
-      correction: { heard: transcript.raw, intended },
+      correction: { heard: trimTrailingPunctuation(transcript.raw), intended },
     };
   }
 

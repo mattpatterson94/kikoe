@@ -1,4 +1,4 @@
-import { checkAnswer, normalize } from '../src/flashcards';
+import { checkAnswer, normalize, trimTrailingPunctuation } from '../src/flashcards';
 import type { CheckResult } from '../src/flashcards';
 import type { Dictionary } from '../src/dict';
 import { ToHiragana } from '../src/candidates/to_hiragana';
@@ -416,6 +416,21 @@ describe('custom corrections', () => {
     const r = checkAnswer(ctx, makeTransformers(), 'PG', { corrections });
     expectSuccess(r);
     expect(r.answer).toBe('ひじ');
+  });
+
+  test('trailing punctuation on either side does not stop a correction matching', () => {
+    const ctx = { type: 'meaning', prompt: '一般', meanings: ['Generally'] };
+    const saved = checkAnswer(ctx, makeTransformers(), 'brothers', { corrections: [{ heard: 'Brothers.', intended: 'Generally' }] });
+    expectSuccess(saved);
+    expect(saved.answer).toBe('generally');
+    const heard = checkAnswer(ctx, makeTransformers(), 'Brothers?', { corrections: [{ heard: 'brothers', intended: 'Generally' }] });
+    expectSuccess(heard);
+  });
+
+  test('trimTrailingPunctuation drops recognizer end punctuation only', () => {
+    expect(trimTrailingPunctuation(' Brothers. ')).toBe('Brothers');
+    expect(trimTrailingPunctuation('ひじ。')).toBe('ひじ');
+    expect(trimTrailingPunctuation('e.g. thing')).toBe('e.g. thing');
   });
 
   test('reading: a heard string can map to multiple intended readings', () => {
