@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// App-wide state: which site is showing, the live page sessions, and the
-/// settings sheet.
+/// App-wide state: which apps are on and showing, the live page sessions,
+/// and the settings sheet.
 @MainActor
 final class AppModel: ObservableObject {
     @Published var site: Site {
@@ -10,20 +10,31 @@ final class AppModel: ObservableObject {
             _ = session(for: site)
         }
     }
+    /// The apps the user has turned on, in Site order. Never empty.
+    @Published private(set) var enabledSites: [Site]
+    @Published private(set) var onboarded: Bool
     @Published var showSettings = false
     @Published var alert: PageAlert?
 
-    /// Both sites stay loaded once visited, so switching back keeps the
-    /// review in progress. If iOS reclaims a background page's process, the
-    /// session reloads it when it's next shown.
+    /// Every enabled site stays loaded once visited, so switching back keeps
+    /// the review in progress. If iOS reclaims a background page's process,
+    /// the session reloads it when it's next shown.
     private(set) var sessions: [Site: PageSession] = [:]
 
     init() {
-        var initial = UserDefaults.standard.string(forKey: Pref.lastSite).flatMap(Site.init(rawValue:)) ?? .wanikani
+        let defaults = UserDefaults.standard
+        let stored = defaults.stringArray(forKey: Pref.enabledSites)?.compactMap(Site.init(rawValue:)) ?? []
+        let enabled = Site.allCases.filter { stored.isEmpty || stored.contains($0) }
+        enabledSites = enabled
+        onboarded = defaults.bool(forKey: Pref.onboarded)
+        var initial = defaults.string(forKey: Pref.lastSite).flatMap(Site.init(rawValue:)) ?? enabled[0]
         #if DEBUG
-        if let env = ProcessInfo.processInfo.environment["KIKOE_SITE"].flatMap(Site.init(rawValue:)) { initial = env }
+        let env = ProcessInfo.processInfo.environment
+        if let site = env["KIKOE_SITE"].flatMap(Site.init(rawValue:)) { initial = site }
+        // Fixture and eval runs go straight to the page.
+        if env["KIKOE_FIXTURE"] != nil || env["KIKOE_SKIP_ONBOARDING"] != nil { onboarded = true }
         #endif
-        site = initial
+        site = enabled.contains(initial) ? initial : enabled[0]
     }
 
     var current: PageSession { session(for: site) }
@@ -35,6 +46,31 @@ final class AppModel: ObservableObject {
         return session
     }
 
+    func isEnabled(_ site: Site) -> Bool { enabledSites.contains(site) }
+
+    /// Turns an app on or off. The last one can't be turned off. Turning off
+    /// the one showing moves to another first, then lets its page go.
+    func setEnabled(_ site: Site, _ on: Bool) {
+        var set = Set(enabledSites)
+        if on { set.insert(site) } else { set.remove(site) }
+        guard !set.isEmpty else { return }
+        enabledSites = Site.allCases.filter(set.contains)
+        UserDefaults.standard.set(enabledSites.map(\.rawValue), forKey: Pref.enabledSites)
+        if !on {
+            if self.site == site { self.site = enabledSites[0] }
+            sessions.removeValue(forKey: site)?.close()
+        }
+    }
+
+    /// Ends onboarding with the apps the user picked, starting on the first.
+    func finishOnboarding(sites: Set<Site>) {
+        for site in Site.allCases { setEnabled(site, true) }
+        for site in Site.allCases where !sites.contains(site) { setEnabled(site, false) }
+        site = enabledSites[0]
+        UserDefaults.standard.set(true, forKey: Pref.onboarded)
+        onboarded = true
+    }
+
     /// Opens WaniKani's token page with discovery armed, so content.ts reads
     /// the token off the page and reopens settings (the same flow as the
     /// extension's "Find token" button).
@@ -44,6 +80,7 @@ final class AppModel: ObservableObject {
             "kikoe_api_token_discovery_status": "pending",
         ])
         showSettings = false
+        setEnabled(.wanikani, true)
         site = .wanikani
         session(for: .wanikani).load(Site.apiTokenPage)
     }

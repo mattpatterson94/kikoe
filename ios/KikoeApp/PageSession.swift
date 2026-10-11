@@ -87,12 +87,19 @@ final class PageSession: NSObject, ObservableObject {
         if let path = ProcessInfo.processInfo.environment["KIKOE_FIXTURE"],
            ProcessInfo.processInfo.environment["KIKOE_SITE"] == site.rawValue,
            let html = try? String(contentsOfFile: path, encoding: .utf8) {
-            let reviewPath = site == .wanikani ? "/subjects/review" : "/reviews"
-            webView.loadHTMLString(html, baseURL: URL(string: reviewPath, relativeTo: site.home)?.absoluteURL)
+            webView.loadHTMLString(html, baseURL: URL(string: site.reviewPath, relativeTo: site.home)?.absoluteURL)
             return
         }
         #endif
         webView.load(URLRequest(url: site.home))
+    }
+
+    /// The app was turned off: stop listening and let the page go.
+    func close() {
+        SpeechService.shared.release(self)
+        webView.stopLoading()
+        webView.configuration.userContentController.removeAllScriptMessageHandlers()
+        webView.removeFromSuperview()
     }
 
     func load(_ url: URL) {

@@ -1,5 +1,8 @@
 import SwiftUI
 
+/// Every review site Kikoe can drive. Each case mirrors an adapter that
+/// src/site.ts detects; adding an app means a case here and an adapter
+/// there. Which ones the user sees is AppModel.enabledSites.
 enum Site: String, CaseIterable, Identifiable {
     case wanikani
     case bunpro
@@ -10,6 +13,35 @@ enum Site: String, CaseIterable, Identifiable {
         switch self {
         case .wanikani: "WaniKani"
         case .bunpro: "BunPro"
+        }
+    }
+
+    /// One line for onboarding and the Apps settings.
+    var blurb: String {
+        switch self {
+        case .wanikani: "Kanji and vocabulary reviews"
+        case .bunpro: "Grammar and vocabulary reviews"
+        }
+    }
+
+    /// Stands in for the site's logo, which isn't ours to ship: 鰐 (wani)
+    /// and 文 (bun), on the site's tint.
+    var glyph: String {
+        switch self {
+        case .wanikani: "鰐"
+        case .bunpro: "文"
+        }
+    }
+
+    /// WaniKani's adapter looks answers up through the API; BunPro's reads
+    /// them off the page.
+    var needsApiToken: Bool { self == .wanikani }
+
+    /// Where a review card lives, for the DEBUG fixture loader.
+    var reviewPath: String {
+        switch self {
+        case .wanikani: "/subjects/review"
+        case .bunpro: "/reviews"
         }
     }
 
@@ -40,6 +72,8 @@ enum Pref {
     static let engine = "kikoe.engine"
     static let sendHints = "kikoe.sendHints"
     static let lastSite = "kikoe.lastSite"
+    static let enabledSites = "kikoe.enabledSites"
+    static let onboarded = "kikoe.onboarded"
     static let developerMode = "kikoe.developerMode"
     static let showDebugBar = "kikoe.dev.showDebugBar"
     static let showSayButton = "kikoe.dev.showSayButton"

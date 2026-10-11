@@ -17,7 +17,8 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             Form {
-                TokenSection(app: app)
+                AppsSection(app: app)
+                if app.isEnabled(.wanikani) { TokenSection(app: app) }
                 PermissionSection()
 
                 Section {
@@ -145,6 +146,34 @@ struct SettingsView: View {
     }
 }
 
+// MARK: - Apps
+
+private struct AppsSection: View {
+    @ObservedObject var app: AppModel
+
+    var body: some View {
+        Section {
+            ForEach(Site.allCases) { site in
+                let on = app.isEnabled(site)
+                Toggle(isOn: Binding(get: { on }, set: { app.setEnabled(site, $0) })) {
+                    HStack(spacing: 12) {
+                        SiteBadge(site: site, size: 30)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(site.name)
+                            Text(site.blurb).font(.footnote).foregroundStyle(.secondary)
+                        }
+                    }
+                }
+                .disabled(on && app.enabledSites.count == 1)
+            }
+        } header: {
+            Text("Apps")
+        } footer: {
+            Text("Turn off the ones you don't use; Kikoe only loads apps that are on. With two or more on, tap the app name at the top to switch.")
+        }
+    }
+}
+
 // MARK: - API token
 
 private struct TokenSection: View {
@@ -152,11 +181,7 @@ private struct TokenSection: View {
     @ObservedObject private var settings = SyncSettings.shared
     @State private var draft = ""
     @State private var revealed = false
-    @State private var status: Status = .unchecked
-
-    enum Status: Equatable {
-        case unchecked, checking, valid(String), invalid(String)
-    }
+    @State private var status: WaniKaniToken.Status = .unchecked
 
     var body: some View {
         Section {
@@ -242,8 +267,12 @@ private struct TokenSection: View {
     }
 }
 
-private enum WaniKaniToken {
-    static func check(_ token: String) async -> TokenSection.Status {
+enum WaniKaniToken {
+    enum Status: Equatable {
+        case unchecked, checking, valid(String), invalid(String)
+    }
+
+    static func check(_ token: String) async -> Status {
         var request = URLRequest(url: URL(string: "https://api.wanikani.com/v2/user")!)
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         request.setValue("20170710", forHTTPHeaderField: "Wanikani-Revision")

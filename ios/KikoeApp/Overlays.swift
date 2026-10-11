@@ -72,36 +72,60 @@ struct IndicatorBanner: View {
     }
 }
 
-/// WaniKani | BunPro, each tinted with its site colour when selected.
-struct SiteSwitcher: View {
-    @Binding var site: Site
-    @Namespace private var selection
+/// A site's glyph on its tint, standing in for its logo.
+struct SiteBadge: View {
+    let site: Site
+    var size: CGFloat = 22
 
     var body: some View {
-        HStack(spacing: 2) {
-            ForEach(Site.allCases) { option in
-                Button {
-                    withAnimation(.snappy(duration: 0.25)) { site = option }
-                } label: {
-                    Text(option.name)
-                        .font(.subheadline.weight(.semibold))
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 5)
-                        .foregroundStyle(site == option ? .white : .primary)
-                        .background {
-                            if site == option {
-                                Capsule().fill(option.tint)
-                                    .matchedGeometryEffect(id: "selected", in: selection)
-                            }
-                        }
-                        .contentShape(Capsule())
+        Text(site.glyph)
+            .font(.system(size: size * 0.62, weight: .bold))
+            .foregroundStyle(.white)
+            .frame(width: size, height: size)
+            .background(site.tint, in: RoundedRectangle(cornerRadius: size * 0.27, style: .continuous))
+            .accessibilityHidden(true)
+    }
+}
+
+/// The nav bar title: the current app, and with more than one app on, a
+/// menu to switch between them. Scales to any number of apps without
+/// taking room from the page.
+struct SiteMenu: View {
+    @ObservedObject var app: AppModel
+
+    var body: some View {
+        if app.enabledSites.count > 1 {
+            Menu {
+                Picker("App", selection: $app.site) {
+                    ForEach(app.enabledSites) { site in
+                        Text(site.name).tag(site)
+                    }
                 }
-                .buttonStyle(.plain)
-                .accessibilityAddTraits(site == option ? .isSelected : [])
+                Divider()
+                Button { app.showSettings = true } label: {
+                    Label("Manage Apps…", systemImage: "square.grid.2x2")
+                }
+            } label: {
+                title(chevron: true)
+            }
+            .accessibilityLabel("\(app.site.name), switch app")
+        } else {
+            title(chevron: false)
+        }
+    }
+
+    private func title(chevron: Bool) -> some View {
+        HStack(spacing: 7) {
+            SiteBadge(site: app.site)
+            Text(app.site.name).font(.headline).foregroundStyle(.primary)
+            if chevron {
+                Image(systemName: "chevron.down")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(.secondary)
             }
         }
-        .padding(3)
-        .background(Color(.tertiarySystemFill), in: Capsule())
+        .fixedSize()
+        .contentShape(Rectangle())
     }
 }
 

@@ -22,7 +22,15 @@ struct RootView: View {
     @StateObject private var app = AppModel()
 
     var body: some View {
-        SessionScreen(app: app, session: app.current)
+        Group {
+            if app.onboarded {
+                SessionScreen(app: app, session: app.current)
+                    .transition(.opacity)
+            } else {
+                OnboardingView(app: app)
+            }
+        }
+        .animation(.easeInOut(duration: 0.3), value: app.onboarded)
             .sheet(isPresented: $app.showSettings) {
                 SettingsView(app: app)
             }
@@ -122,7 +130,7 @@ struct SessionScreen: View {
             }
         }
         ToolbarItem(placement: .principal) {
-            SiteSwitcher(site: $app.site).fixedSize()
+            SiteMenu(app: app)
         }
         ToolbarItemGroup(placement: .topBarTrailing) {
             if session.helpButtonVisible {
