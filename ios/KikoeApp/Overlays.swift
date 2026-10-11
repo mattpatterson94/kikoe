@@ -11,11 +11,10 @@ struct IndicatorPill: View {
     var body: some View {
         Button(action: action) {
             Image(systemName: symbol)
-                .font(.footnote.weight(.semibold))
-                .padding(.horizontal, 10)
-                .padding(.vertical, 5)
-                .foregroundStyle(foreground)
-                .background(background, in: Capsule())
+                .font(.body.weight(.semibold))
+                .foregroundStyle(indicator.needsAttention ? indicator.attentionColor : indicator.micColor)
+                .frame(minWidth: 44, minHeight: 44)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel(indicator.label)
@@ -25,14 +24,6 @@ struct IndicatorPill: View {
     private var symbol: String {
         if indicator.needsAttention { return "exclamationmark.triangle.fill" }
         return indicator.micOn ? "mic.fill" : "mic.slash.fill"
-    }
-
-    private var foreground: Color {
-        indicator.needsAttention ? .white : indicator.micColor
-    }
-
-    private var background: Color {
-        indicator.needsAttention ? indicator.attentionColor : indicator.micColor.opacity(0.15)
     }
 }
 
@@ -130,12 +121,13 @@ struct SiteMenu: View {
     }
 }
 
-/// Always-on strip above or below the page: a live meter showing the mic is
-/// hearing you, then what the recognizer made of it. Stands in for the DOM
-/// transcript chip, which comes and goes, so there's a constant sign that
-/// listening is working.
-struct ListeningBar: View {
-    let indicator: IndicatorState?
+/// The floating transcript bubble, shown for the whole review rather than
+/// only after speech: between answers it says whether Kikoe is listening,
+/// with a live level meter so there's a constant sign the mic hears you.
+/// Tapping that idle state does what the pill does; tapping a "save as a
+/// correction" bubble opens the correction dialog.
+struct TranscriptView: View {
+    let indicator: IndicatorState
     let bubble: TranscriptBubble?
     @ObservedObject var level: MicLevel
     /// The language picked from the More menu for this card, if any.
@@ -143,99 +135,90 @@ struct ListeningBar: View {
     let onMic: () -> Void
     let onCorrection: (TranscriptBubble.Correction) -> Void
 
-    private var live: Bool { indicator?.state == "listening" }
-    private var micTint: Color {
-        guard let indicator, !indicator.needsAttention else { return .secondary }
-        return indicator.micColor
-    }
-
     var body: some View {
-        HStack(spacing: 12) {
-            Button(action: onMic) {
-                HStack(spacing: 6) {
-                    Image(systemName: (indicator?.micOn ?? true) ? "mic.fill" : "mic.slash.fill")
-                        .font(.body.weight(.semibold))
-                    LevelMeter(level: live ? CGFloat(level.value) : 0)
-                        .opacity(live ? 1 : 0.4)
-                }
-                .foregroundStyle(micTint)
-                .padding(.horizontal, 12)
-                .frame(minHeight: 44)
-                .background(micTint.opacity(0.15), in: Capsule())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(indicator?.micOn == false ? "Resume listening" : "Mute")
-            .accessibilityValue(indicator.map { $0.micOn && !$0.needsAttention ? "Listening" : $0.message } ?? "")
-
-            if bubble == nil, let indicator, indicator.needsAttention {
-                // The problem itself, tappable like the pill (the token page
-                // for a missing token). Replaces the banner while the bar is on.
-                Button(action: onMic) {
-                    Label(indicator.message, systemImage: "exclamationmark.triangle.fill")
-                        .font(.callout.weight(.semibold))
-                        .foregroundStyle(indicator.attentionColor)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-            } else if let correction = bubble?.correction {
-                Button { onCorrection(correction) } label: { words }
-                    .buttonStyle(.plain)
+        Group {
+            if let bubble {
+                heard(bubble).id(bubble.id)
             } else {
-                words
+                Button(action: onMic) { status }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(statusText)
+                    .accessibilityHint(indicator.state == "no-token" ? "Opens the WaniKani token page" : "Mutes or resumes listening")
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 8)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .transition(.opacity)
         .animation(.easeOut(duration: 0.2), value: bubble)
+        .animation(.easeOut(duration: 0.2), value: indicator)
     }
 
-    @ViewBuilder
-    private var words: some View {
-        if let bubble {
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
-                if bubble.error {
-                    Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.red)
-                }
-                Text(bubble.text)
-                    .font(.body.weight(.medium))
-                    .foregroundStyle(bubble.error ? .red : .primary)
-                if let detail = bubble.detail {
-                    Text(detail).font(.callout).foregroundStyle(.secondary)
-                }
-                Spacer(minLength: 0)
-                if bubble.correction != nil {
-                    Image(systemName: "plus.bubble").foregroundStyle(.tint)
-                        .accessibilityLabel("Save as a correction")
+    private func heard(_ bubble: TranscriptBubble) -> some View {
+        let content = HStack(alignment: .firstTextBaseline, spacing: 6) {
+            if bubble.error { Image(systemName: "exclamationmark.triangle.fill") }
+            Text(bubble.text).font(.body.weight(.medium))
+            if let detail = bubble.detail {
+                Text(detail).font(.callout).foregroundStyle(bubble.error ? .white.opacity(0.8) : .secondary)
+            }
+            if bubble.correction != nil {
+                Image(systemName: "plus.bubble").foregroundStyle(.tint)
+                    .accessibilityLabel("Save as a correction")
+            }
+        }
+        .foregroundStyle(bubble.error ? .white : .primary)
+        .bubble(fill: bubble.error ? .red : nil)
+
+        return Group {
+            if let correction = bubble.correction {
+                Button { onCorrection(correction) } label: { content }.buttonStyle(.plain)
+            } else {
+                content
+            }
+        }
+    }
+
+    private var status: some View {
+        HStack(spacing: 8) {
+            if indicator.needsAttention {
+                Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(indicator.attentionColor)
+            } else {
+                Image(systemName: indicator.micOn ? "mic.fill" : "mic.slash.fill")
+                    .foregroundStyle(indicator.micColor)
+                if live {
+                    LevelMeter(level: CGFloat(level.value)).foregroundStyle(.secondary)
                 }
             }
-            .lineLimit(1)
-            .contentShape(Rectangle())
-            .id(bubble.id)
-            .transition(.opacity)
-        } else {
-            Text(placeholder)
-                .font(.callout)
-                .foregroundStyle(.secondary)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .transition(.opacity)
+            Text(statusText).font(.callout).foregroundStyle(.secondary)
         }
+        .bubble(fill: nil)
     }
 
-    private var placeholder: String {
-        guard let indicator else { return "Kikoe listens during reviews" }
-        if indicator.state == "listening" {
-            if let lang = languageOverride { return "Listening in \(SpeechLanguage.name(lang)) for this card" }
-            return "Listening. Say your answer"
+    private var live: Bool { indicator.state == "listening" }
+
+    private var statusText: String {
+        if indicator.needsAttention { return indicator.message }
+        if live {
+            if let lang = languageOverride { return "Listening in \(SpeechLanguage.name(lang))" }
+            return "Listening"
         }
-        if indicator.state == "muted" { return "Muted. Tap the mic to listen" }
-        return indicator.message
+        return indicator.micOn ? indicator.message : "Muted"
+    }
+}
+
+private extension View {
+    /// The transcript capsule: frosted, or a solid colour for errors.
+    func bubble(fill: Color?) -> some View {
+        padding(.horizontal, 14)
+            .padding(.vertical, 9)
+            .frame(minHeight: 44)
+            .background {
+                if let fill { Capsule().fill(fill) } else { Capsule().fill(.regularMaterial) }
+            }
+            .shadow(color: .black.opacity(0.12), radius: 8, y: 2)
+            .contentShape(Capsule())
     }
 }
 
 /// Four bars that rise with the input level, the middle ones most, like the
-/// system's own dictation meter. Flat when the mic is off.
+/// system's own dictation meter.
 struct LevelMeter: View {
     let level: CGFloat
     private let weights: [CGFloat] = [0.55, 1, 0.8, 0.45]

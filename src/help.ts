@@ -303,7 +303,7 @@ export function closeHelpPanel(): void {
 // lands (gated by the help_hint_shown flag — see app.ts / content.ts).
 export function showHelpHint(settings: Settings): void {
   if (isNativeUi()) {
-    postNativeUi({ type: 'helpHint', text: 'New: say "help" or tap ? for voice commands' });
+    postNativeUi({ type: 'helpHint', text: 'New: say "help" for voice commands, or find them in the ⋯ menu' });
     return;
   }
   if (document.getElementById('kikoe-help-hint')) return;

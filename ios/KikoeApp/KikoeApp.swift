@@ -61,43 +61,33 @@ struct SessionScreen: View {
     var body: some View {
         NavigationStack {
             WebContainer(session: session)
-                // Edge to edge, except where the listening bar sits: the page
-                // makes room for it instead of scrolling under it.
-                .ignoresSafeArea(edges: showBar && barAtBottom ? [] : .bottom)
+                .ignoresSafeArea(edges: .bottom)
                 .overlay(alignment: .top) {
                     VStack(spacing: 8) {
                         if session.isLoading {
                             ProgressView().progressViewStyle(.linear).tint(session.site.tint)
                         }
-                        if !showBar, let indicator = session.indicator, indicator.needsAttention {
+                        if bubbleIndicator == nil, let indicator = session.indicator, indicator.needsAttention {
                             IndicatorBanner(indicator: indicator) { session.sendAction("indicatorTapped") }
                                 .transition(slideIn)
                         }
                         if let hint = session.hint {
                             HintToast(text: hint).transition(slideIn)
                         }
+                        if !bubbleAtBottom, let indicator = bubbleIndicator { transcript(indicator) }
                     }
                     .padding(.horizontal)
                     .padding(.top, 8)
                 }
+                .overlay(alignment: .bottom) {
+                    if bubbleAtBottom, let indicator = bubbleIndicator {
+                        transcript(indicator).padding()
+                    }
+                }
                 .animation(.easeOut(duration: 0.3), value: session.hint)
                 .animation(.easeOut(duration: 0.3), value: session.indicator)
                 .safeAreaInset(edge: .top, spacing: 0) {
-                    VStack(spacing: 0) {
-                        if developerMode && showDebugBar { DebugBar() }
-                        if showBar && !barAtBottom {
-                            listeningBar
-                                .background(.bar)
-                                .overlay(alignment: .bottom) { Divider() }
-                        }
-                    }
-                }
-                .safeAreaInset(edge: .bottom, spacing: 0) {
-                    if showBar && barAtBottom {
-                        listeningBar
-                            .background(.bar, ignoresSafeAreaEdges: .bottom)
-                            .overlay(alignment: .top) { Divider() }
-                    }
+                    if developerMode && showDebugBar { DebugBar() }
                 }
                 .toolbar { toolbar }
                 .navigationBarTitleDisplayMode(.inline)
@@ -125,13 +115,17 @@ struct SessionScreen: View {
         }
     }
 
-    /// The "Show live transcript" setting now means the always-on bar.
-    private var showBar: Bool { settings.bool("transcript").wrappedValue }
-    private var barAtBottom: Bool { settings.string("transcript_position").wrappedValue != "top" }
+    /// The bubble shows for the whole review (the page posts an indicator
+    /// only while Kikoe is active), not just after speech. It also carries
+    /// problem states, so the banner only shows when the bubble is off.
+    private var bubbleIndicator: IndicatorState? {
+        settings.bool("transcript").wrappedValue ? session.indicator : nil
+    }
+    private var bubbleAtBottom: Bool { settings.string("transcript_position").wrappedValue != "top" }
 
-    private var listeningBar: some View {
-        ListeningBar(
-            indicator: session.indicator,
+    private func transcript(_ indicator: IndicatorState) -> some View {
+        TranscriptView(
+            indicator: indicator,
             bubble: session.transcript,
             level: speech.mic.level,
             languageOverride: speech.languageOverride,
@@ -158,20 +152,15 @@ struct SessionScreen: View {
         ToolbarItem(placement: .principal) {
             SiteMenu(app: app)
         }
-        ToolbarItemGroup(placement: .topBarTrailing) {
-            if session.helpButtonVisible {
-                Button { session.sendAction("helpButtonTapped") } label: {
-                    Image(systemName: "questionmark.circle")
-                }
-                .accessibilityLabel("Voice commands")
-            }
+        ToolbarItem(placement: .topBarTrailing) {
             SessionMenu(session: session, speech: SpeechService.shared) { app.showSettings = true }
         }
     }
 }
 
 /// The nav bar's More menu: ways out when something goes wrong mid-review,
-/// then Settings.
+/// then the voice-command help (when the help button setting is on) and
+/// Settings.
 struct SessionMenu: View {
     @ObservedObject var session: PageSession
     @ObservedObject var speech: SpeechService
@@ -196,6 +185,11 @@ struct SessionMenu: View {
             .pickerStyle(.menu)
             .disabled(!speech.listening)
             Divider()
+            if session.helpButtonVisible {
+                Button { session.sendAction("helpButtonTapped") } label: {
+                    Label("Voice Commands", systemImage: "questionmark.circle")
+                }
+            }
             Button(action: openSettings) {
                 Label("Settings", systemImage: "gearshape")
             }

@@ -39,9 +39,9 @@ struct SettingsView: View {
                     Text("One shot per question: a wrong answer is submitted instead of letting you retry.")
                 }
 
-                Section("Listening bar") {
+                Section("Live transcript") {
                     Toggle(isOn: settings.bool("transcript")) {
-                        labelled("Show listening bar", "A live mic meter and what Kikoe hears, above or below the page")
+                        labelled("Show live transcript", "Whether Kikoe is listening and what it hears, over the page")
                     }
                     Picker("Theme", selection: settings.string("transcript_theme")) {
                         Text("System").tag("system")

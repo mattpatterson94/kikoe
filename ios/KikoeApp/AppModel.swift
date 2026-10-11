@@ -140,7 +140,7 @@ final class SyncSettings: ObservableObject {
 
     /// Mirrors src/settings.ts `defaults`, except the transcript sits at the
     /// bottom: on a phone that's where the thumb and eye already are, and
-    /// the native bar reads this value itself, so the page's own default
+    /// the native bubble reads this value itself, so the page's own default
     /// doesn't matter here.
     static let defaults: [String: Any] = [
         "debug": false,
