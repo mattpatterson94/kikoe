@@ -53,6 +53,11 @@ final class Probe: ObservableObject {
     @Published var results: [ProbeResult] = []
     @Published var running = false
     @Published var status = ""
+    @Published var resultsFile: URL?
+
+    static var resultsURL: URL {
+        FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("probe.json")
+    }
 
     func run(engines: [EngineKind]) async {
         running = true
@@ -97,9 +102,9 @@ final class Probe: ObservableObject {
         }
         status = summary
         NSLog("[probe] SUMMARY\n\(summary)")
-        if let dir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first,
-           let data = try? JSONEncoder().encode(results) {
-            try? data.write(to: dir.appendingPathComponent("probe.json"))
+        if let data = try? JSONEncoder().encode(results) {
+            try? data.write(to: Self.resultsURL)
+            resultsFile = Self.resultsURL
         }
     }
 
@@ -134,6 +139,9 @@ struct ProbeView: View {
                 }
                 .disabled(probe.running)
                 Text(probe.status).font(.footnote.monospaced())
+                if let file = probe.resultsFile {
+                    ShareLink("Share results (probe.json)", item: file)
+                }
             }
             Section("Results") {
                 ForEach(probe.results) { r in
