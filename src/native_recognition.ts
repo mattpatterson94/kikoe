@@ -9,6 +9,7 @@
 // its own (audio engine running, recognition requests swapped underneath),
 // so there's no onend/auto-restart dance here: start/stop/restart are
 // explicit, and the host only reports results and errors.
+import { SHARED_COMMANDS } from './commands';
 import type { RecognitionControls, TranscriptCallback } from './recognition';
 
 export const NATIVE_SPEECH_EVENT = 'kikoe:nativeSpeech';
@@ -41,24 +42,37 @@ export function getNativeSpeechHandler(): MessageHandler | null {
 }
 
 // What the native recognizer should bias toward for this card: the accepted
-// answers in the language being spoken. Reading cards also get the prompt
-// itself, since Japanese recognizers commonly emit the kanji spelling of a
-// word rather than its kana, and the matcher already converts that back.
+// answers in the language being spoken, plus the voice commands in that
+// language. Commands only fire on an exact transcript, so without the bias a
+// recognizer leaning toward the card's answers turns まちがい into a near miss.
+//
+// Reading cards also get the prompt itself, since Japanese recognizers
+// commonly emit the kanji spelling of a word rather than its kana, and the
+// matcher converts that back. Not for a single-kanji prompt (kanji cards, 麦
+// むぎ): there a kanji transcript can't say which reading was spoken, so the
+// matcher rejects it in strict mode, and hinting the kanji makes the
+// recognizer write exactly that instead of the kana.
 // Hiragana, katakana and CJK ideographs. BunPro's prompt is a card id
 // ("806:0"), not text the user could say, so only Japanese prompts are hinted.
 const JAPANESE_RE = /[\u3040-\u30ff\u3400-\u9fff\uf900-\ufaff]/;
+const KANJI_RE = /^[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]$/u;
 
 export function answerHints(ctx: {
   type?: string | null;
+  category?: string | null;
   prompt?: string | null;
   readings?: string[];
   meanings?: string[];
 } | null | undefined): string[] {
   if (!ctx) return [];
-  const hints = ctx.type === 'reading'
-    ? [...(ctx.readings ?? []), ...(ctx.prompt && JAPANESE_RE.test(ctx.prompt) ? [ctx.prompt] : [])]
+  const reading = ctx.type === 'reading';
+  const prompt = ctx.prompt?.trim() ?? '';
+  const hintPrompt = reading && JAPANESE_RE.test(prompt) && ctx.category !== 'kanji' && !KANJI_RE.test(prompt);
+  const answers = reading
+    ? [...(ctx.readings ?? []), ...(hintPrompt ? [prompt] : [])]
     : [...(ctx.meanings ?? [])];
-  return [...new Set(hints.map(h => h.trim()).filter(Boolean))];
+  const commands = SHARED_COMMANDS.flatMap(command => reading ? command.ja : command.en);
+  return [...new Set([...answers, ...commands].map(h => h.trim()).filter(Boolean))];
 }
 
 export function createNativeRecognition(

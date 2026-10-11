@@ -6,6 +6,7 @@ import {
 } from '../src/native_recognition';
 import type { NativeSpeechEvent } from '../src/native_recognition';
 import { createRecognition, setLanguage } from '../src/recognition';
+import { SHARED_COMMANDS } from '../src/commands';
 
 function emit(detail: NativeSpeechEvent): void {
   document.dispatchEvent(new CustomEvent(NATIVE_SPEECH_EVENT, { detail }));
@@ -40,24 +41,39 @@ describe('getNativeSpeechHandler', () => {
 });
 
 describe('answerHints', () => {
-  test('reading cards hint the accepted readings plus the prompt', () => {
-    expect(answerHints({ type: 'reading', prompt: '会', readings: ['かい', 'え'], meanings: ['meeting'] }))
-      .toEqual(['かい', 'え', '会']);
+  const ja = SHARED_COMMANDS.flatMap(c => c.ja);
+  const en = SHARED_COMMANDS.flatMap(c => c.en);
+
+  test('reading cards hint the accepted readings plus a multi-kanji prompt, then the Japanese commands', () => {
+    expect(answerHints({ type: 'reading', prompt: '大人', readings: ['おとな'], meanings: ['adult'] }))
+      .toEqual(['おとな', '大人', ...ja]);
+  });
+
+  test('a single-kanji prompt is not hinted, so the recognizer writes the kana', () => {
+    expect(answerHints({ type: 'reading', category: 'vocabulary', prompt: '麦', readings: ['むぎ'] }))
+      .toEqual(['むぎ', ...ja]);
+    expect(answerHints({ type: 'reading', category: 'kanji', prompt: '会', readings: ['かい', 'え'] }))
+      .toEqual(['かい', 'え', ...ja]);
+  });
+
+  test('voice commands are hinted so they come back whole', () => {
+    expect(answerHints({ type: 'reading', prompt: '大人', readings: ['おとな'] })).toContain('まちがい');
+    expect(answerHints({ type: 'meaning', prompt: '大人', meanings: ['adult'] })).toContain('incorrect');
   });
 
   test('non-Japanese prompts such as BunPro card ids are not hinted', () => {
-    expect(answerHints({ type: 'reading', prompt: '806:0', readings: ['おとこ'] })).toEqual(['おとこ']);
+    expect(answerHints({ type: 'reading', prompt: '806:0', readings: ['おとこ'] })).toEqual(['おとこ', ...ja]);
   });
 
-  test('meaning cards hint the accepted meanings', () => {
+  test('meaning cards hint the accepted meanings, then the English commands', () => {
     expect(answerHints({ type: 'meaning', prompt: '会', readings: ['かい'], meanings: ['Meeting', 'Meet'] }))
-      .toEqual(['Meeting', 'Meet']);
+      .toEqual(['Meeting', 'Meet', ...en]);
   });
 
   test('drops blanks and duplicates, and tolerates missing context', () => {
-    expect(answerHints({ type: 'reading', prompt: 'かい', readings: ['かい', ' ', ''] })).toEqual(['かい']);
+    expect(answerHints({ type: 'reading', prompt: 'かい', readings: ['かい', ' ', ''] })).toEqual(['かい', ...ja]);
     expect(answerHints(null)).toEqual([]);
-    expect(answerHints({ type: 'meaning' })).toEqual([]);
+    expect(answerHints({ type: 'meaning' })).toEqual(en);
   });
 });
 
