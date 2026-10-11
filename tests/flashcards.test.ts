@@ -560,7 +560,7 @@ describe('strict kanji readings', () => {
   // spoken, so the transcript carries no evidence of which reading it was.
   const HEARD_AS_KANJI = '上';
 
-  test('off (default): a bare kanji is accepted as the onyomi answer', () => {
+  test('off: a bare kanji is accepted as the onyomi answer', () => {
     const r = checkAnswer(onyomiCard, transformers, HEARD_AS_KANJI);
     expectSuccess(r);
     expect(r.answer).toBe('じょう');
@@ -568,7 +568,7 @@ describe('strict kanji readings', () => {
 
   // The same transcript satisfying both cards is the bug: whichever reading
   // WaniKani happens to accept is the one the dictionary supplies.
-  test('off (default): the identical transcript is also accepted as the kunyomi answer', () => {
+  test('off: the identical transcript is also accepted as the kunyomi answer', () => {
     const r = checkAnswer(kunyomiCard, transformers, HEARD_AS_KANJI);
     expectSuccess(r);
     expect(r.answer).toBe('うえ');
@@ -604,14 +604,38 @@ describe('strict kanji readings', () => {
     expect(r.transcript.reason).toBe('no-match');
   });
 
-  // Vocabulary is the case the dictionary exists for — a word has one
-  // pronunciation, so resolving the kanji to it invents nothing.
-  test('on: vocabulary cards still resolve a kanji transcript through the dictionary', () => {
+  // One-kanji vocabulary has the same ambiguity as a kanji card: 上 the word
+  // is うえ, but the recogniser writes じょう back as 上 too.
+  test('on: a bare kanji no longer answers a one-kanji vocabulary card', () => {
+    const vocab = { type: 'reading', prompt: '上', category: 'vocabulary', readings: ['うえ'] };
+    const r = checkAnswer(vocab, transformers, HEARD_AS_KANJI, { strictKanjiReadings: true });
+    expectFailure(r);
+    expect(r.transcript.reason).toBe('ambiguous-kanji');
+  });
+
+  test('on: kana still answers a one-kanji vocabulary card', () => {
+    const vocab = { type: 'reading', prompt: '上', category: 'vocabulary', readings: ['うえ'] };
+    const r = checkAnswer(vocab, transformers, 'うえ', { strictKanjiReadings: true });
+    expectSuccess(r);
+    expect(r.answer).toBe('うえ');
+  });
+
+  // Longer vocabulary is the case the dictionary exists for — the recogniser
+  // choosing the word is itself evidence of its pronunciation.
+  test('on: multi-kanji vocabulary cards still resolve a kanji transcript through the dictionary', () => {
     const vocab = { type: 'reading', prompt: '仙台', category: 'vocabulary', readings: ['せんだい'] };
     const dict: Dictionary = { '仙台': [{ type: 'word', kana: ['せんだい'] }] };
     const r = checkAnswer(vocab, makeTransformers(dict), '仙台', { strictKanjiReadings: true });
     expectSuccess(r);
     expect(r.answer).toBe('せんだい');
+  });
+
+  test('on: vocabulary with okurigana still resolves through the dictionary', () => {
+    const vocab = { type: 'reading', prompt: '上る', category: 'vocabulary', readings: ['のぼる'] };
+    const dict: Dictionary = { '上る': [{ type: 'word', kana: ['のぼる'] }] };
+    const r = checkAnswer(vocab, makeTransformers(dict), '上る', { strictKanjiReadings: true });
+    expectSuccess(r);
+    expect(r.answer).toBe('のぼる');
   });
 
   test('on: meaning questions on kanji cards are unaffected', () => {
