@@ -12,14 +12,20 @@
 //
 // Configurable via settings (same keys as WaniKani):
 //   turbo           (bool)   – auto-advance to next card on correct answer
-//   speed_show_info (bool)   – auto-open item info on a wrong answer Kikoe
-//                              itself submitted (see takeSelfSubmittedWrongCardId)
+//   speed_show_info (bool)   – on a wrong answer, open item info and switch
+//                              the card to the correct answer
 
-import { clickNext, clickInfo, takeSelfSubmittedWrongCardId } from './bunpro';
+import { clickNext, clickInfo, clickAnswer } from './bunpro';
 import { debugLog } from './logger';
 import type { Settings } from './settings';
 
 const RESULT_DELAY_MS = 100;
+
+// How long after opening item info to press Answer. Opening the panel
+// re-renders the card, and doing that over the correct answer would put the
+// answer given back on top of it — so Answer goes second, once the panel's
+// render has settled.
+const ANSWER_AFTER_INFO_MS = 200;
 
 export interface BunproSpeedEnhancer {
   scan(): void;
@@ -51,11 +57,6 @@ export function startSpeedEnhancer(getSettingsFn: () => Settings): BunproSpeedEn
     if (key === lastResultKey) return;
     lastResultKey = key;
 
-    // Consumed on whichever result actually lands, so it can't carry past the
-    // attempt markWrong() raised it for.
-    const selfWrongCardId = takeSelfSubmittedWrongCardId();
-    const selfSubmitted = cardId !== null && selfWrongCardId === cardId;
-
     const s = getSettingsFn();
 
     if (result === 'true' && s.turbo) {
@@ -65,12 +66,15 @@ export function startSpeedEnhancer(getSettingsFn: () => Settings): BunproSpeedEn
         clickNext();
       }, RESULT_DELAY_MS);
     }
-    // Only Kikoe's own placeholder-wrong submissions open the panel. An answer
-    // the user meant, which BunPro simply graded wrong, leaves the card alone —
-    // BunPro is already showing the correct answer there, and clicking into it
-    // re-renders the card on top of that reveal.
-    if (result === 'false' && selfSubmitted && s.speed_show_info) {
-      setTimeout(clickInfo, RESULT_DELAY_MS);
+    if (result === 'false' && s.speed_show_info) {
+      setTimeout(() => {
+        clickInfo();
+        setTimeout(() => {
+          // The user may already have moved on to the next card.
+          if (getCardId(meta) !== cardId) return;
+          clickAnswer();
+        }, ANSWER_AFTER_INFO_MS);
+      }, RESULT_DELAY_MS);
     }
   }
 
