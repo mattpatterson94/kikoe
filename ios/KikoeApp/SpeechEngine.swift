@@ -56,6 +56,10 @@ final class MicCapture {
     private let audioEngine = AVAudioEngine()
     private var consumer: ((AVAudioPCMBuffer) -> Void)?
     private(set) var isRunning = false
+    /// Apple's voice processing (the FaceTime path): suppresses steady
+    /// background noise and cancels echo, so room sound and the page's own
+    /// reading audio reach the recognizer less. Applied on the next start.
+    var voiceProcessing = true
     /// Live input level for the listening bar's meter.
     let level = MicLevel()
 
@@ -67,13 +71,22 @@ final class MicCapture {
         let session = AVAudioSession.sharedInstance()
         // playAndRecord so WaniKani's reading audio still plays while we
         // listen; mixWithOthers keeps the webview's own media from being
-        // interrupted. voiceChat would add echo cancellation (the page's
-        // audio being heard as an answer) at the cost of quality — worth
-        // trying if self-capture shows up in testing.
+        // interrupted.
         try session.setCategory(.playAndRecord, mode: .default,
                                 options: [.defaultToSpeaker, .allowBluetoothHFP, .mixWithOthers])
         try session.setActive(true)
         let input = audioEngine.inputNode
+        if input.isVoiceProcessingEnabled != voiceProcessing {
+            do { try input.setVoiceProcessingEnabled(voiceProcessing) } catch {
+                NSLog("[kikoe] voice processing \(voiceProcessing) failed: \(error)")
+            }
+        }
+        if input.isVoiceProcessingEnabled {
+            // Voice processing ducks other audio by default; keep the page's
+            // reading audio as loud as it allows.
+            input.voiceProcessingOtherAudioDuckingConfiguration =
+                .init(enableAdvancedDucking: false, duckingLevel: .min)
+        }
         let format = input.outputFormat(forBus: 0)
         input.removeTap(onBus: 0)
         input.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak self] buffer, _ in

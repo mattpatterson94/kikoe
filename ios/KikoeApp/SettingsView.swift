@@ -83,6 +83,9 @@ struct SettingsView: View {
                     Picker("Recognizer", selection: $speech.engineKind) {
                         ForEach(availableEngines) { Text($0.rawValue).tag($0) }
                     }
+                    Toggle(isOn: $speech.noiseReduction) {
+                        labelled("Reduce background noise", "Filter out room noise and the page's own audio, like a phone call does. Other audio plays slightly quieter while Kikoe listens")
+                    }
                     Toggle(isOn: $speech.sendHints) {
                         labelled("Contextual hints", "Pass the card's accepted answers to the recognizer to bias it toward them")
                     }

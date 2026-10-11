@@ -70,6 +70,7 @@ enum Site: String, CaseIterable, Identifiable {
 enum Pref {
     static let engine = "kikoe.engine"
     static let sendHints = "kikoe.sendHints"
+    static let noiseReduction = "kikoe.noiseReduction"
     static let lastSite = "kikoe.lastSite"
     static let enabledSites = "kikoe.enabledSites"
     static let onboarded = "kikoe.onboarded"

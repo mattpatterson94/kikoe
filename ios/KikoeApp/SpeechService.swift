@@ -29,6 +29,15 @@ final class SpeechService: ObservableObject {
             engine.updateHints(effectiveHints)
         }
     }
+    @Published var noiseReduction: Bool {
+        didSet {
+            guard oldValue != noiseReduction else { return }
+            UserDefaults.standard.set(noiseReduction, forKey: Pref.noiseReduction)
+            mic.voiceProcessing = noiseReduction
+            // Voice processing can only change with the mic stopped.
+            swapEngine(to: runningKind)
+        }
+    }
     @Published private(set) var listening = false
     @Published private(set) var lastHeard: [String] = []
     @Published private(set) var currentHints: [String] = []
@@ -64,6 +73,9 @@ final class SpeechService: ObservableObject {
         engineKind = kind
         runningKind = kind
         sendHints = UserDefaults.standard.object(forKey: Pref.sendHints) as? Bool ?? true
+        let reduceNoise = UserDefaults.standard.object(forKey: Pref.noiseReduction) as? Bool ?? true
+        noiseReduction = reduceNoise
+        mic.voiceProcessing = reduceNoise
         engine = makeEngine(kind, mic: mic)
         engine.onEvent = { [weak self] in self?.deliver($0) }
     }

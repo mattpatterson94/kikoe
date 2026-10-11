@@ -166,6 +166,11 @@ measured: hours of real reviews on a device. That still needs doing.
     engine joins back-to-back segments and posts the utterance as final
     only after 600 ms with no new segment. Alternatives only vary the
     latest segment; earlier ones contribute their top guess.
+- **Background noise:** `MicCapture` turns on Apple's voice processing
+  (`setVoiceProcessingEnabled`, the FaceTime path: noise suppression plus
+  echo cancellation, so the page's reading audio isn't heard as an answer)
+  with minimum ducking. Settings → Advanced → Reduce background noise, on
+  by default; toggling restarts the mic. Not yet compared on a device.
 - **Error noise:**
   - Server SFSpeech emits `203 Empty recognition` / `203 Retry` constantly in
     silence. These are now restarted quietly instead of being surfaced as
