@@ -324,6 +324,22 @@ describe('reading questions', () => {
     expect(r.answer).toBe('むいか');
   });
 
+  // Bug reproduction: speech recognition writes 三十代 as 30代. Numerals
+  // turned that into 三十代, but in the same stage as the dictionary
+  // transformers, so nothing ever converted its kanji form to kana.
+  test('REGRESSION: reads a digit-form compound through the dictionary (30代 → さんじゅうだい)', () => {
+    const dict: Dictionary = {
+      '三': [{ type: 'character', readings: [{ value: 'サン' }, { value: 'み' }] }],
+      '十': [{ type: 'character', readings: [{ value: 'ジュウ' }, { value: 'とお' }] }],
+      '代': [{ type: 'character', readings: [{ value: 'ダイ' }, { value: 'よ' }] }],
+    };
+    const transformers = [...makeTransformers(dict), new CompoundDictionary(dict), new Numerals(dict)];
+    const ctx = { type: 'reading', prompt: '三十代', category: 'vocabulary', readings: ['さんじゅうだい'] };
+    const r = checkAnswer(ctx, transformers, '30代');
+    expectSuccess(r);
+    expect(r.answer).toBe('さんじゅうだい');
+  });
+
   // Bug reproduction: wanakana's toHiragana expands a katakana chōonpu into a
   // doubled vowel (ビール → びいる), but WaniKani's accepted reading keeps
   // the ー (びーる), so the candidate could never match.
