@@ -74,6 +74,7 @@ final class SyncSettings: ObservableObject {
     private var observer: NSObjectProtocol?
 
     private init() {
+        Self.migrate()
         values = ExtensionStorage.all(area: "sync")
         observer = NotificationCenter.default.addObserver(
             forName: .kikoeStorageChanged, object: nil, queue: .main
@@ -84,6 +85,20 @@ final class SyncSettings: ObservableObject {
                 SpeechService.shared.updateIdleTimer()
             }
         }
+    }
+
+    /// Mirrors migrateSettings in extension/content.ts, so settings opened
+    /// before any page has run the content script never show (or re-save) a
+    /// pre-migration value.
+    private static func migrate() {
+        let version = ExtensionStorage.value("settings_version", area: "sync") as? Int ?? 0
+        guard version < 1 else { return }
+        var patch: [String: Any] = ["settings_version": 1]
+        // v1: strict kanji readings became the default; flip an old stored false.
+        if ExtensionStorage.value("strict_kanji_readings", area: "sync") as? Bool == false {
+            patch["strict_kanji_readings"] = true
+        }
+        ExtensionStorage.set(area: "sync", items: patch)
     }
 
     /// Mirrors src/settings.ts `defaults`.
@@ -98,7 +113,7 @@ final class SyncSettings: ObservableObject {
         "transcript_position": "top",
         "show_help_button": true,
         "keep_screen_awake": true,
-        "strict_kanji_readings": false,
+        "strict_kanji_readings": true,
     ]
 
     func bool(_ key: String) -> Binding<Bool> {

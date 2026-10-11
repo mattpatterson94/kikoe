@@ -74,9 +74,9 @@ struct SettingsView: View {
 
                 Section {
                     Toggle(isOn: settings.bool("strict_kanji_readings")) {
-                        labelled("Strict kanji readings", "On kanji reading questions, only accept kana the recognizer actually heard; it may ask you to repeat a reading it wrote back as the kanji")
+                        labelled("Strict kanji readings", "When the prompt is a single kanji, only accept kana the recognizer actually heard; it may ask you to repeat a reading it wrote back as the kanji")
                     }
-                } header: { Text("Experimental") }
+                } header: { Text("Kanji readings") }
 
                 Section {
                     Picker("Recognizer", selection: $speech.engineKind) {
