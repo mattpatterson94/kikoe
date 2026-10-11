@@ -16,7 +16,7 @@ export type NativeUiMessage =
   | {
       type: 'transcript';
       text: string;
-      // The "→ answer" or "— hint" suffix the DOM chip shows in lighter text.
+      // The "→ answer" or hint the DOM chip shows in lighter text after the words.
       detail: string | null;
       error: boolean;
       position: 'top' | 'bottom';

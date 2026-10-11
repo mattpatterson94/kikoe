@@ -144,13 +144,13 @@ describe('logTranscript', () => {
   test('shows a reading-specific hint for a wrong-type failure on a reading question', () => {
     logTranscript(settings(), { raw: 'cold', reason: 'wrong-type', type: 'reading' });
     const container = document.getElementById('kikoe-transcript-container');
-    expect(container.children[0].textContent).toContain("that's the meaning");
+    expect(container.children[0].textContent).toContain('say the reading, not the meaning');
   });
 
   test('shows a meaning-specific hint for a wrong-type failure on a meaning question', () => {
     logTranscript(settings(), { raw: 'さむい', reason: 'wrong-type', type: 'meaning' });
     const container = document.getElementById('kikoe-transcript-container');
-    expect(container.children[0].textContent).toContain("that's the reading");
+    expect(container.children[0].textContent).toContain('say the meaning, not the reading');
   });
 
   test('does not show a hint when a match was found', () => {

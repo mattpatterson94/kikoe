@@ -1520,7 +1520,7 @@ describe('startListener transcript failure reason hints', () => {
     await vi.waitFor(() => {
       if (!container.textContent.includes('reading')) throw new Error('hint not shown yet');
     });
-    expect(container.textContent).toContain("that's the meaning — say the reading");
+    expect(container.textContent).toContain('say the reading, not the meaning');
   });
 
   test('an unrecognisable answer shows a plain no-match hint', async () => {
@@ -1574,7 +1574,7 @@ describe('startListener transcript failure reason hints', () => {
     await vi.waitFor(() => {
       if (!container.textContent.includes('reading')) throw new Error('hint not shown yet');
     });
-    expect(container.textContent).toContain("that's the meaning — say the reading");
+    expect(container.textContent).toContain('say the reading, not the meaning');
     // The heard text shown should still be the top alternative, not the one
     // that supplied the reason.
     expect(container.textContent).toContain('gibberish nonsense');

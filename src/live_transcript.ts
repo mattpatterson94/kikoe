@@ -357,10 +357,10 @@ function reasonHint(transcript: TranscriptInfo): string | null {
   if (transcript.reason === 'not-loaded') return 'loading answers…';
   if (transcript.reason === 'wrong-type') {
     return transcript.type === 'reading'
-      ? "that's the meaning — say the reading"
-      : "that's the reading — say the meaning";
+      ? 'say the reading, not the meaning'
+      : 'say the meaning, not the reading';
   }
-  if (transcript.reason === 'ambiguous-kanji') return "heard the kanji — say the reading again";
+  if (transcript.reason === 'ambiguous-kanji') return 'heard the kanji, say the reading again';
   if (transcript.reason === 'no-match') return 'no match';
   // Reveal & Grade cards (see app.js's reveal-mode routing).
   if (transcript.reason === 'say-reveal') return 'say "reveal" to show the answer';
@@ -406,7 +406,7 @@ function logNativeTranscript(settings: Settings, transcript: TranscriptInfo): vo
   postNativeUi({
     type: 'transcript',
     text: isError ? transcript.raw.replace(/^!!\s*|\s*!!$/g, '') : transcript.raw,
-    detail: transcript.matched ? `→ ${transcript.matched}` : hint ? `— ${hint}` : null,
+    detail: transcript.matched ? `→ ${transcript.matched}` : hint,
     error: isError,
     position: settings.transcript_position === 'bottom' ? 'bottom' : 'top',
     correction,
@@ -490,7 +490,7 @@ export function logTranscript(settings: Settings, transcript: TranscriptInfo | s
     if (hint) {
       const hintEl = document.createElement('span');
       hintEl.className = 'kikoe-chip-matched';
-      hintEl.textContent = '— ' + hint;
+      hintEl.textContent = hint;
       el.appendChild(hintEl);
     }
   }

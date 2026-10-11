@@ -110,7 +110,7 @@ describe('live_transcript on the native host', () => {
     expect(posted).toEqual([
       { type: 'transcript', text: 'さむい', detail: '→ さむい', error: false, position: 'bottom', correction: null },
       {
-        type: 'transcript', text: 'some way', detail: '— no match', error: false, position: 'bottom',
+        type: 'transcript', text: 'some way', detail: 'no match', error: false, position: 'bottom',
         correction: { heard: 'some way', intended: 'さむい' },
       },
       { type: 'transcript', text: 'mic error', detail: null, error: true, position: 'bottom', correction: null },
@@ -122,7 +122,7 @@ describe('live_transcript on the native host', () => {
     lt.logTranscript(settings(), { raw: 'cold' });
     lt.logTranscript(settings(), { raw: 'cold' });
     lt.logTranscript(settings(), { raw: 'cold', reason: 'no-match' });
-    expect(posted.map(m => m.type === 'transcript' && m.detail)).toEqual([null, '— no match']);
+    expect(posted.map(m => m.type === 'transcript' && m.detail)).toEqual([null, 'no match']);
   });
 
   test('respects the transcript setting and clears through the host', async () => {
