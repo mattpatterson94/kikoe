@@ -11,6 +11,7 @@ const htmlPath = `file://${path.join(root, "index.html")}`;
 const outputs = [
   { device: "iphone", width: 1320, height: 2868, prefix: "iphone-69" },
   { device: "iphone", width: 1284, height: 2778, prefix: "iphone-65" },
+  { device: "iphone", width: 1206, height: 2622, prefix: "iphone-63" },
   { device: "ipad", width: 2064, height: 2752, prefix: "ipad-13" },
 ];
 const names = { 1: "wanikani", 2: "bunpro", 3: "commands", 4: "settings" };
