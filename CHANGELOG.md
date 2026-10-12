@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
-## [0.12.0] - 2026-10-11
+## [0.20.0] - 2026-10-12
 
 ### Added
 
@@ -398,8 +398,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Vitest test suite: 118 tests covering candidates, flashcards, settings,
   the content script, WaniKani helpers, and the speed enhancer.
 
-[Unreleased]: https://github.com/mattpatterson94/kikoe/compare/v0.12.0...HEAD
-[0.12.0]: https://github.com/mattpatterson94/kikoe/compare/v0.11.0...v0.12.0
+[Unreleased]: https://github.com/mattpatterson94/kikoe/compare/v0.20.0...HEAD
+[0.20.0]: https://github.com/mattpatterson94/kikoe/compare/v0.11.0...v0.20.0
 [0.11.0]: https://github.com/mattpatterson94/kikoe/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/mattpatterson94/kikoe/compare/v0.9.1...v0.10.0
 [0.9.1]: https://github.com/mattpatterson94/kikoe/compare/v0.9.0...v0.9.1

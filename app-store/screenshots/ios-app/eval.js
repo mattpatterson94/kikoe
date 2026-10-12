@@ -1,3 +1,4 @@
+/* global window, console */
 (function () {
   try {
     const h = window.webkit.messageHandlers.kikoeUI;

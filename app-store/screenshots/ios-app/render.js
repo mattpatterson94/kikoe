@@ -2,6 +2,7 @@
 //   node app-store/screenshots/ios-app/render.js [iphone|ipad]
 import { chromium } from "playwright";
 import fs from "fs";
+import process from "process";
 import path from "path";
 import { fileURLToPath } from "url";
 
