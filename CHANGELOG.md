@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## [0.21.0] - 2026-11-08
+
+### Added
+
+- iOS app: Dictation assist (Settings → Advanced, on by default). On Japanese
+  cards the app also runs Apple's dictation model next to SpeechTranscriber
+  and adds its guesses. It follows the card's kana hints, so it helps strict
+  kanji readings, at some extra battery use.
+
+### Changed
+
+- iOS app: answers register much sooner. Kikoe now ends an utterance itself
+  after a short silence instead of waiting for SpeechTranscriber, which ran
+  separate answers together and finished seconds late. Each language's
+  recognizer stays loaded, so switching between meaning and reading cards no
+  longer drops the start of an answer, and audio no longer waits on the main
+  thread, which made words arrive in a burst after a pause.
+- Strict kanji readings accept a homophone kanji that can only be the
+  accepted reading: hearing 城 on a 上 card means you said じょう. The prompt
+  kanji itself, or one that shares another of the prompt's readings, still
+  asks you to say it again.
+
+### Fixed
+
+- iOS app: results that were only a full stop (from a breath or silence) no
+  longer show up as a transcript, and an answer split in two by the
+  recognizer keeps all of its alternatives.
+
 ## [0.20.0] - 2026-10-12
 
 ### Added
@@ -398,7 +426,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Vitest test suite: 118 tests covering candidates, flashcards, settings,
   the content script, WaniKani helpers, and the speed enhancer.
 
-[Unreleased]: https://github.com/mattpatterson94/kikoe/compare/v0.20.0...HEAD
+[Unreleased]: https://github.com/mattpatterson94/kikoe/compare/v0.21.0...HEAD
+[0.21.0]: https://github.com/mattpatterson94/kikoe/compare/v0.20.0...v0.21.0
 [0.20.0]: https://github.com/mattpatterson94/kikoe/compare/v0.11.0...v0.20.0
 [0.11.0]: https://github.com/mattpatterson94/kikoe/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/mattpatterson94/kikoe/compare/v0.9.1...v0.10.0
