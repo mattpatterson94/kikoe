@@ -30,31 +30,48 @@ protocol SpeechEngine: AnyObject {
     /// and hints. Results still arriving for the ended utterance are dropped,
     /// so the tail of an answer can't land on the next card.
     func reset()
+    /// Stop for good and release models (engine swap). Plain stop() may keep
+    /// models warm for the next start.
+    func shutdown()
     /// Probe path: run pre-recorded buffers through a one-shot session and
     /// return the ranked alternatives of the final result.
     func transcribe(buffers: [AVAudioPCMBuffer], locale: String, hints: [String]) async throws -> [String]
 }
 
+extension SpeechEngine {
+    func shutdown() { stop() }
+}
+
 @MainActor
-func makeEngine(_ kind: EngineKind, mic: MicCapture) -> SpeechEngine {
+func makeEngine(_ kind: EngineKind, mic: MicCapture, dictationAssist: Bool = false) -> SpeechEngine {
     switch kind {
     case .legacy:
         return LegacySpeechEngine(mic: mic)
     case .dictation, .transcriber:
         if #available(iOS 26, *) {
-            return AnalyzerSpeechEngine(mic: mic, useDictation: kind == .dictation)
+            return AnalyzerSpeechEngine(mic: mic, useDictation: kind == .dictation, dictationAssist: dictationAssist)
         }
         return LegacySpeechEngine(mic: mic)
     }
 }
 
+/// Called on the realtime audio thread with each captured buffer and its RMS
+/// level. Must not block, and must be done with the buffer when it returns
+/// (the engine may reuse it).
+typealias MicConsumer = @Sendable (AVAudioPCMBuffer, Float) -> Void
+
 /// Owns the audio session and the single AVAudioEngine input tap; engines
 /// subscribe to buffers rather than each opening the mic, so swapping
 /// recognition requests never tears the audio route down.
+///
+/// Buffers go to the consumer straight from the audio thread. They used to
+/// hop to the main thread first, which is also where the web view and
+/// SwiftUI run, so any stall there (a page transition, a redraw) held audio
+/// back from the recognizer and it all arrived at once afterwards.
 @MainActor
 final class MicCapture {
     private let audioEngine = AVAudioEngine()
-    private var consumer: ((AVAudioPCMBuffer) -> Void)?
+    private let consumer = LockedValue<MicConsumer?>(nil)
     private(set) var isRunning = false
     /// Apple's voice processing (the FaceTime path): suppresses steady
     /// background noise and cancels echo, so room sound and the page's own
@@ -65,8 +82,8 @@ final class MicCapture {
 
     var inputFormat: AVAudioFormat { audioEngine.inputNode.outputFormat(forBus: 0) }
 
-    func start(consumer: @escaping (AVAudioPCMBuffer) -> Void) throws {
-        self.consumer = consumer
+    func start(consumer: @escaping MicConsumer) throws {
+        self.consumer.set(consumer)
         if isRunning { return }
         let session = AVAudioSession.sharedInstance()
         // playAndRecord so WaniKani's reading audio still plays while we
@@ -89,14 +106,12 @@ final class MicCapture {
         }
         let format = input.outputFormat(forBus: 0)
         input.removeTap(onBus: 0)
-        input.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak self] buffer, _ in
-            // Tap runs on a realtime audio thread; hop to main to keep the
-            // consumer handoff simple. Fine for a spike.
+        let consumer = self.consumer
+        let meter = MeterThrottle(level: level)
+        input.installTap(onBus: 0, bufferSize: 1024, format: format) { buffer, _ in
             let rms = MicLevel.rms(buffer)
-            Task { @MainActor in
-                self?.level.push(rms)
-                self?.consumer?(buffer)
-            }
+            consumer.get()?(buffer, rms)
+            meter.offer(rms)
         }
         audioEngine.prepare()
         try audioEngine.start()
@@ -105,14 +120,14 @@ final class MicCapture {
 
     /// Debug: push synthetic audio through the same path as the mic tap.
     func inject(_ buffers: [AVAudioPCMBuffer]) {
-        guard isRunning, let consumer else { return }
+        guard isRunning, let consumer = consumer.get() else { return }
         for b in buffers {
-            if let converted = AudioConvert.convert(b, to: inputFormat) { consumer(converted) }
+            if let converted = AudioConvert.convert(b, to: inputFormat) { consumer(converted, MicLevel.rms(converted)) }
         }
     }
 
     func stop() {
-        consumer = nil
+        consumer.set(nil)
         guard isRunning else { return }
         audioEngine.inputNode.removeTap(onBus: 0)
         audioEngine.stop()
@@ -122,9 +137,46 @@ final class MicCapture {
     }
 }
 
+/// A value shared between the audio thread and the main actor.
+final class LockedValue<Value>: @unchecked Sendable {
+    private let lock = NSLock()
+    private var value: Value
+    init(_ value: Value) { self.value = value }
+    func get() -> Value { lock.withLock { value } }
+    func set(_ newValue: Value) { lock.withLock { value = newValue } }
+}
+
+/// Hands the meter the loudest level seen in each 1/15 s. The tap fires ~47
+/// times a second, and publishing every one redrew the SwiftUI overlay that
+/// often, on the same main thread the web view needs.
+private final class MeterThrottle: @unchecked Sendable {
+    private static let interval: TimeInterval = 1.0 / 15
+    private let lock = NSLock()
+    private var peak: Float = 0
+    private var last = Date.distantPast
+    private weak var level: MicLevel?
+
+    init(level: MicLevel) { self.level = level }
+
+    func offer(_ rms: Float) {
+        let send: Float? = lock.withLock {
+            peak = max(peak, rms)
+            let now = Date()
+            guard now.timeIntervalSince(last) >= Self.interval else { return nil }
+            last = now
+            defer { peak = 0 }
+            return peak
+        }
+        guard let send else { return }
+        DispatchQueue.main.async { [weak self] in
+            MainActor.assumeIsolated { self?.level?.push(send) }
+        }
+    }
+}
+
 /// How loud the microphone is right now, 0...1, smoothed for display: it
 /// jumps up with speech and eases back down, like a VU meter. Separate from
-/// MicCapture so only the meter redraws ~45 times a second.
+/// MicCapture so only the meter redraws, about 15 times a second.
 @MainActor
 final class MicLevel: ObservableObject {
     @Published var value: Float = 0
@@ -133,7 +185,7 @@ final class MicLevel: ObservableObject {
         // -50 dBFS (a quiet room) to -12 dBFS (speaking close to the phone).
         let db = 20 * log10(max(rms, 1e-6))
         let target = min(max((db + 50) / 38, 0), 1)
-        value = target > value ? target : value * 0.82 + target * 0.18
+        value = target > value ? target : value * 0.55 + target * 0.45
     }
 
     nonisolated static func rms(_ buffer: AVAudioPCMBuffer) -> Float {
@@ -151,6 +203,15 @@ enum SpeechPermissions {
         }
         let mic = await AVAudioApplication.requestRecordPermission()
         return speech && mic
+    }
+}
+
+/// Whether a transcript is only punctuation: what SpeechTranscriber emits for
+/// a breath, a click or plain silence (`。`, `.`). Never an answer.
+func isPunctuationOnly(_ s: String) -> Bool {
+    s.unicodeScalars.allSatisfy {
+        CharacterSet.punctuationCharacters.contains($0) || CharacterSet.whitespacesAndNewlines.contains($0)
+            || CharacterSet.symbols.contains($0)
     }
 }
 

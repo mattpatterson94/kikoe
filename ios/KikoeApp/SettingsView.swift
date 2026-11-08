@@ -83,6 +83,11 @@ struct SettingsView: View {
                     Picker("Recognizer", selection: $speech.engineKind) {
                         ForEach(availableEngines) { Text($0.rawValue).tag($0) }
                     }
+                    if speech.engineKind == .transcriber {
+                        Toggle(isOn: $speech.dictationAssist) {
+                            labelled("Dictation assist", "On Japanese cards, also run the dictation model and add its guesses. It follows the card's hints, which helps strict kanji readings, at some extra battery use")
+                        }
+                    }
                     Toggle(isOn: $speech.noiseReduction) {
                         labelled("Reduce background noise", "Filter out room noise and the page's own audio, like a phone call does. Other audio plays slightly quieter while Kikoe listens")
                     }

@@ -273,6 +273,41 @@ function matchingReading(kana: string, acceptedReadings: string[], particleSound
   }) ?? null;
 }
 
+// Strict mode's way back in for a kanji transcript. The prompt itself (say
+// うえ or じょう, hear 上) proves nothing, but a different kanji the
+// recognizer picked as a homophone does: hearing 城 on a 上 card means the
+// user said じょう, because 城 can't be read うえ, かみ or any other reading
+// of 上. So accept the transcript when its dictionary readings include an
+// accepted answer and none of the prompt's other readings, i.e. when no
+// wrong reading of the prompt could have produced it. Returns the accepted
+// answer, or null when the transcript stays ambiguous.
+function homophoneAnswer(
+  raw: string,
+  prompt: string,
+  acceptedReadings: string[],
+  candidates: Candidate[],
+  transformers: CandidateGenerator[],
+  particleSounds: boolean,
+): string | null {
+  if (!prompt || raw === prompt) return null;
+  const heard = dictionaryReadings(candidates);
+  if (!heard.length) return null;
+  const wrong = dictionaryReadings(generateCandidates(transformers, prompt))
+    .filter(r => !matchingReading(r, acceptedReadings, particleSounds));
+  if (heard.some(r => matchingReading(r, wrong))) return null;
+  for (const r of heard) {
+    const answer = matchingReading(r, acceptedReadings, particleSounds);
+    if (answer) return answer;
+  }
+  return null;
+}
+
+// The kana readings the dictionary lists for a transcript, without the
+// fuzzy, split or compound guesses the other transformers add.
+function dictionaryReadings(candidates: Candidate[]): string[] {
+  return candidates.filter(c => c.type === 'dictionary' && isKana(c.data)).map(c => c.data);
+}
+
 // Whether any candidate resolves to one of the accepted readings — used to
 // detect a meaning-question answer that was actually the reading (or vice
 // versa), so the failure can be reported as "wrong type" instead of a bare
@@ -401,6 +436,11 @@ export function checkAnswer(
     // 大人 is itself evidence the user said おとな.
     const singleKanjiPrompt = context.category === 'kanji' || isSingleKanji(context.prompt ?? '');
     if (strictKanjiReadings && singleKanjiPrompt && containsKanji(raw)) {
+      // A *different* kanji can still be evidence (see homophoneAnswer).
+      const answer = homophoneAnswer(raw, context.prompt ?? '', acceptedReadings, candidates, transformers, particleSounds);
+      if (answer) {
+        return { success: true, answer, transcript: { raw, matched: answer } };
+      }
       return {
         success: false,
         error: false,

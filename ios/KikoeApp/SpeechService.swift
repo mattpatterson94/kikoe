@@ -38,6 +38,15 @@ final class SpeechService: ObservableObject {
             swapEngine(to: runningKind)
         }
     }
+    /// Run DictationTranscriber alongside SpeechTranscriber on Japanese
+    /// cards and add its alternatives (see AnalyzerSpeechEngine).
+    @Published var dictationAssist: Bool {
+        didSet {
+            guard oldValue != dictationAssist else { return }
+            UserDefaults.standard.set(dictationAssist, forKey: Pref.dictationAssist)
+            swapEngine(to: runningKind)
+        }
+    }
     @Published private(set) var listening = false
     @Published private(set) var lastHeard: [String] = []
     @Published private(set) var currentHints: [String] = []
@@ -76,7 +85,9 @@ final class SpeechService: ObservableObject {
         let reduceNoise = UserDefaults.standard.object(forKey: Pref.noiseReduction) as? Bool ?? true
         noiseReduction = reduceNoise
         mic.voiceProcessing = reduceNoise
-        engine = makeEngine(kind, mic: mic)
+        let assist = UserDefaults.standard.object(forKey: Pref.dictationAssist) as? Bool ?? true
+        dictationAssist = assist
+        engine = makeEngine(kind, mic: mic, dictationAssist: assist)
         engine.onEvent = { [weak self] in self?.deliver($0) }
     }
 
@@ -172,8 +183,8 @@ final class SpeechService: ObservableObject {
 
     private func swapEngine(to kind: EngineKind, restart: Bool = true) {
         let wasListening = listening && restart
-        engine.stop()
-        engine = makeEngine(kind, mic: mic)
+        engine.shutdown()
+        engine = makeEngine(kind, mic: mic, dictationAssist: dictationAssist)
         runningKind = kind
         engine.onEvent = { [weak self] in self?.deliver($0) }
         if wasListening { engine.start(locale: currentLocale, hints: effectiveHints) }
