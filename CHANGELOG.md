@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Changed
+
+- iOS app: the recognizer is chosen per site (Settings → Advanced). It
+  defaults to DictationTranscriber for WaniKani and SpeechTranscriber for
+  BunPro, which is what worked best for each. An earlier single recognizer
+  choice is reset to these defaults.
+
+### Fixed
+
+- Once a card has been graded, speech is only checked for voice commands
+  until the next card. Saying the answer while reading the item info used to
+  press the button that had become "next" and skip past it, and "wrong" did
+  the same.
+
 ## [0.21.0] - 2026-11-08
 
 ### Added

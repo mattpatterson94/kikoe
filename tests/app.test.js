@@ -1948,6 +1948,53 @@ describe('startListener ippatsu mode (one-shot auto-submit on a miss)', () => {
     },
   );
 
+  // Once WaniKani grades a card, its submit button means "next": an answer
+  // heard while the user reads the item info must not press it.
+  async function gradeCard(correct) {
+    const container = document.createElement('div');
+    container.className = 'quiz-input__input-container';
+    document.body.appendChild(container);
+    await Promise.resolve();
+    container.setAttribute('correct', String(correct));
+    await Promise.resolve();
+  }
+
+  test('speech after a card is graded wrong is not submitted as an answer', async () => {
+    const native = await loadCard('Reading', {});
+    const next = document.querySelector('.quiz-input__submit-button');
+    const clicks = vi.fn();
+    next.addEventListener('click', clicks);
+    await gradeCard(false);
+
+    native.onresult({ resultIndex: 0, results: [interimResult('さむい')] });
+    native.onresult({ resultIndex: 0, results: [finalResult('さむい')] });
+
+    expect(document.getElementById('user-response').value).toBe('');
+    expect(clicks).not.toHaveBeenCalled();
+  });
+
+  test('"wrong" on a graded card does not skip ahead', async () => {
+    const native = await loadCard('Meaning', {});
+    const clicks = vi.fn();
+    document.querySelector('.quiz-input__submit-button').addEventListener('click', clicks);
+    await gradeCard(false);
+
+    native.onresult({ resultIndex: 0, results: [finalResult('wrong')] });
+
+    expect(clicks).not.toHaveBeenCalled();
+  });
+
+  test('"next" still advances a graded card', async () => {
+    const native = await loadCard('Meaning', {});
+    const clicks = vi.fn();
+    document.querySelector('.quiz-input__submit-button').addEventListener('click', clicks);
+    await gradeCard(false);
+
+    native.onresult({ resultIndex: 0, results: [finalResult('next')] });
+
+    expect(clicks).toHaveBeenCalledTimes(1);
+  });
+
   test('muting cancels a matched interim instead of submitting it once muted', async () => {
     const native = await loadCard('Reading', {});
     vi.useFakeTimers();

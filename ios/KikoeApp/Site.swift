@@ -68,7 +68,9 @@ enum Site: String, CaseIterable, Identifiable {
 /// Native-only preferences. Everything the web code reads lives in
 /// ExtensionStorage instead, so settings.ts sees it unchanged.
 enum Pref {
-    static let engine = "kikoe.engine"
+    /// Per site. The single "kikoe.engine" key it replaced is no longer read,
+    /// so everyone starts from the per-site defaults.
+    static func engine(_ site: Site) -> String { "kikoe.engine.\(site.rawValue)" }
     static let sendHints = "kikoe.sendHints"
     static let noiseReduction = "kikoe.noiseReduction"
     static let dictationAssist = "kikoe.dictationAssist"

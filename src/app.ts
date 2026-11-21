@@ -324,7 +324,9 @@ async function startListener(dictionary: Dictionary): Promise<void> {
   // Lookup tables are built from the shared registry (src/commands.ts) so
   // the help panel lists exactly what the matcher accepts.
   const commands = buildCommandTable(SHARED_COMMANDS, {
-    'wrong': site.markWrong,
+    // On a graded card the submit button has become "next", so marking it
+    // wrong again would only skip ahead.
+    'wrong': () => !submitted && submitWrongAnswer(),
     'next': site.clickNext,
     'pause': () => setMuted(true),
   });
@@ -859,7 +861,19 @@ async function startListener(dictionary: Dictionary): Promise<void> {
 
   setInterval(checkPageHealth, PAGE_HEALTH_CHECK_MS);
 
-  startSpeedEnhancer(getSettings);
+  // A graded card is done with, however it got graded: typed, the "wrong"
+  // command, or Kikoe's own submit. Until the next card appears, speech is
+  // only checked for commands — otherwise thinking aloud while reading the
+  // item info can match the answer, and submitting it presses the button
+  // that has become "next", skipping past the info.
+  startSpeedEnhancer(getSettings, () => {
+    if (submitted) return;
+    submitted = true;
+    pendingRaws = null;
+    clearMatchedInterimTimer();
+    recognition.endUtterance?.();
+    debugLog('card graded — ignoring answers until the next card');
+  });
 
   // While permission is denied there's nothing to mute/unmute — recognition
   // isn't running — so ignore the click instead of letting it silently set

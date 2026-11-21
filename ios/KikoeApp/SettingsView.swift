@@ -80,10 +80,15 @@ struct SettingsView: View {
                 } header: { Text("Kanji readings") }
 
                 Section {
-                    Picker("Recognizer", selection: $speech.engineKind) {
-                        ForEach(availableEngines) { Text($0.rawValue).tag($0) }
+                    ForEach(app.enabledSites) { site in
+                        Picker(app.enabledSites.count > 1 ? "\(site.name) recognizer" : "Recognizer", selection: Binding(
+                            get: { speech.engineKind(for: site) },
+                            set: { speech.setEngineKind($0, for: site) }
+                        )) {
+                            ForEach(availableEngines) { Text($0.rawValue).tag($0) }
+                        }
                     }
-                    if speech.engineKind == .transcriber {
+                    if app.enabledSites.contains(where: { speech.engineKinds[$0] == .transcriber }) {
                         Toggle(isOn: $speech.dictationAssist) {
                             labelled("Dictation assist", "On Japanese cards, also run the dictation model and add its guesses. It follows the card's hints, which helps strict kanji readings, at some extra battery use")
                         }
@@ -103,7 +108,7 @@ struct SettingsView: View {
                     if let reason = speech.fallbackReason {
                         Text(reason)
                     } else {
-                        Text("SpeechTranscriber (iOS 26) is the most accurate. SFSpeechRecognizer follows contextual hints more closely.")
+                        Text("DictationTranscriber follows the card's hints, which suits WaniKani's single words. SpeechTranscriber is better with BunPro's grammar in context. Both need iOS 26; SFSpeechRecognizer works everywhere.")
                     }
                 }
 

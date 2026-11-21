@@ -33,7 +33,12 @@ export interface BunproSpeedEnhancer {
   _getContainer(): HTMLElement | null;
 }
 
-export function startSpeedEnhancer(getSettingsFn: () => Settings): BunproSpeedEnhancer {
+// onGraded fires once BunPro has graded the card, right or wrong, so app.ts
+// can stop treating speech as an answer until the next card appears.
+export function startSpeedEnhancer(
+  getSettingsFn: () => Settings,
+  onGraded: (correct: boolean) => void = () => {},
+): BunproSpeedEnhancer {
   let currentMeta: HTMLElement | null = null;
   let attrObserver: MutationObserver | null = null;
   let lastResultKey: string | null = null;
@@ -57,6 +62,7 @@ export function startSpeedEnhancer(getSettingsFn: () => Settings): BunproSpeedEn
     if (key === lastResultKey) return;
     lastResultKey = key;
 
+    if (result === 'true' || result === 'false') onGraded(result === 'true');
     const s = getSettingsFn();
 
     if (result === 'true' && s.turbo) {

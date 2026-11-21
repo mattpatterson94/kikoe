@@ -106,6 +106,20 @@ describe('startSpeedEnhancer', () => {
     expect(_getContainer()).not.toBeNull();
   });
 
+  test('reports each grade to onGraded, whatever the settings', async () => {
+    const el = addContainer();
+    const onGraded = vi.fn();
+    startSpeedEnhancer(() => makeSettings({ turbo: false, speed_show_info: false }), onGraded);
+    el.setAttribute('correct', 'false');
+    await Promise.resolve();
+    expect(onGraded).toHaveBeenCalledWith(false);
+    el.removeAttribute('correct');
+    await Promise.resolve();
+    el.setAttribute('correct', 'true');
+    await Promise.resolve();
+    expect(onGraded.mock.calls).toEqual([[false], [true]]);
+  });
+
   test('reads settings lazily — clickInfo respects updated setting at fire time', async () => {
     const el = addContainer();
     let showInfo = false;

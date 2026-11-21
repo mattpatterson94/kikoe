@@ -198,6 +198,16 @@ describe('startSpeedEnhancer (bunpro)', () => {
     expect(clickInfo).toHaveBeenCalledTimes(2);
   });
 
+  test('reports a grade to onGraded once, whatever the settings', async () => {
+    const meta = addMetadata();
+    const onGraded = vi.fn();
+    enhancers.push(startSpeedEnhancer(() => makeSettings({ turbo: false, speed_show_info: false }), onGraded));
+    meta.setAttribute('data-meta-is-correct', 'false');
+    meta.setAttribute('data-meta-is-post-attempt', 'true');
+    await Promise.resolve();
+    expect(onGraded.mock.calls).toEqual([[false]]);
+  });
+
   test('picks up a metadata element added after init', async () => {
     const { _getContainer } = start(() => makeSettings());
     expect(_getContainer()).toBeNull();
