@@ -130,6 +130,7 @@ interface SiteAdapter {
   markWrong(): boolean;
   submitAnswer(input: string): boolean;
   createCardWatcher(onChange: () => void): MutationObserver;
+  isGradeOf(card: SiteContext | null | undefined, current: SiteContext | null | undefined): boolean;
   getQueuedSubjectIds?(cap?: number): number[];
   reveal?(): boolean;
   gradeGood?(): boolean;
@@ -866,8 +867,16 @@ async function startListener(dictionary: Dictionary): Promise<void> {
   // only checked for commands — otherwise thinking aloud while reading the
   // item info can match the answer, and submitting it presses the button
   // that has become "next", skipping past the info.
+  //
+  // Only a grade of the card being answered counts. Locking anything else —
+  // a card the page is still swapping in, or one carrying the last card's
+  // state — would ignore every answer on it.
   startSpeedEnhancer(getSettings, () => {
     if (submitted) return;
+    if (!site.isGradeOf(context, site.getContext(subjects))) {
+      debugLog('ignored a grade that is not for the current card');
+      return;
+    }
     submitted = true;
     pendingRaws = null;
     clearMatchedInterimTimer();

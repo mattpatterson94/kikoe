@@ -19,7 +19,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Once a card has been graded, speech is only checked for voice commands
   until the next card. Saying the answer while reading the item info used to
   press the button that had become "next" and skip past it, and "wrong" did
-  the same.
+  the same. A grade only locks the card it belongs to: on BunPro a new card
+  that still carried the previous card's "answered" flag could be locked
+  before you'd answered it.
+- iOS app: the More button opens on the first tap. The nav bar no longer
+  redraws on every transcript, mic-level and page update, which used to
+  rebuild the menu mid-tap and drop the press.
 
 ## [0.21.0] - 2026-11-08
 

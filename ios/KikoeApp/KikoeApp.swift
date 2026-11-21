@@ -49,71 +49,141 @@ struct RootView: View {
 }
 
 /// The current site's page with Kikoe's controls around it.
+///
+/// This view deliberately observes nothing that changes while you speak.
+/// The page, transcript and recognizer publish many times a second, and
+/// every re-render here rebuilt the whole nav bar; a Menu rebuilt while a tap
+/// is landing drops the tap, so the More button often needed several
+/// presses. Everything busy lives in SessionContent, and each toolbar item
+/// watches only the values it shows.
 struct SessionScreen: View {
     @ObservedObject var app: AppModel
+    let session: PageSession
+    @State private var choosingLanguage = false
+
+    var body: some View {
+        NavigationStack {
+            SessionContent(session: session, choosingLanguage: $choosingLanguage)
+                .toolbar { toolbar }
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbarBackground(.visible, for: .navigationBar)
+        }
+    }
+
+    @ToolbarContentBuilder
+    private var toolbar: some ToolbarContent {
+        ToolbarItem(placement: .topBarLeading) {
+            // Keyed by page, so switching site starts their state afresh.
+            IndicatorPillItem(session: session).id(ObjectIdentifier(session))
+        }
+        ToolbarItem(placement: .principal) {
+            SiteMenu(app: app)
+        }
+        ToolbarItem(placement: .topBarTrailing) {
+            SessionMenuItem(session: session, chooseLanguage: { choosingLanguage = true },
+                            openSettings: { app.showSettings = true })
+                .id(ObjectIdentifier(session))
+        }
+    }
+}
+
+/// The nav bar's mic pill. It redraws only when the indicator itself changes,
+/// not on every publish from the page (which fires even for equal values).
+private struct IndicatorPillItem: View {
+    let session: PageSession
+    @State private var indicator: IndicatorState?
+
+    var body: some View {
+        Group {
+            if let indicator {
+                IndicatorPill(indicator: indicator) { session.sendAction("indicatorTapped") }
+            }
+        }
+        .onReceive(session.$indicator.removeDuplicates()) { indicator = $0 }
+    }
+}
+
+/// Feeds SessionMenu just the two values it shows.
+private struct SessionMenuItem: View {
+    let session: PageSession
+    let chooseLanguage: () -> Void
+    let openSettings: () -> Void
+    @State private var listening = SpeechService.shared.listening
+    @State private var helpButtonVisible = false
+
+    var body: some View {
+        SessionMenu(listening: listening, helpButtonVisible: helpButtonVisible,
+                    reload: { session.reload() },
+                    chooseLanguage: chooseLanguage,
+                    showHelp: { session.sendAction("helpButtonTapped") },
+                    openSettings: openSettings)
+            .equatable()
+            .onReceive(SpeechService.shared.$listening.removeDuplicates()) { listening = $0 }
+            .onReceive(session.$helpButtonVisible.removeDuplicates()) { helpButtonVisible = $0 }
+    }
+}
+
+/// The page and everything drawn over it: transcript bubble, banners and
+/// the sheets they open. This is the part that redraws as you speak.
+private struct SessionContent: View {
     @ObservedObject var session: PageSession
+    @Binding var choosingLanguage: Bool
     @ObservedObject private var settings = SyncSettings.shared
     @ObservedObject private var speech = SpeechService.shared
     @AppStorage(Pref.developerMode) private var developerMode = false
     @AppStorage(Pref.showDebugBar) private var showDebugBar = false
     @State private var pendingCorrection: TranscriptBubble.Correction?
-    @State private var choosingLanguage = false
 
     var body: some View {
-        NavigationStack {
-            WebContainer(session: session)
-                .ignoresSafeArea(edges: .bottom)
-                .overlay(alignment: .top) {
-                    VStack(spacing: 8) {
-                        if session.isLoading {
-                            ProgressView().progressViewStyle(.linear).tint(session.site.tint)
-                        }
-                        if bubbleIndicator == nil, let indicator = session.indicator, indicator.needsAttention {
-                            IndicatorBanner(indicator: indicator) { session.sendAction("indicatorTapped") }
-                                .transition(slideIn)
-                        }
-                        if let hint = session.hint {
-                            HintToast(text: hint).transition(slideIn)
-                        }
-                        if !bubbleAtBottom, let indicator = bubbleIndicator { transcript(indicator) }
+        WebContainer(session: session)
+            .ignoresSafeArea(edges: .bottom)
+            .overlay(alignment: .top) {
+                VStack(spacing: 8) {
+                    if session.isLoading {
+                        ProgressView().progressViewStyle(.linear).tint(session.site.tint)
                     }
-                    .padding(.horizontal)
-                    .padding(.top, 8)
-                }
-                .overlay(alignment: .bottom) {
-                    if bubbleAtBottom, let indicator = bubbleIndicator {
-                        transcript(indicator).padding()
+                    if bubbleIndicator == nil, let indicator = session.indicator, indicator.needsAttention {
+                        IndicatorBanner(indicator: indicator) { session.sendAction("indicatorTapped") }
+                            .transition(slideIn)
                     }
-                }
-                .animation(.easeOut(duration: 0.3), value: session.hint)
-                .animation(.easeOut(duration: 0.3), value: session.indicator)
-                .safeAreaInset(edge: .top, spacing: 0) {
-                    if developerMode && showDebugBar { DebugBar() }
-                }
-                .toolbar { toolbar }
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbarBackground(.visible, for: .navigationBar)
-                .sheet(isPresented: Binding(
-                    get: { session.help != nil },
-                    set: { if !$0 { session.helpDismissed() } }
-                )) {
-                    if let help = session.help {
-                        HelpSheet(help: help) { session.helpDismissed() }
-                            .presentationDetents([.medium, .large])
+                    if let hint = session.hint {
+                        HintToast(text: hint).transition(slideIn)
                     }
+                    if !bubbleAtBottom, let indicator = bubbleIndicator { transcript(indicator) }
                 }
-                .sheet(isPresented: $choosingLanguage) {
-                    LanguageSheet(speech: speech) { choosingLanguage = false }
+                .padding(.horizontal)
+                .padding(.top, 8)
+            }
+            .overlay(alignment: .bottom) {
+                if bubbleAtBottom, let indicator = bubbleIndicator {
+                    transcript(indicator).padding()
                 }
-                .sheet(isPresented: Binding(get: { pendingCorrection != nil }, set: { if !$0 { pendingCorrection = nil } })) {
-                    if let correction = pendingCorrection {
-                        CorrectionSheet(
-                            correction: correction,
-                            onSave: { session.confirmCorrection(correction); pendingCorrection = nil },
-                            onCancel: { pendingCorrection = nil })
-                    }
+            }
+            .animation(.easeOut(duration: 0.3), value: session.hint)
+            .animation(.easeOut(duration: 0.3), value: session.indicator)
+            .safeAreaInset(edge: .top, spacing: 0) {
+                if developerMode && showDebugBar { DebugBar() }
+            }
+            .sheet(isPresented: Binding(
+                get: { session.help != nil },
+                set: { if !$0 { session.helpDismissed() } }
+            )) {
+                if let help = session.help {
+                    HelpSheet(help: help) { session.helpDismissed() }
+                        .presentationDetents([.medium, .large])
                 }
-        }
+            }
+            .sheet(isPresented: $choosingLanguage) {
+                LanguageSheet(speech: speech) { choosingLanguage = false }
+            }
+            .sheet(isPresented: Binding(get: { pendingCorrection != nil }, set: { if !$0 { pendingCorrection = nil } })) {
+                if let correction = pendingCorrection {
+                    CorrectionSheet(
+                        correction: correction,
+                        onSave: { session.confirmCorrection(correction); pendingCorrection = nil },
+                        onCancel: { pendingCorrection = nil })
+                }
+            }
     }
 
     /// The bubble shows for the whole review (the page posts an indicator
@@ -142,26 +212,6 @@ struct SessionScreen: View {
     /// Banners slide down from the nav bar, or just fade with Reduce Motion.
     private var slideIn: AnyTransition {
         reduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity)
-    }
-
-    @ToolbarContentBuilder
-    private var toolbar: some ToolbarContent {
-        ToolbarItem(placement: .topBarLeading) {
-            if let indicator = session.indicator {
-                IndicatorPill(indicator: indicator) { session.sendAction("indicatorTapped") }
-            }
-        }
-        ToolbarItem(placement: .principal) {
-            SiteMenu(app: app)
-        }
-        ToolbarItem(placement: .topBarTrailing) {
-            SessionMenu(listening: speech.listening, helpButtonVisible: session.helpButtonVisible,
-                        reload: { session.reload() },
-                        chooseLanguage: { choosingLanguage = true },
-                        showHelp: { session.sendAction("helpButtonTapped") },
-                        openSettings: { app.showSettings = true })
-                .equatable()
-        }
     }
 }
 
