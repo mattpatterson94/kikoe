@@ -23,11 +23,32 @@ const apiTokenPageUrl = 'https://www.wanikani.com/settings/personal_access_token
 const apiTokenDiscoveryRequestedKey = 'kikoe_api_token_discovery_requested';
 const apiTokenDiscoveryStatusKey = 'kikoe_api_token_discovery_status';
 
+// Settings each app keeps its own copy of, stored as `<site>:<key>` with the
+// plain key as the fallback. Mirrors SITE_SETTING_KEYS in src/settings.ts and
+// SiteSettings.swift (options.js is copied verbatim, so it can't import).
+const sites = ['wanikani', 'bunpro'];
+const siteSettingKeys = [
+  'turbo', 'speed_show_info', 'ippatsu_meaning', 'ippatsu_reading',
+  'transcript', 'transcript_theme', 'transcript_position', 'show_help_button',
+  'strict_kanji_readings',
+];
+const siteKey = (site, key) => `${site}:${key}`;
+
 // Keys read/written via a same-id form element. customCorrections is edited
-// through the dynamic row list below instead.
-const fields = Object.keys(defaults).filter((k) => k !== 'customCorrections');
+// through the dynamic row list below instead, and the per-app keys through
+// each app card's copy of the template.
+const fields = Object.keys(defaults)
+  .filter((k) => k !== 'customCorrections' && !siteSettingKeys.includes(k));
 
 function get(id) { return document.getElementById(id); }
+
+// Each app card gets the per-app controls, with ids like `bunpro:turbo`.
+for (const site of sites) {
+  const content = get('appSettingsTemplate').content.cloneNode(true);
+  for (const el of content.querySelectorAll('[data-key]')) el.id = siteKey(site, el.dataset.key);
+  for (const label of content.querySelectorAll('label[data-for]')) label.htmlFor = siteKey(site, label.dataset.for);
+  get(`app_${site}`).appendChild(content);
+}
 
 function setTokenStatus(message, state = '') {
   const status = get('tokenStatus');
@@ -253,13 +274,13 @@ document.addEventListener('visibilitychange', () => {
 // ── apps ──────────────────────────────────────────────────────────────────────
 //
 // Same rule as the iOS app's Settings → Apps: at least one stays on, so the
-// last checked box is locked. The token card only matters for WaniKani.
+// last checked box is locked. An app's own card only shows while it's on.
 
 function refreshApps() {
   const toggles = [...document.querySelectorAll('.site-toggle')];
   const on = toggles.filter((t) => t.checked);
   for (const t of toggles) t.disabled = t.checked && on.length === 1;
-  get('tokenCard').hidden = !get('site_wanikani').checked;
+  for (const site of sites) get(`app_${site}`).hidden = !get(`site_${site}`).checked;
 }
 
 for (const toggle of document.querySelectorAll('.site-toggle')) {
@@ -335,14 +356,30 @@ get('installOnDeviceModels').addEventListener('click', installOnDeviceModels);
 
 // ── form load/save ────────────────────────────────────────────────────────────
 
+function readField(el) {
+  if (el.type === 'checkbox') return el.checked;
+  if (el.type === 'number') return parseFloat(el.value);
+  return el.value;
+}
+
+function writeField(el, value, fallback) {
+  if (el.type === 'checkbox') el.checked = !!value;
+  else el.value = value ?? fallback;
+}
+
+// Saving writes each app's own copy of every per-app setting. The plain keys
+// are left as they were, as the fallback older versions still read.
 function readForm() {
   const values = {};
   for (const key of fields) {
     const el = get(key);
-    if (!el) continue;
-    if (el.type === 'checkbox') values[key] = el.checked;
-    else if (el.type === 'number') values[key] = parseFloat(el.value);
-    else values[key] = el.value;
+    if (el) values[key] = readField(el);
+  }
+  for (const site of sites) {
+    for (const key of siteSettingKeys) {
+      const el = get(siteKey(site, key));
+      if (el) values[siteKey(site, key)] = readField(el);
+    }
   }
   values.customCorrections = readCorrections();
   return values;
@@ -351,9 +388,13 @@ function readForm() {
 function populateForm(settings) {
   for (const key of fields) {
     const el = get(key);
-    if (!el) continue;
-    if (el.type === 'checkbox') el.checked = !!settings[key];
-    else el.value = settings[key] ?? defaults[key];
+    if (el) writeField(el, settings[key], defaults[key]);
+  }
+  for (const site of sites) {
+    for (const key of siteSettingKeys) {
+      const el = get(siteKey(site, key));
+      if (el) writeField(el, settings[siteKey(site, key)] ?? settings[key], defaults[key]);
+    }
   }
   renderCorrections(settings.customCorrections);
   refreshApps();
@@ -379,7 +420,10 @@ async function migrateSettings() {
 async function load() {
   await migrateSettings();
   const [stored, discovery] = await Promise.all([
-    chrome.storage.sync.get(Object.keys(defaults)),
+    chrome.storage.sync.get([
+      ...Object.keys(defaults),
+      ...sites.flatMap((site) => siteSettingKeys.map((key) => siteKey(site, key))),
+    ]),
     chrome.storage.local.get(apiTokenDiscoveryStatusKey),
   ]);
   populateForm({ ...defaults, ...stored });

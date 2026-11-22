@@ -170,7 +170,9 @@ The extension applies several candidate transformations to improve recognition a
 
 ## Settings
 
-Open the extension options page (via the toolbar icon or extensions menu) to configure. The sections follow the same order and wording as the iOS and macOS app's Settings screen.
+Open the extension options page (via the toolbar icon or extensions menu) to configure. The sections follow the same order and wording as the iOS and macOS app's Settings screen: general settings first, then Apps, then a card for each app that's on.
+
+Turbo, show item info, strict kanji readings, Ippatsu and the live transcript are set **separately for WaniKani and BunPro**. Each app's value is stored as `<app>:<key>` (e.g. `bunpro:transcript_position`), falling back to the plain key, so settings saved before this keep applying to both apps until you change them.
 
 ### Apps
 
@@ -179,7 +181,7 @@ Open the extension options page (via the toolbar icon or extensions menu) to con
 | WaniKani | On | Run Kikoe on WaniKani review and lesson pages |
 | BunPro | On | Run Kikoe on BunPro review pages |
 
-At least one app stays on. Turning WaniKani off also hides the API token section ("Find token" still works if you turn it back on).
+At least one app stays on. Turning an app off hides its card (for WaniKani, that includes the API token).
 
 ### WaniKani API
 

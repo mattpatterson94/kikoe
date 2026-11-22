@@ -266,7 +266,7 @@ private struct AppSettingsView: View {
                     if let reason = speech.fallbackReason {
                         Text(reason)
                     } else {
-                        Text("Automatic uses DictationTranscriber for WaniKani readings, which follows the card's hints, and SpeechTranscriber for meanings and for BunPro, which is better with grammar in context. Both need iOS 26; SFSpeechRecognizer works everywhere.")
+                        Text("Automatic uses DictationTranscriber for WaniKani readings, which follows the card's hints, and SpeechTranscriber for meanings and for BunPro, which is better with grammar in context. Both need \(Platform.isMac ? "macOS 26" : "iOS 26"); SFSpeechRecognizer works everywhere.")
                     }
                 }
             }

@@ -14,8 +14,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   windows, Apple's on-device transcribers (SpeechTranscriber, SpeechAnalyzer,
   SFSpeechRecognizer), the native overlays, and a Review menu with keyboard
   shortcuts (⌘R reload, ⇧⌘L Listen In, ⌘/ voice commands, ⌘1/⌘2 switch app).
-- The extension options page now matches the app's Settings: same section
-  order and wording, plus an Apps section that turns WaniKani or BunPro off.
+- The extension options page now matches the app's Settings: general
+  settings, an Apps section that turns WaniKani or BunPro off, and a card per
+  app. Turbo, show item info, strict kanji readings, Ippatsu and the live
+  transcript are set separately for each app, stored the same way as the iOS
+  app (`<app>:<key>`, falling back to the shared value), so a setting saved
+  on either side means the same thing.
 - Chrome: an on-device recognizer option with a model download button,
   contextual hints (the card's expected answers sent as recognition phrases)
   and noise reduction. Each is hidden where the browser doesn't support it.
