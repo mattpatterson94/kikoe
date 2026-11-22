@@ -172,6 +172,16 @@ export function didContextChange(oldContext: ContextIdentity, newContext: Contex
          (newContext?.type !== oldContext?.type);
 }
 
+// Whether a grade the speed enhancer just saw belongs to `card`, the card
+// app.ts is answering. A real grade raises the submission count on the same
+// item and sets the post-attempt flag. A new card can arrive with the last
+// one's post-attempt flag still set, which looks like a grade but keeps the
+// count it was shown with, so that must not count.
+export function isGradeOf(card: ContextIdentity, current: ContextIdentity): boolean {
+  if (!card?.prompt || current?.mode === 'reveal' || current?.postAttempt !== true) return false;
+  return itemKey(current.prompt) === itemKey(card.prompt) && current.prompt !== card.prompt;
+}
+
 // The card Kikoe last submitted an answer for, so a graded card can be told
 // apart from an untouched one carrying a stale post-attempt flag.
 let lastSubmittedCardId: number | string | null = null;

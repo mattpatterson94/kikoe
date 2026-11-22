@@ -1298,6 +1298,33 @@ describe('startListener BunPro Reveal & Grade cards', () => {
     }
   });
 
+  // iOS SpeechTranscriber's English finals lose the word ("Incorrect." then a
+  // final of "to.."); the engine appends the live text as the last
+  // alternative, and the command must still be found there.
+  test('"incorrect" behind a garbled first alternative marks a translate card wrong', async () => {
+    addMetadata({
+      'data-meta-input-mode': 'manual',
+      'data-meta-question-mode': 'translate',
+      'data-meta-answers-array': JSON.stringify(['to eat']),
+    });
+    const input = document.createElement('input');
+    input.id = 'js-manual-input';
+    document.body.appendChild(input);
+    const submit = document.createElement('button');
+    submit.className = 'InputManual__button';
+    document.body.appendChild(submit);
+    const submitSpy = vi.spyOn(submit, 'click');
+    stampConfig({ hasApiToken: true });
+    await importApp();
+
+    const native = MockSpeechRecognition.instances[0];
+    native.onresult({ resultIndex: 0, results: [interimResult('Incorrect.')] });
+    native.onresult({ resultIndex: 0, results: [finalResult('to..', 'to.', 'Incorrect.')] });
+
+    expect(input.value).toBe('aaa');
+    expect(submitSpy).toHaveBeenCalledTimes(1);
+  });
+
   test('a hiragana transcript submits BunPro\'s canonical katakana answer', async () => {
     addMetadata({
       'data-meta-input-mode': 'manual',
@@ -1947,6 +1974,53 @@ describe('startListener ippatsu mode (one-shot auto-submit on a miss)', () => {
       expect(document.getElementById('user-response').value).toBe('あああ');
     },
   );
+
+  // Once WaniKani grades a card, its submit button means "next": an answer
+  // heard while the user reads the item info must not press it.
+  async function gradeCard(correct) {
+    const container = document.createElement('div');
+    container.className = 'quiz-input__input-container';
+    document.body.appendChild(container);
+    await Promise.resolve();
+    container.setAttribute('correct', String(correct));
+    await Promise.resolve();
+  }
+
+  test('speech after a card is graded wrong is not submitted as an answer', async () => {
+    const native = await loadCard('Reading', {});
+    const next = document.querySelector('.quiz-input__submit-button');
+    const clicks = vi.fn();
+    next.addEventListener('click', clicks);
+    await gradeCard(false);
+
+    native.onresult({ resultIndex: 0, results: [interimResult('さむい')] });
+    native.onresult({ resultIndex: 0, results: [finalResult('さむい')] });
+
+    expect(document.getElementById('user-response').value).toBe('');
+    expect(clicks).not.toHaveBeenCalled();
+  });
+
+  test('"wrong" on a graded card does not skip ahead', async () => {
+    const native = await loadCard('Meaning', {});
+    const clicks = vi.fn();
+    document.querySelector('.quiz-input__submit-button').addEventListener('click', clicks);
+    await gradeCard(false);
+
+    native.onresult({ resultIndex: 0, results: [finalResult('wrong')] });
+
+    expect(clicks).not.toHaveBeenCalled();
+  });
+
+  test('"next" still advances a graded card', async () => {
+    const native = await loadCard('Meaning', {});
+    const clicks = vi.fn();
+    document.querySelector('.quiz-input__submit-button').addEventListener('click', clicks);
+    await gradeCard(false);
+
+    native.onresult({ resultIndex: 0, results: [finalResult('next')] });
+
+    expect(clicks).toHaveBeenCalledTimes(1);
+  });
 
   test('muting cancels a matched interim instead of submitting it once muted', async () => {
     const native = await loadCard('Reading', {});

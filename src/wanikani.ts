@@ -188,6 +188,13 @@ export function didContextChange(oldContext: ContextIdentity, newContext: Contex
          (newContext?.type !== oldContext?.type);
 }
 
+// Whether a grade the speed enhancer just saw belongs to `card`, the card
+// app.ts is answering: the page must still be showing it. WaniKani only sets
+// the result attribute in answer to a submission, so that is enough.
+export function isGradeOf(card: ContextIdentity, current: ContextIdentity): boolean {
+  return !!card?.prompt && !didContextChange(card, current);
+}
+
 // The review/lesson queue is embedded as JSON in a <script> tag so the SPA
 // can resume without an extra API round-trip. The container differs by page
 // and has changed shape before, so scan every embedded JSON blob for a

@@ -18,7 +18,12 @@ export interface SpeedEnhancer {
   _getContainer(): Element | null;
 }
 
-export function startSpeedEnhancer(getSettingsFn: () => Settings): SpeedEnhancer {
+// onGraded fires once WaniKani has graded the card, right or wrong, so app.ts
+// can stop treating speech as an answer until the next card appears.
+export function startSpeedEnhancer(
+  getSettingsFn: () => Settings,
+  onGraded: (correct: boolean) => void = () => {},
+): SpeedEnhancer {
   let currentContainer: Element | null = null;
   let attrObserver: MutationObserver | null = null;
 
@@ -35,6 +40,8 @@ export function startSpeedEnhancer(getSettingsFn: () => Settings): SpeedEnhancer
 
   function onResult(container: Element): void {
     const result = getResult(container);
+    if (result !== 'true' && result !== 'false') return;
+    onGraded(result === 'true');
     const s = getSettingsFn();
 
     if (result === 'true' && s.turbo) {

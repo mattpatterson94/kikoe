@@ -1,5 +1,5 @@
 import {
-  getLanguage, getContext, didContextChange,
+  getLanguage, getContext, didContextChange, isGradeOf,
   inputAnswer, submitAnswer, markWrong,
   clickNext, clickInfo, clickAnswer,
   reveal, gradeGood, gradeBad,
@@ -684,5 +684,30 @@ describe('canReadPage', () => {
     addMetadata({ 'data-meta-input-mode': 'reveal', 'data-meta-is-post-attempt': 'true' });
     addButton('Good');
     expect(canReadPage()).toBe(false);
+  });
+});
+
+describe('isGradeOf', () => {
+  const card = { prompt: '806:0', type: 'reading' };
+
+  test('the same item, one submission on and post-attempt → a grade of this card', () => {
+    expect(isGradeOf(card, { prompt: '806:1', type: 'reading', postAttempt: true })).toBe(true);
+  });
+
+  test('a stale post-attempt flag on an unsubmitted card does not count', () => {
+    expect(isGradeOf(card, { ...card, postAttempt: true })).toBe(false);
+  });
+
+  test('a different item does not count', () => {
+    expect(isGradeOf(card, { prompt: '807:1', type: 'reading', postAttempt: true })).toBe(false);
+  });
+
+  test('not post-attempt, or in reveal mode → not a grade', () => {
+    expect(isGradeOf(card, { prompt: '806:1', type: 'reading' })).toBe(false);
+    expect(isGradeOf(card, { prompt: '806:1', type: 'reading', postAttempt: true, mode: 'reveal' })).toBe(false);
+  });
+
+  test('no card yet → not a grade of it', () => {
+    expect(isGradeOf(null, { prompt: '806:1', type: 'reading', postAttempt: true })).toBe(false);
   });
 });

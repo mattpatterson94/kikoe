@@ -7,6 +7,72 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Changed
+
+- iOS app: Settings is reorganised into sub pages. The top level keeps what
+  applies to everything (keep screen awake, background noise, custom
+  corrections, advanced and developer options) and an Enabled apps page where
+  you tick which of WaniKani and BunPro Kikoe loads. Each enabled app gets a
+  row below it that opens its own page: Turbo, show item info on wrong
+  answer, strict kanji readings, Ippatsu, the live transcript (on/off, theme,
+  position, help button) and the recognizer, all set separately per app. The
+  WaniKani API token moved onto the WaniKani page, and its row shows a
+  warning while no token is set. Until you change one, both apps keep using
+  the setting they already had. The extension is unchanged.
+- iOS app: the recognizer is chosen per site (Settings → the app's page), and a
+  new Automatic choice is the default. On WaniKani it uses
+  DictationTranscriber for readings and SpeechTranscriber for meanings; on
+  BunPro, SpeechTranscriber. Switching between them costs nothing per card,
+  since each language keeps its own warm recognizer. An earlier single
+  recognizer choice is reset to Automatic.
+
+### Fixed
+
+- iOS app: English answers with SpeechTranscriber no longer stall or miss.
+  Its English finals often lose the word the live result had right ("Water."
+  finalizes as "." or "to."), so a correct answer either never finished or
+  was graded wrong. The final now keeps the live result as an alternative.
+  A live result that never gets a final at all is sent as final once it has
+  stood still for 1.2 s, so voice commands like "incorrect" work on English
+  cards too (they only run from finals).
+- Once a card has been graded, speech is only checked for voice commands
+  until the next card. Saying the answer while reading the item info used to
+  press the button that had become "next" and skip past it, and "wrong" did
+  the same. A grade only locks the card it belongs to: on BunPro a new card
+  that still carried the previous card's "answered" flag could be locked
+  before you'd answered it.
+- iOS app: the More button opens on the first tap. The nav bar no longer
+  redraws on every transcript, mic-level and page update, which used to
+  rebuild the menu mid-tap and drop the press.
+
+## [0.21.0] - 2026-11-08
+
+### Added
+
+- iOS app: Dictation assist (Settings → Advanced, on by default). On Japanese
+  cards the app also runs Apple's dictation model next to SpeechTranscriber
+  and adds its guesses. It follows the card's kana hints, so it helps strict
+  kanji readings, at some extra battery use.
+
+### Changed
+
+- iOS app: answers register much sooner. Kikoe now ends an utterance itself
+  after a short silence instead of waiting for SpeechTranscriber, which ran
+  separate answers together and finished seconds late. Each language's
+  recognizer stays loaded, so switching between meaning and reading cards no
+  longer drops the start of an answer, and audio no longer waits on the main
+  thread, which made words arrive in a burst after a pause.
+- Strict kanji readings accept a homophone kanji that can only be the
+  accepted reading: hearing 城 on a 上 card means you said じょう. The prompt
+  kanji itself, or one that shares another of the prompt's readings, still
+  asks you to say it again.
+
+### Fixed
+
+- iOS app: results that were only a full stop (from a breath or silence) no
+  longer show up as a transcript, and an answer split in two by the
+  recognizer keeps all of its alternatives.
+
 ## [0.20.0] - 2026-10-12
 
 ### Added
@@ -398,7 +464,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Vitest test suite: 118 tests covering candidates, flashcards, settings,
   the content script, WaniKani helpers, and the speed enhancer.
 
-[Unreleased]: https://github.com/mattpatterson94/kikoe/compare/v0.20.0...HEAD
+[Unreleased]: https://github.com/mattpatterson94/kikoe/compare/v0.21.0...HEAD
+[0.21.0]: https://github.com/mattpatterson94/kikoe/compare/v0.20.0...v0.21.0
 [0.20.0]: https://github.com/mattpatterson94/kikoe/compare/v0.11.0...v0.20.0
 [0.11.0]: https://github.com/mattpatterson94/kikoe/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/mattpatterson94/kikoe/compare/v0.9.1...v0.10.0

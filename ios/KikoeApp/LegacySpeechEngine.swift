@@ -45,7 +45,11 @@ final class LegacySpeechEngine: SpeechEngine {
         }
         running = true
         do {
-            try mic.start { [weak self] buffer in self?.request?.append(buffer) }
+            // SFSpeech requests accept audio from any thread, but `request` is
+            // main-actor state; this fallback engine keeps the main hop.
+            try mic.start { [weak self] buffer, _ in
+                Task { @MainActor in self?.request?.append(buffer) }
+            }
         } catch {
             NSLog("[kikoe] mic start failed: \(error)")
             onEvent?(.error("audio-capture"))

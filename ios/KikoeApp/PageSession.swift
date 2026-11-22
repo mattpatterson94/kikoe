@@ -190,7 +190,13 @@ final class PageSession: NSObject, ObservableObject {
         switch op {
         case "storage.get":
             let keys = (body["keys"] as? String).flatMap(Self.parse)
-            reply(Self.json(ExtensionStorage.get(area: area, keys: keys)), nil)
+            var result = ExtensionStorage.get(area: area, keys: keys)
+            if area == "sync" {
+                // This site's own values for the settings that can differ.
+                result = SiteSettings.apply(to: result, requested: keys,
+                                            stored: ExtensionStorage.all(area: "sync"), for: site)
+            }
+            reply(Self.json(result), nil)
         case "storage.set":
             let items = (body["items"] as? String).flatMap(Self.parse) as? [String: Any] ?? [:]
             ExtensionStorage.set(area: area, items: items)
@@ -238,7 +244,9 @@ final class PageSession: NSObject, ObservableObject {
     /// writes are the (large) subject cache.
     private func relayStorageChange(_ note: Notification) {
         guard let area = note.userInfo?["area"] as? String, area == "sync",
-              let changes = note.userInfo?["changes"] else { return }
+              let raw = note.userInfo?["changes"] as? [String: Any] else { return }
+        let changes = SiteSettings.relay(raw, stored: ExtensionStorage.all(area: "sync"), for: site)
+        guard !changes.isEmpty else { return }
         let js = "window.__kikoeStorageChanged && window.__kikoeStorageChanged(\(Self.json(changes)), \(Self.json(area)));"
         webView.evaluateJavaScript(js, in: nil, in: Self.contentWorld, completionHandler: nil)
     }

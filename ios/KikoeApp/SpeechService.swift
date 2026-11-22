@@ -12,14 +12,13 @@ import UIKit
 final class SpeechService: ObservableObject {
     static let shared = SpeechService()
 
-    @Published var engineKind: EngineKind {
-        didSet {
-            guard oldValue != engineKind else { return }
-            UserDefaults.standard.set(engineKind.rawValue, forKey: Pref.engine)
-            fallbackReason = nil
-            swapEngine(to: engineKind)
-        }
-    }
+    /// The recognizer chosen for each site; the page in charge picks which
+    /// one runs (see defaultEngine).
+    @Published private(set) var engineKinds: [Site: EngineKind]
+    /// The site of the page that last sent "start".
+    private var activeSite: Site
+    /// The site the running engine was made for; Automatic differs by site.
+    private var runningSite: Site
     /// A/B switch: when off, card answers aren't passed to the recognizer as
     /// contextual strings, which behaves like plain Web Speech.
     @Published var sendHints: Bool {
@@ -35,6 +34,15 @@ final class SpeechService: ObservableObject {
             UserDefaults.standard.set(noiseReduction, forKey: Pref.noiseReduction)
             mic.voiceProcessing = noiseReduction
             // Voice processing can only change with the mic stopped.
+            swapEngine(to: runningKind)
+        }
+    }
+    /// Run DictationTranscriber alongside SpeechTranscriber on Japanese
+    /// cards and add its alternatives (see AnalyzerSpeechEngine).
+    @Published var dictationAssist: Bool {
+        didSet {
+            guard oldValue != dictationAssist else { return }
+            UserDefaults.standard.set(dictationAssist, forKey: Pref.dictationAssist)
             swapEngine(to: runningKind)
         }
     }
@@ -59,24 +67,60 @@ final class SpeechService: ObservableObject {
     private var permissionsGranted = false
     private var pageHints: [String] = []
 
-    /// SpeechTranscriber where the OS has it: on the macOS 27 probe it had
-    /// the best top-1 accuracy of the three engines by a wide margin. Hints
-    /// barely move it, but app.ts's own matching covers what they'd add.
-    static var defaultEngine: EngineKind {
-        if #available(iOS 26, *) { return .transcriber }
-        return .legacy
+    /// Automatic on iOS 26 (see automaticUsesDictation for what it picks).
+    static func defaultEngine(for site: Site) -> EngineKind {
+        guard #available(iOS 26, *) else { return .legacy }
+        return .automatic
     }
 
+    func engineKind(for site: Site) -> EngineKind {
+        engineKinds[site] ?? Self.defaultEngine(for: site)
+    }
+
+    /// Whether Japanese cards on `site` run SpeechTranscriber, which is when
+    /// Dictation assist applies.
+    func usesTranscriberForJapanese(_ site: Site) -> Bool {
+        switch engineKind(for: site) {
+        case .transcriber: true
+        case .automatic: !automaticUsesDictation(site: site, locale: SpeechLanguage.japanese)
+        default: false
+        }
+    }
+
+    func setEngineKind(_ kind: EngineKind, for site: Site) {
+        guard engineKind(for: site) != kind else { return }
+        engineKinds[site] = kind
+        UserDefaults.standard.set(kind.rawValue, forKey: Pref.engine(site))
+        guard site == activeSite else { return }
+        fallbackReason = nil
+        swapEngine(to: kind)
+    }
+
+    /// The engine the page in charge asked for (runningKind differs only
+    /// while falling back).
+    private var engineKind: EngineKind { engineKind(for: activeSite) }
+
     private init() {
-        let stored = UserDefaults.standard.string(forKey: Pref.engine).flatMap(EngineKind.init(rawValue:))
-        let kind = stored ?? Self.defaultEngine
-        engineKind = kind
+        var kinds: [Site: EngineKind] = [:]
+        for site in Site.allCases {
+            let stored = UserDefaults.standard.string(forKey: Pref.engine(site)).flatMap(EngineKind.init(rawValue:))
+            kinds[site] = stored ?? Self.defaultEngine(for: site)
+        }
+        engineKinds = kinds
+        // Start on the engine the site the app reopens on will want, so the
+        // first "start" doesn't have to swap it.
+        let site = UserDefaults.standard.string(forKey: Pref.lastSite).flatMap(Site.init(rawValue:)) ?? .wanikani
+        activeSite = site
+        let kind = kinds[site] ?? Self.defaultEngine(for: site)
         runningKind = kind
+        runningSite = site
         sendHints = UserDefaults.standard.object(forKey: Pref.sendHints) as? Bool ?? true
         let reduceNoise = UserDefaults.standard.object(forKey: Pref.noiseReduction) as? Bool ?? true
         noiseReduction = reduceNoise
         mic.voiceProcessing = reduceNoise
-        engine = makeEngine(kind, mic: mic)
+        let assist = UserDefaults.standard.object(forKey: Pref.dictationAssist) as? Bool ?? true
+        dictationAssist = assist
+        engine = makeEngine(kind, site: site, mic: mic, dictationAssist: assist)
         engine.onEvent = { [weak self] in self?.deliver($0) }
     }
 
@@ -84,6 +128,14 @@ final class SpeechService: ObservableObject {
         guard let type = body["type"] as? String else { return }
         if type == "start" {
             owner = session
+            if session.site != activeSite {
+                activeSite = session.site
+                if runningKind != engineKind || (engineKind == .automatic && runningSite != activeSite) {
+                    fallbackReason = nil
+                    // start() below starts the new engine.
+                    swapEngine(to: engineKind, restart: false)
+                }
+            }
             let lang = body["lang"] as? String ?? "ja-JP"
             let hints = body["hints"] as? [String] ?? []
             if lang != pageLocale || hints != pageHints { languageOverride = nil }
@@ -172,9 +224,10 @@ final class SpeechService: ObservableObject {
 
     private func swapEngine(to kind: EngineKind, restart: Bool = true) {
         let wasListening = listening && restart
-        engine.stop()
-        engine = makeEngine(kind, mic: mic)
+        engine.shutdown()
+        engine = makeEngine(kind, site: activeSite, mic: mic, dictationAssist: dictationAssist)
         runningKind = kind
+        runningSite = activeSite
         engine.onEvent = { [weak self] in self?.deliver($0) }
         if wasListening { engine.start(locale: currentLocale, hints: effectiveHints) }
     }
@@ -187,7 +240,7 @@ final class SpeechService: ObservableObject {
             payload = ["type": "result", "transcripts": transcripts, "isFinal": isFinal, "resultId": resultId]
         case let .error(code):
             if code == "language-not-supported", runningKind != .legacy {
-                fallbackReason = "\(runningKind.rawValue) isn't available for \(currentLocale) on this device, so Kikoe is using SFSpeechRecognizer."
+                fallbackReason = "\(runningKind == .automatic ? "The iOS 26 recognizer" : runningKind.rawValue) isn't available for \(currentLocale) on this device, so Kikoe is using SFSpeechRecognizer."
                 NSLog("[kikoe] \(fallbackReason ?? "")")
                 swapEngine(to: .legacy)
                 return

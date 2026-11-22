@@ -732,6 +732,64 @@ describe('strict kanji readings', () => {
     expect(r.answer).toBe('のぼる');
   });
 
+  // A homophone kanji is evidence of the sound: 城 is only ever じょう, so
+  // hearing it on a 上 card means the user said じょう, not うえ.
+  describe('homophone kanji', () => {
+    const dict: Dictionary = {
+      ...kanjiDict,
+      '城': [{ type: 'character', readings: [{ value: 'ジョウ' }, { value: 'しろ' }] }],
+      // Made up: a kanji read both じょう and うえ proves neither.
+      '㐂': [{ type: 'character', readings: [{ value: 'ジョウ' }, { value: 'うえ' }] }],
+      // Made up: a word read only うえ.
+      '㐃': [{ type: 'word', kana: ['うえ'] }],
+    };
+    const homophones = makeTransformers(dict);
+
+    test('on: a kanji only readable as the accepted reading answers the card', () => {
+      const r = checkAnswer(onyomiCard, homophones, '城', { strictKanjiReadings: true });
+      expectSuccess(r);
+      expect(r.answer).toBe('じょう');
+    });
+
+    test('on: trailing punctuation does not get in the way', () => {
+      expectSuccess(checkAnswer(onyomiCard, homophones, '城。', { strictKanjiReadings: true }));
+    });
+
+    test('on: a homophone of a wrong reading does not answer the card', () => {
+      const r = checkAnswer(kunyomiCard, homophones, '城', { strictKanjiReadings: true });
+      expectFailure(r);
+      expect(r.transcript.reason).toBe('ambiguous-kanji');
+    });
+
+    test('on: a kanji that is also read as another reading of the prompt stays ambiguous', () => {
+      const r = checkAnswer(onyomiCard, homophones, '㐂', { strictKanjiReadings: true });
+      expectFailure(r);
+      expect(r.transcript.reason).toBe('ambiguous-kanji');
+    });
+
+    test('on: the prompt kanji itself stays ambiguous', () => {
+      const r = checkAnswer(onyomiCard, homophones, '上', { strictKanjiReadings: true });
+      expectFailure(r);
+      expect(r.transcript.reason).toBe('ambiguous-kanji');
+    });
+
+    test('on: a kanji the dictionary does not know stays ambiguous', () => {
+      const r = checkAnswer(onyomiCard, homophones, '丈', { strictKanjiReadings: true });
+      expectFailure(r);
+      expect(r.transcript.reason).toBe('ambiguous-kanji');
+    });
+
+    // The vocabulary card only lists うえ; the prompt's other readings come
+    // from the dictionary, so 城 (じょう) still can't pass and 㐃 (うえ) can.
+    test('on: one-kanji vocabulary accepts a homophone of its reading', () => {
+      const vocab = { type: 'reading', prompt: '上', category: 'vocabulary', readings: ['うえ'] };
+      const r = checkAnswer(vocab, homophones, '㐃', { strictKanjiReadings: true });
+      expectSuccess(r);
+      expect(r.answer).toBe('うえ');
+      expectFailure(checkAnswer(vocab, homophones, '城', { strictKanjiReadings: true }));
+    });
+  });
+
   test('on: meaning questions on kanji cards are unaffected', () => {
     const meaning = { type: 'meaning', prompt: '上', category: 'kanji', meanings: ['above'] };
     const r = checkAnswer(meaning, transformers, 'above', { strictKanjiReadings: true });

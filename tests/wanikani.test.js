@@ -1,6 +1,6 @@
 import {
   getPrompt, getLanguage, getContext,
-  didContextChange, didAnswerCorrectly,
+  didContextChange, isGradeOf, didAnswerCorrectly,
   getUserSynonyms, inputAnswer, createCardWatcher,
   getQueuedSubjectIds, canReadPage,
 } from '../src/wanikani';
@@ -568,5 +568,23 @@ describe('canReadPage', () => {
     setURL('https://www.wanikani.com/subject-lessons/12345/quiz');
     setDOM('<div class="character-header__characters">下</div>');
     expect(canReadPage()).toBe(false);
+  });
+});
+
+describe('isGradeOf', () => {
+  const card = { prompt: '下', type: 'reading' };
+
+  test('a grade on the same card counts', () => {
+    expect(isGradeOf(card, { ...card })).toBe(true);
+  });
+
+  test('a grade after the card moved on does not', () => {
+    expect(isGradeOf(card, { prompt: '上', type: 'reading' })).toBe(false);
+    expect(isGradeOf(card, { prompt: '下', type: 'meaning' })).toBe(false);
+  });
+
+  test('no card yet → not a grade of it', () => {
+    expect(isGradeOf(null, card)).toBe(false);
+    expect(isGradeOf({ prompt: '', type: 'reading' }, card)).toBe(false);
   });
 });
