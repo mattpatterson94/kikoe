@@ -34,7 +34,10 @@ final class AnalyzerSpeechEngine: SpeechEngine {
     var onEvent: ((SpeechEvent) -> Void)?
 
     private let mic: MicCapture
-    private let useDictation: Bool
+    /// Per locale: DictationTranscriber (true) or SpeechTranscriber. Each
+    /// language has its own pipeline, so Automatic can mix them without
+    /// rebuilding anything when the card's language changes.
+    private let usesDictation: @MainActor (String) -> Bool
     private let dictationAssist: Bool
     /// The feed the mic tap writes to: the active pipeline's, or nil.
     private let route = LockedValue<AudioFeed?>(nil)
@@ -63,9 +66,9 @@ final class AnalyzerSpeechEngine: SpeechEngine {
     /// Speech that started but never finalized shouldn't hold the utterance forever.
     private static let volatileTimeout: Duration = .seconds(2)
 
-    init(mic: MicCapture, useDictation: Bool, dictationAssist: Bool = false) {
+    init(mic: MicCapture, usesDictation: @escaping @MainActor (String) -> Bool, dictationAssist: Bool = false) {
         self.mic = mic
-        self.useDictation = useDictation
+        self.usesDictation = usesDictation
         self.dictationAssist = dictationAssist
     }
 
@@ -185,10 +188,10 @@ final class AnalyzerSpeechEngine: SpeechEngine {
 
     private func build(locale id: String) async throws -> Pipeline {
         let locale = Locale(identifier: id)
-        let primaryModule = makeModule(locale: locale)
+        let primaryModule = makeModule(locale: id)
         try await prepare(primaryModule, locale: locale)
         var helperModule: DictationTranscriber?
-        if dictationAssist, !useDictation, id.hasPrefix("ja") {
+        if dictationAssist, !usesDictation(id), id.hasPrefix("ja") {
             let m = DictationTranscriber(locale: locale, contentHints: [.shortForm], transcriptionOptions: [],
                                          reportingOptions: [.volatileResults, .alternativeTranscriptions, .frequentFinalization],
                                          attributeOptions: [])
@@ -281,9 +284,8 @@ final class AnalyzerSpeechEngine: SpeechEngine {
     /// Folds one result into its module's segments and tells the page.
     private func receive(_ r: TranscriberResult, into keyPath: ReferenceWritableKeyPath<AnalyzerSpeechEngine, Segments>) {
         let texts = dedupe([r.text] + r.alternatives).filter { !isPunctuationOnly($0) }
-        guard !texts.isEmpty else { return }
         let separator = (locale ?? "").hasPrefix("ja") ? "" : " "
-        self[keyPath: keyPath].add(texts, isFinal: r.isFinal, end: r.end, separator: separator)
+        guard self[keyPath: keyPath].add(texts, isFinal: r.isFinal, end: r.end, separator: separator) else { return }
         if utteranceId == nil { utteranceId = r.start }
         let transcripts = merged
         guard !transcripts.isEmpty else { return }
@@ -324,8 +326,9 @@ final class AnalyzerSpeechEngine: SpeechEngine {
 
     // MARK: - Modules
 
-    private func makeModule(locale: Locale) -> any SpeechModule {
-        if useDictation {
+    private func makeModule(locale id: String) -> any SpeechModule {
+        let locale = Locale(identifier: id)
+        if usesDictation(id) {
             return DictationTranscriber(locale: locale, contentHints: [.shortForm], transcriptionOptions: [],
                                         reportingOptions: [.volatileResults, .alternativeTranscriptions, .frequentFinalization],
                                         attributeOptions: [])
@@ -387,7 +390,7 @@ final class AnalyzerSpeechEngine: SpeechEngine {
     // MARK: - Probe
 
     func transcribe(buffers: [AVAudioPCMBuffer], locale: String, hints: [String]) async throws -> [String] {
-        let module = makeModule(locale: Locale(identifier: locale))
+        let module = makeModule(locale: locale)
         try await prepare(module, locale: Locale(identifier: locale))
         guard let format = await SpeechAnalyzer.bestAvailableAudioFormat(compatibleWith: [module]) else { return [] }
         NSLog("[kikoe] analyzer format \(format)")
@@ -443,8 +446,21 @@ struct Segments {
     private(set) var transcripts: [String] = []
     private(set) var hasFinal = false
     private(set) var end: Double = 0
+    /// The segment in progress as last heard, before its final.
+    ///
+    /// SpeechTranscriber's English finals often lose the word its volatile
+    /// result had right: "Water." finalizes as "." or "to.". A
+    /// punctuation-only final used to be dropped, leaving the answer waiting
+    /// for a final that never came, and "to." was graded as a miss. The
+    /// final now keeps these as alternatives after its own.
+    private var volatile: [String] = []
 
-    mutating func add(_ texts: [String], isFinal: Bool, end: Double, separator: String) {
+    /// Returns false when there was nothing to add.
+    @discardableResult
+    mutating func add(_ texts: [String], isFinal: Bool, end: Double, separator: String) -> Bool {
+        let texts = isFinal ? dedupe(texts + volatile) : texts
+        if isFinal { volatile = [] } else if !texts.isEmpty { volatile = texts }
+        guard !texts.isEmpty else { return false }
         transcripts = Self.join(finished, texts, separator: separator)
         self.end = max(self.end, end)
         if isFinal, !transcripts.isEmpty {
@@ -455,6 +471,7 @@ struct Segments {
                 String($0.reversed().drop { ".,!?;:。、！？".contains($0) }.reversed())
             })
         }
+        return true
     }
 
     /// Every prefix × segment pairing, best combined rank first, so the

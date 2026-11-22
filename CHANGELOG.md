@@ -9,13 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- iOS app: the recognizer is chosen per site (Settings → Advanced). It
-  defaults to DictationTranscriber for WaniKani and SpeechTranscriber for
-  BunPro, which is what worked best for each. An earlier single recognizer
-  choice is reset to these defaults.
+- iOS app: the recognizer is chosen per site (Settings → Advanced), and a
+  new Automatic choice is the default. On WaniKani it uses
+  DictationTranscriber for readings and SpeechTranscriber for meanings; on
+  BunPro, SpeechTranscriber. Switching between them costs nothing per card,
+  since each language keeps its own warm recognizer. An earlier single
+  recognizer choice is reset to Automatic.
 
 ### Fixed
 
+- iOS app: English answers with SpeechTranscriber no longer stall or miss.
+  Its English finals often lose the word the live result had right ("Water."
+  finalizes as "." or "to."), so a correct answer either never finished or
+  was graded wrong. The final now keeps the live result as an alternative.
 - Once a card has been graded, speech is only checked for voice commands
   until the next card. Saying the answer while reading the item info used to
   press the button that had become "next" and skip past it, and "wrong" did

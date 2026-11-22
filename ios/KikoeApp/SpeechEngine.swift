@@ -11,6 +11,9 @@ enum SpeechEvent {
 }
 
 enum EngineKind: String, CaseIterable, Identifiable {
+    /// The best of the two iOS 26 models for each site and language (see
+    /// automaticUsesDictation).
+    case automatic = "Automatic"
     case legacy = "SFSpeechRecognizer"
     case dictation = "DictationTranscriber"
     case transcriber = "SpeechTranscriber"
@@ -42,17 +45,24 @@ extension SpeechEngine {
     func shutdown() { stop() }
 }
 
+/// What Automatic runs, from use: on WaniKani, DictationTranscriber for
+/// readings (it follows the card's kana hints) and SpeechTranscriber for
+/// meanings; on BunPro, SpeechTranscriber throughout, which is better with
+/// grammar in context.
+func automaticUsesDictation(site: Site, locale: String) -> Bool {
+    site == .wanikani && locale.hasPrefix("ja")
+}
+
 @MainActor
-func makeEngine(_ kind: EngineKind, mic: MicCapture, dictationAssist: Bool = false) -> SpeechEngine {
+func makeEngine(_ kind: EngineKind, site: Site, mic: MicCapture, dictationAssist: Bool = false) -> SpeechEngine {
+    guard kind != .legacy, #available(iOS 26, *) else { return LegacySpeechEngine(mic: mic) }
+    let usesDictation: @MainActor (String) -> Bool
     switch kind {
-    case .legacy:
-        return LegacySpeechEngine(mic: mic)
-    case .dictation, .transcriber:
-        if #available(iOS 26, *) {
-            return AnalyzerSpeechEngine(mic: mic, useDictation: kind == .dictation, dictationAssist: dictationAssist)
-        }
-        return LegacySpeechEngine(mic: mic)
+    case .dictation: usesDictation = { _ in true }
+    case .transcriber: usesDictation = { _ in false }
+    default: usesDictation = { automaticUsesDictation(site: site, locale: $0) }
     }
+    return AnalyzerSpeechEngine(mic: mic, usesDictation: usesDictation, dictationAssist: dictationAssist)
 }
 
 /// Called on the realtime audio thread with each captured buffer and its RMS

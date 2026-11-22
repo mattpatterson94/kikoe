@@ -68,9 +68,9 @@ final class Probe: ObservableObject {
         var audio: [ProbeCase: [AVAudioPCMBuffer]] = [:]
         for c in probeCases { audio[c] = await TTS.render(c.reading, language: "ja-JP") }
         let only = ProcessInfo.processInfo.environment["PROBE_ENGINES"]?.split(separator: ",").map(String.init)
-        for kind in engines where only?.contains(kind.rawValue) ?? true {
+        for kind in engines where kind != .automatic && only?.contains(kind.rawValue) ?? true {
             if kind != .legacy, #unavailable(iOS 26) { continue }
-            let engine = makeEngine(kind, mic: mic)
+            let engine = makeEngine(kind, site: .wanikani, mic: mic)
             for hints in [false, true] {
                 for c in probeCases {
                     status = "\(kind.rawValue) hints=\(hints) \(c.reading)"
@@ -129,7 +129,7 @@ struct ProbeView: View {
     var body: some View {
         List {
             Section {
-                ForEach(EngineKind.allCases) { kind in
+                ForEach(EngineKind.allCases.filter { $0 != .automatic }) { kind in
                     Toggle(kind.rawValue, isOn: Binding(
                         get: { engines.contains(kind) },
                         set: { if $0 { engines.insert(kind) } else { engines.remove(kind) } }))

@@ -88,7 +88,7 @@ struct SettingsView: View {
                             ForEach(availableEngines) { Text($0.rawValue).tag($0) }
                         }
                     }
-                    if app.enabledSites.contains(where: { speech.engineKinds[$0] == .transcriber }) {
+                    if app.enabledSites.contains(where: { speech.usesTranscriberForJapanese($0) }) {
                         Toggle(isOn: $speech.dictationAssist) {
                             labelled("Dictation assist", "On Japanese cards, also run the dictation model and add its guesses. It follows the card's hints, which helps strict kanji readings, at some extra battery use")
                         }
@@ -108,7 +108,7 @@ struct SettingsView: View {
                     if let reason = speech.fallbackReason {
                         Text(reason)
                     } else {
-                        Text("DictationTranscriber follows the card's hints, which suits WaniKani's single words. SpeechTranscriber is better with BunPro's grammar in context. Both need iOS 26; SFSpeechRecognizer works everywhere.")
+                        Text("Automatic uses DictationTranscriber for WaniKani readings, which follows the card's hints, and SpeechTranscriber for meanings and for BunPro, which is better with grammar in context. Both need iOS 26; SFSpeechRecognizer works everywhere.")
                     }
                 }
 
