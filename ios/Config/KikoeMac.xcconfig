@@ -1,0 +1,7 @@
+// Signing and identity for the native Kikoe macOS app (target KikoeMac).
+// It shares every source file with the iOS app; see NOTES.md. A separate
+// bundle id for now, so it installs next to the Safari-extension Mac app
+// that ships as com.mattdoesdev.kikoe.
+#include "Kikoe.xcconfig"
+
+PRODUCT_BUNDLE_IDENTIFIER = com.mattdoesdev.kikoe.mac

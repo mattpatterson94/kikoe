@@ -1,4 +1,4 @@
-import { defaults, initSettings, updateSettings, getSettings, isTurboOn, encodeConfig, decodeConfig } from '../src/settings';
+import { defaults, initSettings, updateSettings, getSettings, isTurboOn, encodeConfig, decodeConfig, isSiteEnabled } from '../src/settings';
 
 // Reset module state between tests by re-calling initSettings with defaults.
 beforeEach(() => {
@@ -108,5 +108,26 @@ describe('config encoding', () => {
     expect(decodeConfig(undefined)).toBeNull();
     expect(decodeConfig('')).toBeNull();
     expect(decodeConfig('not json {')).toBeNull();
+  });
+});
+
+describe('isSiteEnabled', () => {
+  test('both sites are on by default', () => {
+    expect(isSiteEnabled(defaults, 'wanikani')).toBe(true);
+    expect(isSiteEnabled(defaults, 'bunpro')).toBe(true);
+  });
+
+  test('each site follows its own toggle', () => {
+    const settings = { site_wanikani: false, site_bunpro: true };
+    expect(isSiteEnabled(settings, 'wanikani')).toBe(false);
+    expect(isSiteEnabled(settings, 'bunpro')).toBe(true);
+  });
+});
+
+describe('recognizer defaults', () => {
+  test('keep the existing Web Speech behaviour until turned on', () => {
+    expect(defaults.recognizer).toBe('cloud');
+    expect(defaults.noise_reduction).toBe(false);
+    expect(defaults.contextual_hints).toBe(true);
   });
 });

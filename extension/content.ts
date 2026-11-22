@@ -3,7 +3,7 @@
 // fetches + caches subjects, and injects the bridge + app bundle into the
 // page context.
 
-import { defaults, encodeConfig } from '../src/settings';
+import { defaults, encodeConfig, isSiteEnabled } from '../src/settings';
 import type { Settings } from '../src/settings';
 import { detectSite } from '../src/site';
 import { debugLog, setDebugLogging } from '../src/logger';
@@ -558,6 +558,9 @@ async function main(): Promise<void> {
 
   const settings = await getSettings();
   setDebugLogging(settings.debug);
+  // Turned off under Apps in settings. The token page above still runs, so
+  // "Find token" works even with WaniKani switched off.
+  if (!isSiteEnabled(settings, site)) return;
   const base = chrome.runtime.getURL('');
 
   // The API token (and subject fetching) is WaniKani-only — BunPro's accepted

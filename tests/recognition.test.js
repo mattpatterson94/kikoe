@@ -1,4 +1,4 @@
-import { createRecognition } from '../src/recognition';
+import { createRecognition, webSpeechOptions } from '../src/recognition';
 
 let recognitionInstances;
 
@@ -518,5 +518,162 @@ describe('liveness watchdog', () => {
 
     vi.advanceTimersByTime(10_000);
     expect(native.nativeAbort).toHaveBeenCalledTimes(1);
+  });
+});
+
+// Chrome's newer Web Speech surface: processLocally, phrases, start(track).
+class MockModernSpeechRecognition extends MockSpeechRecognition {
+  constructor() {
+    super();
+    this.processLocally = false;
+    this.phrases = [];
+  }
+}
+
+class MockPhrase {
+  constructor(phrase, boost) {
+    this.phrase = phrase;
+    this.boost = boost;
+  }
+}
+
+describe('webSpeechOptions', () => {
+  test('maps the stored settings onto recognizer options', () => {
+    expect(webSpeechOptions({ recognizer: 'on_device', contextual_hints: true, noise_reduction: false }))
+      .toEqual({ onDevice: true, contextualHints: true, noiseReduction: false });
+    expect(webSpeechOptions({ recognizer: 'cloud', contextual_hints: false, noise_reduction: true }))
+      .toEqual({ onDevice: false, contextualHints: false, noiseReduction: true });
+  });
+});
+
+describe('createRecognition browser options', () => {
+  let options;
+  const getOptions = () => options;
+
+  beforeEach(() => {
+    recognitionInstances = [];
+    options = { onDevice: false, contextualHints: false, noiseReduction: false };
+    vi.stubGlobal('webkitSpeechRecognition', MockModernSpeechRecognition);
+    vi.stubGlobal('SpeechRecognitionPhrase', MockPhrase);
+    // A session that ends within a second restarts after a backoff.
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  function endSession(native) {
+    native.onend();
+    vi.advanceTimersByTime(10_000);
+  }
+
+  test('asks for on-device recognition when chosen', () => {
+    options.onDevice = true;
+    const recognition = createRecognition('ja-JP', vi.fn(), undefined, getOptions);
+    recognition.start();
+    expect(recognitionInstances[0].processLocally).toBe(true);
+  });
+
+  test('stays on the default recognizer otherwise', () => {
+    const recognition = createRecognition('ja-JP', vi.fn(), undefined, getOptions);
+    recognition.start();
+    expect(recognitionInstances[0].processLocally).toBe(false);
+  });
+
+  test('falls back to the default recognizer for a language with no local model', () => {
+    options.onDevice = true;
+    const onError = vi.fn();
+    const recognition = createRecognition('ja-JP', vi.fn(), onError, getOptions);
+    recognition.start();
+    const native = recognitionInstances[0];
+    native.onerror({ error: 'language-not-supported' });
+    expect(onError).not.toHaveBeenCalled();
+    endSession(native);
+    expect(native.processLocally).toBe(false);
+    expect(native.nativeStart).toHaveBeenCalledTimes(2);
+  });
+
+  test('passes hints as phrases on-device and restarts so they apply', () => {
+    options.onDevice = true;
+    options.contextualHints = true;
+    const recognition = createRecognition('ja-JP', vi.fn(), undefined, getOptions);
+    recognition.start();
+    const native = recognitionInstances[0];
+    recognition.setHints(['かい', 'まちがい']);
+    expect(native.nativeAbort).toHaveBeenCalledTimes(1);
+    endSession(native);
+    expect(native.phrases.map((p) => p.phrase)).toEqual(['かい', 'まちがい']);
+  });
+
+  test('does not restart for unchanged hints', () => {
+    options.onDevice = true;
+    options.contextualHints = true;
+    const recognition = createRecognition('ja-JP', vi.fn(), undefined, getOptions);
+    recognition.setHints(['かい']);
+    recognition.start();
+    recognition.setHints(['かい']);
+    expect(recognitionInstances[0].nativeAbort).not.toHaveBeenCalled();
+  });
+
+  test('sends no phrases to the cloud recognizer', () => {
+    options.contextualHints = true;
+    const recognition = createRecognition('ja-JP', vi.fn(), undefined, getOptions);
+    recognition.start();
+    recognition.setHints(['かい']);
+    const native = recognitionInstances[0];
+    expect(native.nativeAbort).not.toHaveBeenCalled();
+    expect(native.phrases).toEqual([]);
+  });
+
+  test('stops sending phrases once the engine rejects them', () => {
+    options.onDevice = true;
+    options.contextualHints = true;
+    const recognition = createRecognition('ja-JP', vi.fn(), undefined, getOptions);
+    recognition.setHints(['かい']);
+    recognition.start();
+    const native = recognitionInstances[0];
+    native.onerror({ error: 'phrases-not-supported' });
+    endSession(native);
+    expect(native.phrases).toEqual([]);
+  });
+
+  test('moves onto a noise-suppressed track once it is ready, and releases it on pause', async () => {
+    options.noiseReduction = true;
+    const track = { readyState: 'live', stop: vi.fn() };
+    const getUserMedia = vi.fn().mockResolvedValue({ getAudioTracks: () => [track] });
+    vi.stubGlobal('navigator', { mediaDevices: { getUserMedia } });
+    const recognition = createRecognition('ja-JP', vi.fn(), undefined, getOptions);
+    recognition.start();
+    const native = recognitionInstances[0];
+    expect(native.nativeStart).toHaveBeenLastCalledWith();
+    expect(getUserMedia).toHaveBeenCalledWith({
+      audio: { noiseSuppression: true, echoCancellation: true, autoGainControl: true },
+    });
+
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(native.nativeAbort).toHaveBeenCalledTimes(1);
+    endSession(native);
+    expect(native.nativeStart).toHaveBeenLastCalledWith(track);
+
+    recognition.pause();
+    expect(track.stop).toHaveBeenCalled();
+  });
+
+  test('keeps the default microphone when noise-reduced capture fails', async () => {
+    options.noiseReduction = true;
+    const getUserMedia = vi.fn().mockRejectedValue(new Error('denied'));
+    vi.stubGlobal('navigator', { mediaDevices: { getUserMedia } });
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const recognition = createRecognition('ja-JP', vi.fn(), undefined, getOptions);
+    recognition.start();
+    await Promise.resolve();
+    await Promise.resolve();
+    const native = recognitionInstances[0];
+    endSession(native);
+    expect(native.nativeStart).toHaveBeenLastCalledWith();
+    expect(getUserMedia).toHaveBeenCalledTimes(1);
   });
 });

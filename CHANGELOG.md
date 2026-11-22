@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Added
+
+- A native macOS app (Kikoe for Mac, `com.mattdoesdev.kikoe.mac`) built from
+  the same SwiftUI code as the iOS app: WaniKani and BunPro in their own
+  windows, Apple's on-device transcribers (SpeechTranscriber, SpeechAnalyzer,
+  SFSpeechRecognizer), the native overlays, and a Review menu with keyboard
+  shortcuts (⌘R reload, ⇧⌘L Listen In, ⌘/ voice commands, ⌘1/⌘2 switch app).
+- The extension options page now matches the app's Settings: same section
+  order and wording, plus an Apps section that turns WaniKani or BunPro off.
+- Chrome: an on-device recognizer option with a model download button,
+  contextual hints (the card's expected answers sent as recognition phrases)
+  and noise reduction. Each is hidden where the browser doesn't support it.
+
+### Notes
+
+- Firefox is still unsupported: release Firefox ships without
+  SpeechRecognition enabled.
+
 ### Changed
 
 - iOS app: Settings is reorganised into sub pages. The top level keeps what

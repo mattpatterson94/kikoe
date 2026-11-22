@@ -1,4 +1,5 @@
 import { createNativeRecognition, getNativeSpeechHandler } from './native_recognition';
+import type { Settings } from './settings';
 
 // Short utterances and common on'yomi (かい, けい, どう, ...) are frequently
 // autocorrected by the recognizer into an unrelated real word, since its
@@ -41,6 +42,57 @@ const MIN_HEALTHY_SESSION_MS = 1000;
 const LIVENESS_TIMEOUT_MS = 45000;
 const LIVENESS_CHECK_INTERVAL_MS = 5000;
 
+// How hard a contextual hint pulls the on-device model toward it. The spec
+// allows 0–10; a moderate boost lets a hinted reading win a near tie without
+// drowning out an answer that really was different.
+const HINT_BOOST = 3;
+
+// Browser recognizer options, the Web Speech counterparts of the iOS app's
+// Advanced settings. Each one is feature-detected and silently skipped by an
+// engine that lacks it (Safari, older Chrome):
+// - onDevice: SpeechRecognition.processLocally. Falls back to the cloud
+//   recognizer for any language the browser reports it can't do locally.
+// - contextualHints: SpeechRecognition.phrases, seeded per card like the
+//   native host's contextual strings. Chrome only supports these on-device.
+// - noiseReduction: capture through getUserMedia with noise suppression and
+//   echo cancellation and pass that track to start().
+export interface WebSpeechOptions {
+  onDevice: boolean;
+  contextualHints: boolean;
+  noiseReduction: boolean;
+}
+
+const DEFAULT_WEB_SPEECH_OPTIONS: WebSpeechOptions = {
+  onDevice: false,
+  contextualHints: false,
+  noiseReduction: false,
+};
+
+export function webSpeechOptions(
+  settings: Pick<Settings, 'recognizer' | 'contextual_hints' | 'noise_reduction'>,
+): WebSpeechOptions {
+  return {
+    onDevice: settings.recognizer === 'on_device',
+    contextualHints: !!settings.contextual_hints,
+    noiseReduction: !!settings.noise_reduction,
+  };
+}
+
+// Not in @types/dom-speech-recognition yet.
+interface SpeechRecognitionPhraseLike {
+  readonly phrase: string;
+  readonly boost: number;
+}
+type PhraseConstructor = new (phrase: string, boost?: number) => SpeechRecognitionPhraseLike;
+interface PhraseCapable {
+  phrases: SpeechRecognitionPhraseLike[];
+}
+
+function phraseConstructor(): PhraseConstructor | null {
+  const ctor = (window as unknown as { SpeechRecognitionPhrase?: unknown }).SpeechRecognitionPhrase;
+  return typeof ctor === 'function' ? ctor as PhraseConstructor : null;
+}
+
 export type TranscriptCallback = (transcripts: string[], isFinal: boolean, resultId: string) => void;
 
 // The surface app.ts drives, shared by the Web Speech recognizer below and the
@@ -66,6 +118,7 @@ export function createRecognition(
   lang: string | (() => string),
   callback: TranscriptCallback,
   onError?: (error: SpeechRecognitionErrorCode) => void,
+  getOptions: () => WebSpeechOptions = () => DEFAULT_WEB_SPEECH_OPTIONS,
 ): RecognitionControls | null {
   // Accept a function so callers can supply a live language getter; this ensures
   // every auto-restart picks up the correct language even if setLanguage was
@@ -105,12 +158,86 @@ export function createRecognition(
   // is optional on non-Chromium implementations.
   const abort = typeof recognition.abort === 'function' ? recognition.abort.bind(recognition) : null;
 
+  // ── optional engine features ────────────────────────────────────────────
+  const supportsLocal = 'processLocally' in recognition;
+  const Phrase = phraseConstructor();
+  const supportsPhrases = !!Phrase && 'phrases' in recognition;
+  // Languages the browser turned down for local recognition this page load;
+  // those go back to the cloud recognizer rather than failing every session.
+  const localUnavailable = new Set<string>();
+  let phrasesRejected = false;
+  let usingLocal = false;
+  let hints: string[] = [];
+  let appliedHints = '';
+  // The noise-suppressed capture track, shared by every session until a
+  // pause releases it (so the browser's mic indicator goes off with Kikoe).
+  let noiseTrack: MediaStreamTrack | null = null;
+  let noiseTrackPending = false;
+  let noiseTrackFailed = false;
+
+  function hintsInEffect(options: WebSpeechOptions): boolean {
+    return options.contextualHints && supportsPhrases && usingLocal && !phrasesRejected;
+  }
+
+  function applyOptions(): WebSpeechOptions {
+    const options = getOptions();
+    const lang = recognition.lang;
+    usingLocal = supportsLocal && options.onDevice && !localUnavailable.has(lang);
+    if (supportsLocal) recognition.processLocally = usingLocal;
+    if (supportsPhrases && Phrase) {
+      const active = hintsInEffect(options) ? hints : [];
+      (recognition as unknown as PhraseCapable).phrases = active.map((h) => new Phrase(h, HINT_BOOST));
+      appliedHints = active.join('\n');
+    }
+    return options;
+  }
+
+  function releaseNoiseTrack(): void {
+    noiseTrack?.stop();
+    noiseTrack = null;
+  }
+
+  // getUserMedia is asynchronous and start() isn't, so the first session
+  // after turning this on runs on the default capture; once the track is
+  // ready the session restarts onto it.
+  function ensureNoiseTrack(): MediaStreamTrack | null {
+    if (noiseTrack?.readyState === 'ended') noiseTrack = null;
+    if (noiseTrack || noiseTrackPending || noiseTrackFailed) return noiseTrack;
+    if (!navigator.mediaDevices?.getUserMedia) {
+      noiseTrackFailed = true;
+      return null;
+    }
+    noiseTrackPending = true;
+    navigator.mediaDevices.getUserMedia({
+      audio: { noiseSuppression: true, echoCancellation: true, autoGainControl: true },
+    }).then((stream) => {
+      noiseTrackPending = false;
+      const [track] = stream.getAudioTracks();
+      if (!track) return;
+      if (!shouldAutoRestart || !getOptions().noiseReduction) {
+        track.stop();
+        return;
+      }
+      noiseTrack = track;
+      safeAbort();
+    }, (err: unknown) => {
+      noiseTrackPending = false;
+      noiseTrackFailed = true;
+      console.error('[kikoe] noise-reduced capture unavailable; using default microphone:', err);
+    });
+    return null;
+  }
+
   function safeStart(): void {
     recognition.lang = getLang();
     sessionStartedAt = Date.now();
     sawErrorThisSession = false;
+    const options = applyOptions();
+    if (!options.noiseReduction) releaseNoiseTrack();
+    const track = options.noiseReduction ? ensureNoiseTrack() : null;
     try {
-      start();
+      if (track) start(track);
+      else start();
       sessionId++;
     } catch (err) {
       if (!(err instanceof Error) || err.name !== 'InvalidStateError') throw err;
@@ -162,6 +289,18 @@ export function createRecognition(
     // session down on purpose — neither is a fault, and the auto-restart in
     // onend already brings the recognizer back.
     if (event.error === 'no-speech' || event.error === 'aborted') {
+      return;
+    }
+    // On-device asked for a language this browser can't do locally (model
+    // not installed, or not offered at all): use the cloud recognizer for it.
+    if (event.error === 'language-not-supported' && usingLocal) {
+      console.warn(`[kikoe] on-device recognition unavailable for ${recognition.lang}; using the browser's default recognizer`);
+      localUnavailable.add(recognition.lang);
+      return;
+    }
+    if ((event.error as string) === 'phrases-not-supported') {
+      console.warn('[kikoe] this recognizer does not accept contextual hints; continuing without them');
+      phrasesRejected = true;
       return;
     }
     console.error('[kikoe] error occurred in recognition:', event.error);
@@ -219,6 +358,7 @@ export function createRecognition(
   recognition.pause = () => {
     shouldAutoRestart = false;
     safeStop();
+    releaseNoiseTrack();
   };
 
   recognition.resume = () => {
@@ -235,6 +375,18 @@ export function createRecognition(
   recognition.isPaused = () => {
     return !shouldAutoRestart;
   };
+
+  // Phrases are read when a session starts, so new hints only reach the
+  // engine on a restart. That's only worth doing when they're in effect:
+  // otherwise the next routine restart picks them up for free.
+  if (supportsPhrases) {
+    recognition.setHints = (next: string[]) => {
+      hints = [...next];
+      if (!hintsInEffect(getOptions())) return;
+      if (hints.join('\n') === appliedHints || !shouldAutoRestart) return;
+      safeAbort();
+    };
+  }
 
   return recognition;
 }

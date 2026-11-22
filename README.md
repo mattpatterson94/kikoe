@@ -170,7 +170,16 @@ The extension applies several candidate transformations to improve recognition a
 
 ## Settings
 
-Open the extension options page (via the toolbar icon or extensions menu) to configure:
+Open the extension options page (via the toolbar icon or extensions menu) to configure. The sections follow the same order and wording as the iOS and macOS app's Settings screen.
+
+### Apps
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| WaniKani | On | Run Kikoe on WaniKani review and lesson pages |
+| BunPro | On | Run Kikoe on BunPro review pages |
+
+At least one app stays on. Turning WaniKani off also hides the API token section ("Find token" still works if you turn it back on).
 
 ### WaniKani API
 
@@ -248,7 +257,12 @@ itself evidence you said おとな.
 
 | Setting | Default | Description |
 |---------|---------|-------------|
+| Recognizer | Browser default | **On-device** asks the browser to recognise speech locally (`processLocally`). If the language model isn't installed the options page offers to download it; until then Kikoe falls back to the browser's default recogniser |
+| Noise reduction | Off | Records through a microphone track with noise suppression, echo cancellation and auto gain, and hands it to the recogniser |
+| Contextual hints | On | Sends the current card's expected answers as recognition phrases, so the recogniser favours them. On-device recognizer only |
 | Debug mode | Off | Logs diagnostic details (speech matching, subject loading) to the browser console, prefixed with `[kikoe]` |
+
+Recognizer, noise reduction and contextual hints only appear when the browser supports them (recent Chrome). They stay hidden in Safari and Firefox.
 
 ## Development
 

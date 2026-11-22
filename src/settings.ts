@@ -7,8 +7,14 @@ export interface Correction {
   intended: string;
 }
 
+import type { Site } from './site';
+
 export interface Settings {
   debug: boolean;
+  // Which sites Kikoe runs on (Settings → Apps on iOS). Read by content.ts
+  // at page load; the native app keeps its own list and ignores these.
+  site_wanikani: boolean;
+  site_bunpro: boolean;
   customCorrections: Correction[];
   turbo: boolean;
   speed_show_info: boolean;
@@ -21,6 +27,12 @@ export interface Settings {
   keep_screen_awake: boolean;
   // See checkAnswer in src/flashcards.ts.
   strict_kanji_readings: boolean;
+  // Web Speech recognizer options (Chrome; hidden where unsupported). The
+  // native app has its own engine, hint and noise switches and ignores these.
+  // 'on_device' asks for processLocally; contextual hints only work there.
+  recognizer: 'cloud' | 'on_device';
+  contextual_hints: boolean;
+  noise_reduction: boolean;
   // Not user-facing: flipped to true (via content.ts) after the one-time
   // help-discovery hint has been shown, so it never reappears.
   help_hint_shown: boolean;
@@ -28,6 +40,8 @@ export interface Settings {
 
 export const defaults: Settings = {
   debug: false,
+  site_wanikani: true,
+  site_bunpro: true,
   customCorrections: [],
   turbo: true,
   speed_show_info: true,
@@ -39,8 +53,15 @@ export const defaults: Settings = {
   show_help_button: true,
   keep_screen_awake: true,
   strict_kanji_readings: true,
+  recognizer: 'cloud',
+  contextual_hints: true,
+  noise_reduction: false,
   help_hint_shown: false,
 };
+
+export function isSiteEnabled(settings: Pick<Settings, 'site_wanikani' | 'site_bunpro'>, site: Site): boolean {
+  return site === 'wanikani' ? settings.site_wanikani !== false : settings.site_bunpro !== false;
+}
 
 // The config travels from the content script to the page bundle as plain
 // JSON in a data attribute — the DOM stores any Unicode losslessly, whereas

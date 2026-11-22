@@ -288,7 +288,7 @@ struct HelpSheet: View {
                 }
             }
             .navigationTitle("Voice commands")
-            .navigationBarTitleDisplayMode(.inline)
+            .inlineNavigationTitle()
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) { Button("Done", action: onClose) }
             }
@@ -324,7 +324,7 @@ struct CorrectionSheet: View {
         .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height = $0 }
         .presentationDetents([.height(height)])
         .presentationDragIndicator(.hidden)
-        .presentationBackground(Color(.systemBackground))
+        .presentationBackground(Color.platformBackground)
     }
 }
 
@@ -408,7 +408,7 @@ struct LanguageSheet: View {
                     .accessibilityAddTraits(speech.languageOverride == option.id ? .isSelected : [])
                 }
             }
-            .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .background(Color.platformSecondaryBackground, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
 
             Button(action: onDone) {
                 Text("Done").font(.body.weight(.medium)).frame(maxWidth: .infinity, minHeight: 30)
@@ -423,6 +423,6 @@ struct LanguageSheet: View {
         .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height = $0 }
         .presentationDetents([.height(height)])
         .presentationDragIndicator(.hidden)
-        .presentationBackground(Color(.systemBackground))
+        .presentationBackground(Color.platformBackground)
     }
 }

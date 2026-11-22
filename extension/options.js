@@ -1,5 +1,7 @@
 const defaults = {
   apiToken: '',
+  site_wanikani: true,
+  site_bunpro: true,
   turbo: true,
   speed_show_info: true,
   ippatsu_meaning: false,
@@ -10,6 +12,9 @@ const defaults = {
   show_help_button: true,
   keep_screen_awake: true,
   strict_kanji_readings: true,
+  recognizer: 'cloud',
+  contextual_hints: true,
+  noise_reduction: false,
   debug: false,
   customCorrections: [],
 };
@@ -245,6 +250,89 @@ document.addEventListener('visibilitychange', () => {
   if (!document.hidden) checkSiteAccess();
 });
 
+// ── apps ──────────────────────────────────────────────────────────────────────
+//
+// Same rule as the iOS app's Settings → Apps: at least one stays on, so the
+// last checked box is locked. The token card only matters for WaniKani.
+
+function refreshApps() {
+  const toggles = [...document.querySelectorAll('.site-toggle')];
+  const on = toggles.filter((t) => t.checked);
+  for (const t of toggles) t.disabled = t.checked && on.length === 1;
+  get('tokenCard').hidden = !get('site_wanikani').checked;
+}
+
+for (const toggle of document.querySelectorAll('.site-toggle')) {
+  toggle.addEventListener('change', refreshApps);
+}
+
+// ── recognizer (Web Speech extras) ────────────────────────────────────────────
+//
+// The counterparts of the iOS app's Advanced recognizer settings, shown only
+// where the browser's SpeechRecognition has the feature (recognition.ts
+// feature-detects the same way at runtime). Safari and Firefox hide them.
+
+const onDeviceLangs = ['ja-JP', 'en-US'];
+const SpeechRecognitionCtor = globalThis.SpeechRecognition || globalThis.webkitSpeechRecognition;
+const speechProto = SpeechRecognitionCtor?.prototype;
+const supportsOnDevice = !!speechProto && 'processLocally' in speechProto
+  && typeof SpeechRecognitionCtor.available === 'function';
+const supportsHints = supportsOnDevice && typeof globalThis.SpeechRecognitionPhrase === 'function';
+// start(audioTrack) has no feature test of its own; it shipped in Chrome
+// before processLocally did, so a browser with on-device support has it.
+const supportsNoiseReduction = supportsOnDevice && !!navigator.mediaDevices?.getUserMedia;
+
+function langName(lang) {
+  return lang.startsWith('ja') ? 'Japanese' : 'English';
+}
+
+async function refreshOnDeviceModels() {
+  const status = get('onDeviceModelsStatus');
+  const button = get('installOnDeviceModels');
+  try {
+    const states = await Promise.all(onDeviceLangs.map((lang) =>
+      SpeechRecognitionCtor.available({ langs: [lang], processLocally: true })));
+    const describe = { available: 'ready', downloadable: 'not downloaded', downloading: 'downloading…', unavailable: 'not offered' };
+    status.textContent = onDeviceLangs.map((lang, i) => `${langName(lang)}: ${describe[states[i]] || states[i]}`).join(' · ');
+    button.hidden = !states.some((s) => s === 'downloadable');
+  } catch (err) {
+    console.error('[kikoe] could not check on-device models:', err);
+    status.textContent = "Couldn't check on-device models.";
+    button.hidden = true;
+  }
+}
+
+async function installOnDeviceModels() {
+  const button = get('installOnDeviceModels');
+  button.disabled = true;
+  get('onDeviceModelsStatus').textContent = 'Downloading…';
+  try {
+    await SpeechRecognitionCtor.install({ langs: onDeviceLangs, processLocally: true });
+  } catch (err) {
+    console.error('[kikoe] on-device model install failed:', err);
+  }
+  button.disabled = false;
+  await refreshOnDeviceModels();
+}
+
+function refreshRecognizer() {
+  const onDevice = get('recognizer').value === 'on_device';
+  get('onDeviceModelsField').hidden = !onDevice;
+  get('contextual_hints').disabled = !onDevice;
+  if (onDevice) refreshOnDeviceModels();
+}
+
+get('recognizerField').hidden = !supportsOnDevice;
+get('contextualHintsField').hidden = !supportsHints;
+get('noiseReductionField').hidden = !supportsNoiseReduction;
+get('recognizer').addEventListener('change', refreshRecognizer);
+get('installOnDeviceModels').addEventListener('click', installOnDeviceModels);
+
+{
+  const manifest = chrome.runtime.getManifest?.();
+  if (manifest?.version) get('version').textContent = `Kikoe ${manifest.version}`;
+}
+
 // ── form load/save ────────────────────────────────────────────────────────────
 
 function readForm() {
@@ -268,6 +356,8 @@ function populateForm(settings) {
     else el.value = settings[key] ?? defaults[key];
   }
   renderCorrections(settings.customCorrections);
+  refreshApps();
+  if (supportsOnDevice) refreshRecognizer();
 }
 
 // Mirrors migrateSettings in content.ts, which can't be imported here. Runs

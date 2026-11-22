@@ -263,6 +263,14 @@
 
     #siteAccessCard .setup-note { margin-top: 12px; }
 
+    .version {
+      text-align: center;
+      font-size: 0.8rem;
+      font-weight: 650;
+      color: var(--text-soft);
+      margin: 8px 0 0;
+    }
+
     .setup-steps {
       margin: 6px 0 0;
       padding-left: 1.25em;
@@ -528,11 +536,24 @@
   </section>
 
   <section class="card">
-    <h2>WaniKani API</h2>
+    <h2>Apps</h2>
+    <div class="field">
+      <label for="site_wanikani">WaniKani<span class="hint">Kanji and vocabulary reviews and lessons</span></label>
+      <input type="checkbox" id="site_wanikani" class="site-toggle">
+    </div>
+    <div class="field">
+      <label for="site_bunpro">BunPro<span class="hint">Grammar and vocabulary reviews</span></label>
+      <input type="checkbox" id="site_bunpro" class="site-toggle">
+    </div>
+    <p class="setup-note">Turn off the ones you don't use; Kikoe only runs on apps that are on. Reload an open review page for a change to apply.</p>
+  </section>
+
+  <section class="card" id="tokenCard">
+    <h2>WaniKani API Token</h2>
     <div class="field">
       <label for="apiToken">
         API Token
-        <span class="hint">Read-only token from <a href="https://www.wanikani.com/settings/personal_access_tokens" target="_blank">WaniKani settings</a>.</span>
+        <span class="hint">Kikoe uses a read-only personal access token from <a href="https://www.wanikani.com/settings/personal_access_tokens" target="_blank">WaniKani settings</a> to look up your review items. “Find token” opens that page and reads the token from it. BunPro doesn't need a token.</span>
       </label>
       <div class="token-control">
         <div class="token-actions">
@@ -553,21 +574,13 @@
   </section>
 
   <section class="card">
-    <h2>Screen</h2>
+    <h2>Turbo</h2>
     <div class="field">
-      <label for="keep_screen_awake">Keep screen awake while listening<span class="hint">Prevents the screen from dimming or locking during a hands-free review, since there's no touch or mouse activity to reset the device's idle timer</span></label>
-      <input type="checkbox" id="keep_screen_awake">
-    </div>
-  </section>
-
-  <section class="card">
-    <h2>Turbo Mode</h2>
-    <div class="field">
-      <label for="turbo">Turbo mode<span class="hint">Auto-advance on correct answer</span></label>
+      <label for="turbo">Turbo mode<span class="hint">Auto-advance on a correct answer</span></label>
       <input type="checkbox" id="turbo">
     </div>
     <div class="field">
-      <label for="speed_show_info">Show item info on wrong answer<span class="hint">Auto-opens the item info panel when you answer incorrectly (on BunPro, also shows the correct answer)</span></label>
+      <label for="speed_show_info">Show item info on wrong answer<span class="hint">Opens the item info panel when you answer incorrectly (on BunPro, also shows the correct answer)</span></label>
       <input type="checkbox" id="speed_show_info">
     </div>
   </section>
@@ -575,19 +588,20 @@
   <section class="card">
     <h2>Ippatsu Mode（一発）</h2>
     <div class="field">
-      <label for="ippatsu_meaning">Meaning questions (English)<span class="hint">Auto-submits a wrong answer instead of letting you retry</span></label>
+      <label for="ippatsu_meaning">Meaning questions (English)</label>
       <input type="checkbox" id="ippatsu_meaning">
     </div>
     <div class="field">
-      <label for="ippatsu_reading">Reading questions (Japanese)<span class="hint">Auto-submits a wrong answer instead of letting you retry</span></label>
+      <label for="ippatsu_reading">Reading questions (Japanese)</label>
       <input type="checkbox" id="ippatsu_reading">
     </div>
+    <p class="setup-note">One shot per question: a wrong answer is submitted instead of letting you retry.</p>
   </section>
 
   <section class="card">
     <h2>Live Transcript</h2>
     <div class="field">
-      <label for="transcript">Show live transcript<span class="hint">Overlay of what the extension hears</span></label>
+      <label for="transcript">Show live transcript<span class="hint">Whether Kikoe is listening and what it hears, over the page</span></label>
       <input type="checkbox" id="transcript">
     </div>
     <div class="field">
@@ -606,19 +620,27 @@
       </select>
     </div>
     <div class="field">
-      <label for="show_help_button">Show help button<span class="hint">A ? button next to the listening indicator with voice commands and tips (saying "help" works either way)</span></label>
+      <label for="show_help_button">Show help button<span class="hint">A ? button with voice commands and tips (saying “help” works either way)</span></label>
       <input type="checkbox" id="show_help_button">
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Screen</h2>
+    <div class="field">
+      <label for="keep_screen_awake">Keep screen awake while listening<span class="hint">A hands-free review has no touch or mouse activity to reset the idle timer</span></label>
+      <input type="checkbox" id="keep_screen_awake">
     </div>
   </section>
 
   <section class="card">
     <h2>Custom Corrections</h2>
     <p class="corrections-intro">
-      When speech recognition keeps mishearing an answer, map what it heard to
-      what you meant. Corrections apply to both readings and meanings, take
-      precedence over the built-in tables, and take effect on your next answer.
-      You can also click a "no match" transcript bubble during reviews to save
-      a correction for the current answer.
+      Replace something the recognizer keeps mishearing with the answer you
+      meant. Corrections apply to both readings and meanings, take precedence
+      over the built-in tables, and take effect on your next answer. You can
+      also click a "no match" transcript bubble during reviews to save a
+      correction for the current answer.
     </p>
     <div class="correction-header" id="correctionHeader" hidden>
       <span>Heard</span>
@@ -633,18 +655,39 @@
   <section class="card">
     <h2>Kanji Readings</h2>
     <div class="field">
-      <label for="strict_kanji_readings">Strict kanji readings<span class="hint">When the prompt is a single kanji (kanji cards, and vocabulary like 上 or 人), only accept kana the recogniser actually heard. Speech recognition usually writes a spoken reading back as the kanji itself (say うえ or じょう, get 上), which is indistinguishable from any other reading of that character — so the wrong reading could be marked correct. With this on, Kikoe asks you to say it again instead, at the cost of an occasional retry when you were right.</span></label>
+      <label for="strict_kanji_readings">Strict kanji readings<span class="hint">When the prompt is a single kanji (kanji cards, and vocabulary like 上 or 人), only accept kana the recognizer actually heard. Speech recognition usually writes a spoken reading back as the kanji itself (say うえ or じょう, get 上), which is indistinguishable from any other reading of that character — so the wrong reading could be marked correct. With this on, Kikoe asks you to say it again instead, at the cost of an occasional retry when you were right.</span></label>
       <input type="checkbox" id="strict_kanji_readings">
     </div>
   </section>
 
   <section class="card">
     <h2>Advanced</h2>
+    <div class="field" id="recognizerField" hidden>
+      <label for="recognizer">Recognizer<span class="hint">On-device keeps your voice on this computer and accepts contextual hints. Languages without a downloaded on-device model use the browser's default.</span></label>
+      <select id="recognizer">
+        <option value="cloud">Browser default</option>
+        <option value="on_device">On-device</option>
+      </select>
+    </div>
+    <div class="field" id="onDeviceModelsField" hidden>
+      <label>On-device models<span class="hint" id="onDeviceModelsStatus">Checking…</span></label>
+      <button type="button" class="secondary" id="installOnDeviceModels">Download</button>
+    </div>
+    <div class="field" id="noiseReductionField" hidden>
+      <label for="noise_reduction">Reduce background noise<span class="hint">Filter out room noise and echo from your speakers before the recognizer hears it</span></label>
+      <input type="checkbox" id="noise_reduction">
+    </div>
+    <div class="field" id="contextualHintsField" hidden>
+      <label for="contextual_hints">Contextual hints<span class="hint">Pass the card's accepted answers to the recognizer to bias it toward them (on-device recognizer only)</span></label>
+      <input type="checkbox" id="contextual_hints">
+    </div>
     <div class="field">
-      <label for="debug">Debug mode<span class="hint">Log diagnostic details (speech matching, subject loading, token discovery) to the browser console</span></label>
+      <label for="debug">Debug logging<span class="hint">Log speech matching, subject loading and token discovery to the browser console</span></label>
       <input type="checkbox" id="debug">
     </div>
   </section>
+
+  <p class="version" id="version"></p>
 
   <div class="save-bar">
     <div class="inner">
