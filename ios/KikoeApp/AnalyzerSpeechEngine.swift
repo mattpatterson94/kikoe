@@ -43,6 +43,9 @@ final class AnalyzerSpeechEngine: SpeechEngine {
     private let route = LockedValue<AudioFeed?>(nil)
     private var pipelines: [String: Pipeline] = [:]
     private var building: [String: Task<Pipeline?, Never>] = [:]
+    /// Bumped by shutdown(), so a pipeline that finishes building afterwards
+    /// is closed rather than cached; cancelling the build is only a request.
+    private var shutdownCount = 0
     private var active: Pipeline?
     /// The locale the page wants, whether or not its pipeline is ready yet.
     private var locale: String?
@@ -124,6 +127,7 @@ final class AnalyzerSpeechEngine: SpeechEngine {
     }
 
     func shutdown() {
+        shutdownCount += 1
         stop()
         for task in building.values { task.cancel() }
         building = [:]
@@ -177,7 +181,11 @@ final class AnalyzerSpeechEngine: SpeechEngine {
 
     private func pipeline(for locale: String) async -> Pipeline? {
         if let p = pipelines[locale], p.alive { return p }
-        if let task = building[locale] { return await task.value }
+        let epoch = shutdownCount
+        if let task = building[locale] {
+            let p = await task.value
+            return epoch == shutdownCount ? p : nil
+        }
         let task = Task { () -> Pipeline? in
             do {
                 return try await build(locale: locale)
@@ -188,6 +196,11 @@ final class AnalyzerSpeechEngine: SpeechEngine {
         }
         building[locale] = task
         let p = await task.value
+        guard epoch == shutdownCount else {
+            // Shut down while this built: nothing owns it now.
+            p?.close()
+            return nil
+        }
         building[locale] = nil
         if let p { pipelines[locale] = p }
         return p
