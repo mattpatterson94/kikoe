@@ -5,6 +5,9 @@ import SwiftUI
 /// Native counterpart of extension/options.html. Web-facing settings are
 /// written to the sync storage area under the same keys, so settings.ts and
 /// content.ts read them unchanged and open pages update live.
+///
+/// The root holds what applies to everything; each app has its own page for
+/// the settings that can differ between WaniKani and BunPro (SiteSettings).
 struct SettingsView: View {
     @ObservedObject var app: AppModel
     @ObservedObject private var settings = SyncSettings.shared
@@ -17,84 +20,57 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             Form {
-                AppsSection(app: app)
-                if app.isEnabled(.wanikani) { TokenSection(app: app) }
                 PermissionSection()
 
                 Section {
-                    Toggle(isOn: settings.bool("turbo")) {
-                        labelled("Turbo mode", "Auto-advance on a correct answer")
-                    }
-                    Toggle(isOn: settings.bool("speed_show_info")) {
-                        labelled("Show item info on wrong answer", "Opens the item info panel when you answer incorrectly")
-                    }
-                } header: { Text("Turbo") }
-
-                Section {
-                    Toggle("Meaning questions (English)", isOn: settings.bool("ippatsu_meaning"))
-                    Toggle("Reading questions (Japanese)", isOn: settings.bool("ippatsu_reading"))
-                } header: {
-                    Text("Ippatsu mode（一発）")
-                } footer: {
-                    Text("One shot per question: a wrong answer is submitted instead of letting you retry.")
-                }
-
-                Section("Live transcript") {
-                    Toggle(isOn: settings.bool("transcript")) {
-                        labelled("Show live transcript", "Whether Kikoe is listening and what it hears, over the page")
-                    }
-                    Picker("Theme", selection: settings.string("transcript_theme")) {
-                        Text("System").tag("system")
-                        Text("Light").tag("light")
-                        Text("Dark").tag("dark")
-                    }
-                    Picker("Position", selection: settings.string("transcript_position")) {
-                        Text("Top").tag("top")
-                        Text("Bottom").tag("bottom")
-                    }
-                    Toggle(isOn: settings.bool("show_help_button")) {
-                        labelled("Show help button", "A ? button with voice commands and tips (saying “help” works either way)")
-                    }
-                }
-
-                Section("Screen") {
                     Toggle(isOn: settings.bool("keep_screen_awake")) {
                         labelled("Keep screen awake while listening", "A hands-free review has no touches to reset the idle timer")
                     }
-                }
-
-                Section {
+                    Toggle(isOn: $speech.noiseReduction) {
+                        labelled("Reduce background noise", "Filter out room noise and the page's own audio, like a phone call does. Other audio plays slightly quieter while Kikoe listens")
+                    }
                     NavigationLink {
                         CorrectionsView()
                     } label: {
                         LabeledContent("Custom corrections", value: "\(settings.corrections.count)")
                     }
+                } header: {
+                    Text("General")
                 } footer: {
-                    Text("Replace something the recognizer keeps mishearing with the answer you meant. Tap a no-match transcript to add one while reviewing.")
+                    Text("Corrections replace something the recognizer keeps mishearing with the answer you meant. Tap a no-match transcript to add one while reviewing.")
                 }
 
                 Section {
-                    Toggle(isOn: settings.bool("strict_kanji_readings")) {
-                        labelled("Strict kanji readings", "When the prompt is a single kanji, only accept kana the recognizer actually heard; it may ask you to repeat a reading it wrote back as the kanji")
+                    NavigationLink {
+                        EnabledAppsView(app: app)
+                    } label: {
+                        LabeledContent("Enabled apps", value: app.enabledSites.map(\.name).joined(separator: ", "))
                     }
-                } header: { Text("Kanji readings") }
+                } header: {
+                    Text("Apps")
+                } footer: {
+                    Text("Kikoe only loads the apps that are on.")
+                }
 
                 Section {
                     ForEach(app.enabledSites) { site in
-                        Picker(app.enabledSites.count > 1 ? "\(site.name) recognizer" : "Recognizer", selection: Binding(
-                            get: { speech.engineKind(for: site) },
-                            set: { speech.setEngineKind($0, for: site) }
-                        )) {
-                            ForEach(availableEngines) { Text($0.rawValue).tag($0) }
+                        NavigationLink {
+                            AppSettingsView(app: app, site: site)
+                        } label: {
+                            AppRow(app: app, site: site)
                         }
                     }
+                } header: {
+                    Text("App settings")
+                } footer: {
+                    Text("Review flow, Ippatsu, the live transcript and the recognizer are set separately for each app.")
+                }
+
+                Section {
                     if app.enabledSites.contains(where: { speech.usesTranscriberForJapanese($0) }) {
                         Toggle(isOn: $speech.dictationAssist) {
                             labelled("Dictation assist", "On Japanese cards, also run the dictation model and add its guesses. It follows the card's hints, which helps strict kanji readings, at some extra battery use")
                         }
-                    }
-                    Toggle(isOn: $speech.noiseReduction) {
-                        labelled("Reduce background noise", "Filter out room noise and the page's own audio, like a phone call does. Other audio plays slightly quieter while Kikoe listens")
                     }
                     Toggle(isOn: $speech.sendHints) {
                         labelled("Contextual hints", "Pass the card's accepted answers to the recognizer to bias it toward them")
@@ -102,15 +78,7 @@ struct SettingsView: View {
                     Toggle(isOn: settings.bool("debug")) {
                         labelled("Debug logging", "Log speech matching, subject loading and token discovery to the web inspector")
                     }
-                } header: {
-                    Text("Advanced")
-                } footer: {
-                    if let reason = speech.fallbackReason {
-                        Text(reason)
-                    } else {
-                        Text("Automatic uses DictationTranscriber for WaniKani readings, which follows the card's hints, and SpeechTranscriber for meanings and for BunPro, which is better with grammar in context. Both need iOS 26; SFSpeechRecognizer works everywhere.")
-                    }
-                }
+                } header: { Text("Advanced") }
 
                 Section {
                     Toggle("Developer mode", isOn: $developerMode)
@@ -139,18 +107,6 @@ struct SettingsView: View {
         }
     }
 
-    private var availableEngines: [EngineKind] {
-        if #available(iOS 26, *) { return EngineKind.allCases }
-        return [.legacy]
-    }
-
-    private func labelled(_ title: String, _ hint: String) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(title)
-            Text(hint).font(.footnote).foregroundStyle(.secondary)
-        }
-    }
-
     private static var version: String {
         let info = Bundle.main.infoDictionary
         let short = info?["CFBundleShortVersionString"] as? String ?? "?"
@@ -159,31 +115,167 @@ struct SettingsView: View {
     }
 }
 
+private func labelled(_ title: String, _ hint: String) -> some View {
+    VStack(alignment: .leading, spacing: 2) {
+        Text(title)
+        Text(hint).font(.footnote).foregroundStyle(.secondary)
+    }
+}
+
 // MARK: - Apps
 
-private struct AppsSection: View {
+/// One row of the app settings list: the app and a line on how it's set up.
+/// WaniKani gets a warning while it has no API token, since it can't look up
+/// review items without one.
+private struct AppRow: View {
+    @ObservedObject var app: AppModel
+    @ObservedObject private var settings = SyncSettings.shared
+    let site: Site
+
+    private var needsToken: Bool { site == .wanikani && settings.apiToken.isEmpty }
+
+    var body: some View {
+        HStack(spacing: 12) {
+            SiteBadge(site: site, size: 30)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(site.name)
+                Text(needsToken ? "Needs an API token" : summary)
+                    .font(.footnote)
+                    .foregroundStyle(needsToken ? Color.orange : Color.secondary)
+            }
+            if needsToken {
+                Spacer()
+                Image(systemName: "exclamationmark.circle.fill")
+                    .foregroundStyle(.orange)
+                    .accessibilityLabel("API token missing")
+            }
+        }
+    }
+
+    private var summary: String {
+        var parts: [String] = []
+        if settings.bool("turbo", site: site).wrappedValue { parts.append("Turbo") }
+        if settings.bool("ippatsu_meaning", site: site).wrappedValue
+            || settings.bool("ippatsu_reading", site: site).wrappedValue { parts.append("Ippatsu") }
+        if settings.bool("transcript", site: site).wrappedValue {
+            parts.append("Transcript \(settings.string("transcript_position", site: site).wrappedValue)")
+        } else {
+            parts.append("No transcript")
+        }
+        return parts.joined(separator: " · ")
+    }
+}
+
+/// Pick which apps Kikoe loads. At least one stays on.
+private struct EnabledAppsView: View {
     @ObservedObject var app: AppModel
 
     var body: some View {
-        Section {
-            ForEach(Site.allCases) { site in
-                let on = app.isEnabled(site)
-                Toggle(isOn: Binding(get: { on }, set: { app.setEnabled(site, $0) })) {
-                    HStack(spacing: 12) {
-                        SiteBadge(site: site, size: 30)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(site.name)
-                            Text(site.blurb).font(.footnote).foregroundStyle(.secondary)
+        Form {
+            Section {
+                ForEach(Site.allCases) { site in
+                    let on = app.isEnabled(site)
+                    Button {
+                        // The last app stays on.
+                        if !(on && app.enabledSites.count == 1) { app.setEnabled(site, !on) }
+                    } label: {
+                        HStack(spacing: 12) {
+                            SiteBadge(site: site, size: 30)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(site.name).foregroundStyle(.primary)
+                                Text(site.blurb).font(.footnote).foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            if on { Image(systemName: "checkmark").foregroundStyle(.primary) }
                         }
                     }
+                    .buttonStyle(.plain)
                 }
-                .disabled(on && app.enabledSites.count == 1)
+            } footer: {
+                Text("Turn off the ones you don't use. Kikoe needs at least one on, and each one that's on gets its own settings page.")
             }
-        } header: {
-            Text("Apps")
-        } footer: {
-            Text("Turn off the ones you don't use; Kikoe only loads apps that are on. With two or more on, tap the app name at the top to switch.")
         }
+        .navigationTitle("Enabled apps")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+/// Everything that is set per app, on its own page.
+private struct AppSettingsView: View {
+    @ObservedObject var app: AppModel
+    @ObservedObject private var settings = SyncSettings.shared
+    @ObservedObject private var speech = SpeechService.shared
+    let site: Site
+
+    var body: some View {
+        Form {
+            if site == .wanikani { TokenSection(app: app) }
+
+            Group {
+                Section {
+                    Toggle(isOn: settings.bool("turbo", site: site)) {
+                        labelled("Turbo mode", "Auto-advance on a correct answer")
+                    }
+                    Toggle(isOn: settings.bool("speed_show_info", site: site)) {
+                        labelled("Show item info on wrong answer", "Opens the item info panel when you answer incorrectly")
+                    }
+                    Toggle(isOn: settings.bool("strict_kanji_readings", site: site)) {
+                        labelled("Strict kanji readings", "When the prompt is a single kanji, only accept kana the recognizer actually heard; it may ask you to repeat a reading it wrote back as the kanji")
+                    }
+                } header: { Text("Review flow") }
+
+                Section {
+                    Toggle("Meaning questions (English)", isOn: settings.bool("ippatsu_meaning", site: site))
+                    Toggle("Reading questions (Japanese)", isOn: settings.bool("ippatsu_reading", site: site))
+                } header: {
+                    Text("Ippatsu mode（一発）")
+                } footer: {
+                    Text("One shot per question: a wrong answer is submitted instead of letting you retry.")
+                }
+
+                Section("Live transcript") {
+                    Toggle(isOn: settings.bool("transcript", site: site)) {
+                        labelled("Show live transcript", "Whether Kikoe is listening and what it hears, over the page")
+                    }
+                    Picker("Theme", selection: settings.string("transcript_theme", site: site)) {
+                        Text("System").tag("system")
+                        Text("Light").tag("light")
+                        Text("Dark").tag("dark")
+                    }
+                    Picker("Position", selection: settings.string("transcript_position", site: site)) {
+                        Text("Top").tag("top")
+                        Text("Bottom").tag("bottom")
+                    }
+                    Toggle(isOn: settings.bool("show_help_button", site: site)) {
+                        labelled("Show help button", "A ? button with voice commands and tips (saying “help” works either way)")
+                    }
+                }
+
+                Section {
+                    Picker("Recognizer", selection: Binding(
+                        get: { speech.engineKind(for: site) },
+                        set: { speech.setEngineKind($0, for: site) }
+                    )) {
+                        ForEach(availableEngines) { Text($0.rawValue).tag($0) }
+                    }
+                } header: {
+                    Text("Speech recognizer")
+                } footer: {
+                    if let reason = speech.fallbackReason {
+                        Text(reason)
+                    } else {
+                        Text("Automatic uses DictationTranscriber for WaniKani readings, which follows the card's hints, and SpeechTranscriber for meanings and for BunPro, which is better with grammar in context. Both need iOS 26; SFSpeechRecognizer works everywhere.")
+                    }
+                }
+            }
+        }
+        .navigationTitle(site.name)
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private var availableEngines: [EngineKind] {
+        if #available(iOS 26, *) { return EngineKind.allCases }
+        return [.legacy]
     }
 }
 
@@ -221,7 +313,7 @@ private struct TokenSection: View {
         } header: {
             Text("WaniKani API token")
         } footer: {
-            Text("Kikoe uses a read-only personal access token to look up your review items. “Find my token” opens WaniKani's token page and reads the token from it; create one there first if you don't have one. BunPro doesn't need a token.")
+            Text("Kikoe uses a read-only personal access token to look up your review items. “Find my token” opens WaniKani's token page and reads the token from it; create one there first if you don't have one.")
         }
         .onAppear {
             draft = settings.apiToken
@@ -388,7 +480,6 @@ private struct CorrectionEditor: View {
     @State private var heard = ""
     @State private var intended = ""
     @Environment(\.dismiss) private var dismiss
-
     var body: some View {
         NavigationStack {
             Form {

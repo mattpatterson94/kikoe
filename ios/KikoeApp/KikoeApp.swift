@@ -190,9 +190,9 @@ private struct SessionContent: View {
     /// only while Kikoe is active), not just after speech. It also carries
     /// problem states, so the banner only shows when the bubble is off.
     private var bubbleIndicator: IndicatorState? {
-        settings.bool("transcript").wrappedValue ? session.indicator : nil
+        settings.bool("transcript", site: session.site).wrappedValue ? session.indicator : nil
     }
-    private var bubbleAtBottom: Bool { settings.string("transcript_position").wrappedValue != "top" }
+    private var bubbleAtBottom: Bool { settings.string("transcript_position", site: session.site).wrappedValue != "top" }
 
     private func transcript(_ indicator: IndicatorState) -> some View {
         TranscriptView(
@@ -203,7 +203,7 @@ private struct SessionContent: View {
             resultAbove: bubbleAtBottom,
             onMic: { session.sendAction("indicatorTapped") },
             onCorrection: { pendingCorrection = $0 })
-            .environment(\.colorScheme, settings.transcriptScheme ?? colorScheme)
+            .environment(\.colorScheme, settings.transcriptScheme(for: session.site) ?? colorScheme)
     }
 
     @Environment(\.colorScheme) private var colorScheme

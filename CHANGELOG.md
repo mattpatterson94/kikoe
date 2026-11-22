@@ -9,7 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- iOS app: the recognizer is chosen per site (Settings → Advanced), and a
+- iOS app: Settings is reorganised into sub pages. The top level keeps what
+  applies to everything (keep screen awake, background noise, custom
+  corrections, advanced and developer options) and an Enabled apps page where
+  you tick which of WaniKani and BunPro Kikoe loads. Each enabled app gets a
+  row below it that opens its own page: Turbo, show item info on wrong
+  answer, strict kanji readings, Ippatsu, the live transcript (on/off, theme,
+  position, help button) and the recognizer, all set separately per app. The
+  WaniKani API token moved onto the WaniKani page, and its row shows a
+  warning while no token is set. Until you change one, both apps keep using
+  the setting they already had. The extension is unchanged.
+- iOS app: the recognizer is chosen per site (Settings → the app's page), and a
   new Automatic choice is the default. On WaniKani it uses
   DictationTranscriber for readings and SpeechTranscriber for meanings; on
   BunPro, SpeechTranscriber. Switching between them costs nothing per card,

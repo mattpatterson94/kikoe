@@ -168,8 +168,27 @@ final class SyncSettings: ObservableObject {
             set: { ExtensionStorage.set(area: "sync", items: [key: $0]) })
     }
 
-    var transcriptScheme: ColorScheme? {
-        switch values["transcript_theme"] as? String {
+    /// A setting as `site` sees it: its own override, else the plain key.
+    func value(_ key: String, for site: Site) -> Any? {
+        values[SiteSettings.key(key, site)] ?? values[key]
+    }
+
+    /// Reads and writes `site`'s own copy of a setting; writing one makes it
+    /// differ from the other site from then on.
+    func bool(_ key: String, site: Site) -> Binding<Bool> {
+        Binding(
+            get: { self.value(key, for: site) as? Bool ?? Self.defaults[key] as? Bool ?? false },
+            set: { ExtensionStorage.set(area: "sync", items: [SiteSettings.key(key, site): $0]) })
+    }
+
+    func string(_ key: String, site: Site) -> Binding<String> {
+        Binding(
+            get: { self.value(key, for: site) as? String ?? Self.defaults[key] as? String ?? "" },
+            set: { ExtensionStorage.set(area: "sync", items: [SiteSettings.key(key, site): $0]) })
+    }
+
+    func transcriptScheme(for site: Site) -> ColorScheme? {
+        switch value("transcript_theme", for: site) as? String {
         case "light": .light
         case "dark": .dark
         default: nil
