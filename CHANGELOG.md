@@ -22,6 +22,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Its English finals often lose the word the live result had right ("Water."
   finalizes as "." or "to."), so a correct answer either never finished or
   was graded wrong. The final now keeps the live result as an alternative.
+  A live result that never gets a final at all is sent as final once it has
+  stood still for 1.2 s, so voice commands like "incorrect" work on English
+  cards too (they only run from finals).
 - Once a card has been graded, speech is only checked for voice commands
   until the next card. Saying the answer while reading the item info used to
   press the button that had become "next" and skip past it, and "wrong" did

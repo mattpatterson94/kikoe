@@ -1298,6 +1298,33 @@ describe('startListener BunPro Reveal & Grade cards', () => {
     }
   });
 
+  // iOS SpeechTranscriber's English finals lose the word ("Incorrect." then a
+  // final of "to.."); the engine appends the live text as the last
+  // alternative, and the command must still be found there.
+  test('"incorrect" behind a garbled first alternative marks a translate card wrong', async () => {
+    addMetadata({
+      'data-meta-input-mode': 'manual',
+      'data-meta-question-mode': 'translate',
+      'data-meta-answers-array': JSON.stringify(['to eat']),
+    });
+    const input = document.createElement('input');
+    input.id = 'js-manual-input';
+    document.body.appendChild(input);
+    const submit = document.createElement('button');
+    submit.className = 'InputManual__button';
+    document.body.appendChild(submit);
+    const submitSpy = vi.spyOn(submit, 'click');
+    stampConfig({ hasApiToken: true });
+    await importApp();
+
+    const native = MockSpeechRecognition.instances[0];
+    native.onresult({ resultIndex: 0, results: [interimResult('Incorrect.')] });
+    native.onresult({ resultIndex: 0, results: [finalResult('to..', 'to.', 'Incorrect.')] });
+
+    expect(input.value).toBe('aaa');
+    expect(submitSpy).toHaveBeenCalledTimes(1);
+  });
+
   test('a hiragana transcript submits BunPro\'s canonical katakana answer', async () => {
     addMetadata({
       'data-meta-input-mode': 'manual',

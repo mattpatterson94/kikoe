@@ -65,6 +65,13 @@ final class AnalyzerSpeechEngine: SpeechEngine {
     private static let utteranceGap: Duration = .milliseconds(600)
     /// Speech that started but never finalized shouldn't hold the utterance forever.
     private static let volatileTimeout: Duration = .seconds(2)
+    /// How long a live result with no final at all may sit unchanged before
+    /// it is sent as final itself. SpeechTranscriber alone (English cards)
+    /// only finalizes when the endpointer calls it, which a room that never
+    /// goes quiet can stop; the page then saw "Incorrect" live but never as a
+    /// final, and voice commands only run from finals. Japanese cards rarely
+    /// get here, since dictation assist finalizes often.
+    private static let unfinalizedTimeout: Duration = .milliseconds(1200)
 
     init(mic: MicCapture, usesDictation: @escaping @MainActor (String) -> Bool, dictationAssist: Bool = false) {
         self.mic = mic
@@ -292,13 +299,17 @@ final class AnalyzerSpeechEngine: SpeechEngine {
         onEvent?(.result(transcripts: transcripts, isFinal: false, resultId: resultId))
 
         flushTask?.cancel()
-        guard primary.hasFinal || helper.hasFinal else { return }
-        let wait = r.isFinal ? Self.utteranceGap : Self.volatileTimeout
+        let hasFinal = primary.hasFinal || helper.hasFinal
+        let wait = r.isFinal ? Self.utteranceGap : hasFinal ? Self.volatileTimeout : Self.unfinalizedTimeout
         let gen = generation
         flushTask = Task { [weak self] in
             try? await Task.sleep(for: wait)
             guard !Task.isCancelled, let self, gen == self.generation else { return }
             self.flush()
+            // The transcriber still holds that audio as unfinished; cut it,
+            // so its late final is dropped and the next answer doesn't start
+            // with this one's words.
+            if !r.isFinal, let active = self.active { self.cut(active) }
         }
     }
 
