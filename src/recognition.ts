@@ -296,6 +296,13 @@ export function createRecognition(
     if (event.error === 'language-not-supported' && usingLocal) {
       console.warn(`[kikoe] on-device recognition unavailable for ${recognition.lang}; using the browser's default recognizer`);
       localUnavailable.add(recognition.lang);
+      // Chromium reports this before a session starts and sends no end
+      // event, so onend's auto-restart never runs. Start again here, unless
+      // a session has started since.
+      const failedSession = sessionId;
+      setTimeout(() => {
+        if (shouldAutoRestart && sessionId === failedSession) safeStart();
+      }, 0);
       return;
     }
     if ((event.error as string) === 'phrases-not-supported') {
@@ -327,7 +334,9 @@ export function createRecognition(
     if (!shouldAutoRestart) return;
     const delay = Math.min(unhealthyRestarts * RESTART_BACKOFF_MS, MAX_RESTART_BACKOFF_MS);
     if (delay > 0) {
-      setTimeout(() => { if (shouldAutoRestart) safeStart(); }, delay);
+      // Skipped if something else (a fallback restart) started one meanwhile.
+      const endedSession = sessionId;
+      setTimeout(() => { if (shouldAutoRestart && sessionId === endedSession) safeStart(); }, delay);
     } else {
       safeStart();
     }

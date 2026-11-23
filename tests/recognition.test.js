@@ -590,6 +590,18 @@ describe('createRecognition browser options', () => {
     const native = recognitionInstances[0];
     native.onerror({ error: 'language-not-supported' });
     expect(onError).not.toHaveBeenCalled();
+    // Chromium sends no end event for this failure.
+    vi.advanceTimersByTime(0);
+    expect(native.processLocally).toBe(false);
+    expect(native.nativeStart).toHaveBeenCalledTimes(2);
+  });
+
+  test('starts the fallback only once when an end event does follow', () => {
+    options.onDevice = true;
+    const recognition = createRecognition('ja-JP', vi.fn(), undefined, getOptions);
+    recognition.start();
+    const native = recognitionInstances[0];
+    native.onerror({ error: 'language-not-supported' });
     endSession(native);
     expect(native.processLocally).toBe(false);
     expect(native.nativeStart).toHaveBeenCalledTimes(2);
