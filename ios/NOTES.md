@@ -243,7 +243,7 @@ measured: hours of real reviews on a device. That still needs doing.
   bundle id `com.mattdoesdev.kikoe`, the same as the Safari-extension app.
   The macOS version stays the Safari extension (`scripts/build-safari-app.sh`).
   iOS and macOS builds of that bundle id share build numbers, so pick one
-  above both (0.21.0 is build 102).
+  above both (0.22.0 is build 109).
 - `ios/scripts/build.sh <build> --upload` builds the web bundles, syncs the
   version, archives and uploads to App Store Connect with the account signed
   in to Xcode. Without `--upload` it exports an .ipa to `ios/build/export`.

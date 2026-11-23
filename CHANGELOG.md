@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## [0.22.0] - 2026-11-24
+
 ### Changed
 
 - iOS app: Settings is reorganised into sub pages. The top level keeps what
@@ -464,7 +466,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Vitest test suite: 118 tests covering candidates, flashcards, settings,
   the content script, WaniKani helpers, and the speed enhancer.
 
-[Unreleased]: https://github.com/mattpatterson94/kikoe/compare/v0.21.0...HEAD
+[Unreleased]: https://github.com/mattpatterson94/kikoe/compare/v0.22.0...HEAD
+[0.22.0]: https://github.com/mattpatterson94/kikoe/compare/v0.21.0...v0.22.0
 [0.21.0]: https://github.com/mattpatterson94/kikoe/compare/v0.20.0...v0.21.0
 [0.20.0]: https://github.com/mattpatterson94/kikoe/compare/v0.11.0...v0.20.0
 [0.11.0]: https://github.com/mattpatterson94/kikoe/compare/v0.10.0...v0.11.0
