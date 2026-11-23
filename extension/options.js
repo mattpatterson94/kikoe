@@ -42,7 +42,7 @@ const fields = Object.keys(defaults)
 
 function get(id) { return document.getElementById(id); }
 
-// Each app card gets the per-app controls, with ids like `bunpro:turbo`.
+// Each app panel gets the per-app controls, with ids like `bunpro:turbo`.
 for (const site of sites) {
   const content = get('appSettingsTemplate').content.cloneNode(true);
   for (const el of content.querySelectorAll('[data-key]')) el.id = siteKey(site, el.dataset.key);
@@ -118,6 +118,7 @@ function correctionRow({ heard = '', intended = '' } = {}) {
   remove.addEventListener('click', () => {
     row.remove();
     refreshCorrectionsChrome();
+    scheduleSave(0);
   });
 
   row.append(heardInput, intendedInput, remove);
@@ -151,7 +152,9 @@ get('findApiToken').addEventListener('click', findApiToken);
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area === 'sync' && changes.apiToken?.newValue) {
     get('apiToken').value = changes.apiToken.newValue;
+    if (lastSaved) lastSaved.apiToken = changes.apiToken.newValue;
     setTokenStatus('Token found and saved.', 'ok');
+    refreshTokenBanner();
   }
   if (area === 'local' && changes[apiTokenDiscoveryStatusKey]?.newValue) {
     handleTokenDiscoveryStatus(changes[apiTokenDiscoveryStatusKey].newValue);
@@ -271,17 +274,54 @@ document.addEventListener('visibilitychange', () => {
   if (!document.hidden) checkSiteAccess();
 });
 
+// ── sections ──────────────────────────────────────────────────────────────────
+//
+// One panel at a time, picked from the sidebar and kept in the URL hash so a
+// reload (or the token banner's link) lands on the same one.
+
+const panelNames = ['general', 'wanikani', 'bunpro', 'advanced'];
+
+function navLink(name) {
+  return document.querySelector(`nav.sections a[data-panel="${name}"]`);
+}
+
+function showPanel(name) {
+  if (!panelNames.includes(name) || navLink(name).hidden) name = 'general';
+  for (const panel of document.querySelectorAll('.panel')) panel.hidden = panel.dataset.panel !== name;
+  for (const link of document.querySelectorAll('nav.sections a')) {
+    if (link.dataset.panel === name) link.setAttribute('aria-current', 'page');
+    else link.removeAttribute('aria-current');
+  }
+}
+
+function showPanelFromHash() {
+  showPanel(location.hash.slice(1));
+}
+
+window.addEventListener('hashchange', showPanelFromHash);
+
 // ── apps ──────────────────────────────────────────────────────────────────────
 //
 // Same rule as the iOS app's Settings → Apps: at least one stays on, so the
-// last checked box is locked. An app's own card only shows while it's on.
+// last checked box is locked. An app's own page only shows while it's on.
 
 function refreshApps() {
   const toggles = [...document.querySelectorAll('.site-toggle')];
   const on = toggles.filter((t) => t.checked);
   for (const t of toggles) t.disabled = t.checked && on.length === 1;
-  for (const site of sites) get(`app_${site}`).hidden = !get(`site_${site}`).checked;
+  for (const site of sites) navLink(site).hidden = !get(`site_${site}`).checked;
+  refreshTokenBanner();
+  showPanelFromHash();
 }
+
+// WaniKani does nothing without a token, so say so wherever you are.
+function refreshTokenBanner() {
+  const missing = get('site_wanikani').checked && !get('apiToken').value.trim();
+  get('tokenBanner').hidden = !missing || location.hash === '#wanikani';
+  get('tokenDot').hidden = !missing;
+}
+
+window.addEventListener('hashchange', refreshTokenBanner);
 
 for (const toggle of document.querySelectorAll('.site-toggle')) {
   toggle.addEventListener('change', refreshApps);
@@ -343,6 +383,7 @@ function refreshRecognizer() {
   if (onDevice) refreshOnDeviceModels();
 }
 
+get('recognizerGroup').hidden = !supportsOnDevice;
 get('recognizerField').hidden = !supportsOnDevice;
 get('contextualHintsField').hidden = !supportsHints;
 get('noiseReductionField').hidden = !supportsNoiseReduction;
@@ -355,6 +396,10 @@ get('installOnDeviceModels').addEventListener('click', installOnDeviceModels);
 }
 
 // ── form load/save ────────────────────────────────────────────────────────────
+//
+// Changes save as they're made: toggles and selects at once, typed text once
+// typing pauses. Only the keys that differ from what was last stored are
+// written, which keeps well clear of chrome.storage.sync's write quota.
 
 function readField(el) {
   if (el.type === 'checkbox') return el.checked;
@@ -367,8 +412,8 @@ function writeField(el, value, fallback) {
   else el.value = value ?? fallback;
 }
 
-// Saving writes each app's own copy of every per-app setting. The plain keys
-// are left as they were, as the fallback older versions still read.
+// Each app's own copy of every per-app setting is written. The plain keys are
+// left as they were, as the fallback older versions still read.
 function readForm() {
   const values = {};
   for (const key of fields) {
@@ -427,21 +472,53 @@ async function load() {
     chrome.storage.local.get(apiTokenDiscoveryStatusKey),
   ]);
   populateForm({ ...defaults, ...stored });
+  lastSaved = readForm();
   if (stored.apiToken) {
     handleTokenDiscoveryStatus(discovery[apiTokenDiscoveryStatusKey]);
   }
 }
 
-get('save').addEventListener('click', async () => {
+let lastSaved = null;
+let saveTimer = null;
+let savedTimer = null;
+
+function showSaveState(message) {
+  get('saveState').textContent = message;
+  clearTimeout(savedTimer);
+  if (message) savedTimer = setTimeout(() => { get('saveState').textContent = ''; }, 2500);
+}
+
+async function save() {
+  if (!lastSaved) return; // not loaded yet
   const values = readForm();
-  await chrome.storage.sync.set(values);
-  // Reflect what was actually stored (e.g. half-filled rows are dropped).
-  renderCorrections(values.customCorrections);
-  const save = get('save');
-  save.textContent = 'Saved.';
-  save.disabled = true;
-  setTimeout(() => { save.textContent = 'Save settings'; save.disabled = false; }, 2000);
+  const changed = {};
+  for (const [key, value] of Object.entries(values)) {
+    if (JSON.stringify(value) !== JSON.stringify(lastSaved[key])) changed[key] = value;
+  }
+  if (!Object.keys(changed).length) return;
+  try {
+    await chrome.storage.sync.set(changed);
+    Object.assign(lastSaved, changed);
+    showSaveState('Saved');
+  } catch (err) {
+    console.error('[kikoe] could not save settings:', err);
+    showSaveState("Couldn't save. Try again in a moment.");
+  }
+}
+
+function scheduleSave(delay) {
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => { save(); }, delay);
+}
+
+const main = document.querySelector('main');
+main.addEventListener('change', () => scheduleSave(0));
+main.addEventListener('input', (event) => {
+  if (event.target.matches('input[type=text], input[type=password]')) scheduleSave(600);
+  if (event.target.id === 'apiToken') refreshTokenBanner();
 });
+// Don't lose a pending text save when the tab closes.
+window.addEventListener('pagehide', () => { if (saveTimer) save(); });
 
 load();
 checkSiteAccess();

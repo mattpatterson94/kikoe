@@ -31,6 +31,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- The extension options page is split into pages (General, WaniKani,
+  BunPro, Advanced) picked from a sidebar, or a tab strip in narrow windows,
+  instead of one long scroll. Settings save as you change them, so the Save
+  button is gone, and a missing WaniKani token shows as a banner with a link
+  to fix it.
+
 - iOS app: Settings is reorganised into sub pages. The top level keeps what
   applies to everything (keep screen awake, background noise, custom
   corrections, advanced and developer options) and an Enabled apps page where
