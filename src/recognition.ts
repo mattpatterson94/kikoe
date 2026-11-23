@@ -307,6 +307,8 @@ export function createRecognition(
 
     if (FATAL_ERRORS.has(event.error)) {
       shouldAutoRestart = false;
+      // Nothing restarts after a fatal error, so don't leave the mic open.
+      releaseNoiseTrack();
     } else {
       sawErrorThisSession = true;
     }

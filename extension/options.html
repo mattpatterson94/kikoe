@@ -358,6 +358,8 @@
     }
     /* display: grid above would otherwise override the UA's [hidden] rule */
     .correction-header[hidden], .corrections-empty[hidden] { display: none; }
+    /* .field is display: flex, which would also override [hidden] */
+    .field[hidden] { display: none; }
     .correction-header {
       font-size: 0.78rem;
       font-weight: 600;

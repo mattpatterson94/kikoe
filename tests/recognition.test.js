@@ -662,6 +662,23 @@ describe('createRecognition browser options', () => {
     expect(track.stop).toHaveBeenCalled();
   });
 
+  test('releases the noise-suppressed track on a fatal error', async () => {
+    options.noiseReduction = true;
+    const track = { readyState: 'live', stop: vi.fn() };
+    const getUserMedia = vi.fn().mockResolvedValue({ getAudioTracks: () => [track] });
+    vi.stubGlobal('navigator', { mediaDevices: { getUserMedia } });
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const recognition = createRecognition('ja-JP', vi.fn(), vi.fn(), getOptions);
+    recognition.start();
+    await Promise.resolve();
+    await Promise.resolve();
+    const native = recognitionInstances[0];
+    endSession(native);
+    expect(native.nativeStart).toHaveBeenLastCalledWith(track);
+    native.onerror({ error: 'audio-capture' });
+    expect(track.stop).toHaveBeenCalled();
+  });
+
   test('keeps the default microphone when noise-reduced capture fails', async () => {
     options.noiseReduction = true;
     const getUserMedia = vi.fn().mockRejectedValue(new Error('denied'));
