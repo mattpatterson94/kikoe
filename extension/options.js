@@ -518,7 +518,13 @@ let saving = null;
 function save() {
   if (!lastSaved) return Promise.resolve(); // not loaded yet
   if (saving) return saving;
+  // Nothing to write: don't take the lock.
+  if (!Object.keys(unsavedChanges()).length) return Promise.resolve();
   saving = (async () => {
+    // Yield first, so the finally below can never run before `saving` is
+    // assigned: if it did, the lock would stay held by a settled promise and
+    // every later save would return it without writing.
+    await null;
     try {
       for (;;) {
         const changed = unsavedChanges();
