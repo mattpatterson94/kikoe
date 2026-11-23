@@ -8,78 +8,46 @@ Kikoe can produce a Safari-targeted WebExtension bundle with:
 npm run build
 ```
 
-The build assembles the unpacked extension in `safari/`. That folder is intended
-as the input to Apple's Safari Web Extension converter, which creates the Xcode
-project and containing iOS/iPadOS/macOS app needed for Safari distribution.
-
-```bash
-xcrun safari-web-extension-converter safari/
-```
-
-After conversion, customize the generated containing app page:
-
-```bash
-npm run safari:customize-app -- Kikoe
-```
+The build assembles the unpacked extension in `safari/`. On macOS that folder
+ships inside the native Kikoe app: `ios/Kikoe.xcodeproj` has a
+`KikoeSafariExtension` target (an appex, `com.mattdoesdev.kikoe.Extension`)
+whose build phase (`ios/scripts/copy-safari-extension.sh`) copies `safari/` into
+its resources, and the `KikoeMac` target embeds it. There is no converter step
+and nothing generated is committed. To try it, run `npm run build`, build and
+run the `KikoeMac` scheme, then turn Kikoe on in Safari > Settings >
+Extensions.
 
 ## App Store Builds
 
-For an actual App Store submission, use the script instead of running those
-steps by hand — it does the build, conversion, customization, archiving, and
-export in one pass:
-
 ```bash
-npm run safari:app -- <build-number>
+npm run safari:app -- <build-number> [--upload]
 ```
 
-The marketing version comes from `package.json`. Output lands in
-`dist/safari-app/ios/Kikoe.ipa` and `dist/safari-app/macos/Kikoe.pkg`, ready to
-drag into Transporter.
+runs `ios/scripts/build.sh` (iOS/iPadOS) and `ios/scripts/build-mac.sh` (macOS,
+including the Safari extension) with the same build number. Without `--upload`
+the exports land in `ios/build/export` (.ipa) and `ios/build/export-mac` (.pkg),
+ready for Transporter. The marketing version comes from `package.json`.
 
-The build number is a floor rather than an exact value: Xcode's export step asks
-App Store Connect whether that number is already taken and increments past it if
-so. The export prints what each artifact actually got — trust that over what you
-passed in.
+Both apps share the bundle id `com.mattdoesdev.kikoe`, so the Mac app is a
+universal purchase with the iPhone/iPad one. Entitlements (App Sandbox,
+microphone, outgoing network) are in `ios/Config/KikoeMac.entitlements`, and
+`LSApplicationCategoryType` / `ITSAppUsesNonExemptEncryption` are build settings
+in the project. The extension is sandboxed too
+(`ios/Config/KikoeSafariExtension.entitlements`). Kikoe only speaks HTTPS to the
+WaniKani API through OS frameworks, which is exempt from export compliance.
 
-Build numbers are shared across iOS and macOS, not tracked per platform. Both
-apps ship under one bundle identifier, so a macOS package numbered below an
-already-uploaded iOS build is rejected as a 409 even though no macOS build ever
-used that number. Xcode's own auto-increment doesn't account for this and will
-happily export a macOS build that App Store Connect then refuses, so pass a
-build number above the highest one uploaded for *either* platform.
+Build numbers are shared across iOS and macOS, not tracked per platform: a
+macOS package numbered below an already-uploaded iOS build is rejected as a 409.
+Pass a build number above the highest one uploaded for *either* platform.
 
-The script also writes two Info.plist keys the converter omits.
-`LSApplicationCategoryType` (`public.app-category.education`, override with
-`MACOS_CATEGORY`) is mandatory for the Mac App Store — without it nothing fails
-locally and Transporter rejects the upload with a 409.
-`ITSAppUsesNonExemptEncryption` is set to false so App Store Connect stops
-asking the export compliance question on every submission; Kikoe only speaks
-HTTPS to the WaniKani API through OS frameworks, which is exempt.
+Two certificates are required in the login keychain (Xcode > Settings >
+Accounts > Manage Certificates): **Apple Distribution** and **Mac Installer
+Distribution** (for the macOS `.pkg`).
 
-The script exists because the converter regenerates the Xcode project from
-scratch every run — `Kikoe/` is gitignored and never committed — so it always
-returns with `MARKETING_VERSION` 1.0, `CURRENT_PROJECT_VERSION` 1, and no
-development team. Reapplying those by hand is easy to forget and produces an
-upload that App Store Connect rejects as a duplicate build.
-
-Two certificates are required in the login keychain, both created from Xcode >
-Settings > Accounts > Manage Certificates: **Apple Distribution** (signs both
-apps) and **Mac Installer Distribution** (produces the macOS `.pkg`).
-
-To retry just the signing and packaging after fixing a certificate, skip
-straight to the export — the archives are already built:
-
-```bash
-npm run safari:app:export
-```
-
-The customized iOS app page includes setup steps telling users to navigate to
-**Apps > Safari > Extensions > Kikoe** themselves. There's no button for this —
-iOS only exposes a public URL for opening the app's *own* Settings page, not
-Safari's, so a button would just drop users on Kikoe's (empty) settings entry
-instead of anywhere useful. The macOS page keeps its **Quit and Open Safari
-Extensions Preferences...** button, which correctly opens Safari's Extensions
-pane via `SFSafariApplication.showPreferencesForExtension`.
+iPhone and iPad no longer ship the Safari extension; the native app replaces it.
+The Mac app has no button that opens Safari's Extensions pane (the old converter
+page had one via `SFSafariApplication.showPreferencesForExtension`), so users
+enable Kikoe in Safari > Settings > Extensions themselves.
 
 ## What This Reuses
 
@@ -133,9 +101,8 @@ regardless of per-site permission. The fix here uses two of those:
   stays hidden there. Options opens whenever the toolbar icon is clicked (see
   `background.js`), which is exactly the moment a confused user goes looking
   for help.
-- The customized containing-app page (`scripts/customize-safari-app.js`)
-  spells out the website-access step for macOS, alongside the existing "turn
-  the extension on" instructions.
+- (The converter-era containing-app page that spelled out this step is gone;
+  `scripts/customize-safari-app.js` is no longer used by the build.)
 
 Details in the options-page card that are load-bearing rather than incidental:
 

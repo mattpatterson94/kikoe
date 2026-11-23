@@ -25,7 +25,13 @@ group) for macOS 26 with the iOS bundle ID, `com.mattdoesdev.kikoe`
 (`Config/KikoeMac.xcconfig`; sandbox, network client and audio input in
 `Config/KikoeMac.entitlements`). It ships as the macOS platform of the Kikoe
 App Store record (universal purchase), replacing the Safari extension's Mac
-app there, so don't upload macOS builds of the Safari project any more. Platform differences live in `Platform.swift`:
+app there, so don't upload macOS builds of the Safari project any more.
+The Mac app now embeds the Safari Web Extension: the `KikoeSafariExtension`
+target (sandboxed appex, `com.mattdoesdev.kikoe.Extension`) copies `../safari/`
+into its resources via `scripts/copy-safari-extension.sh`, and `KikoeMac`
+embeds it and depends on it. `scripts/build-safari-app.sh` now just runs
+`build.sh` and `build-mac.sh`; the converter is no longer used.
+ Platform differences live in `Platform.swift`:
 privacy settings URL, app-activation notification, opening links, keep-awake
 (an IOPM display-sleep assertion on the Mac), background colours, toolbar
 placements and text-entry modifiers. Everything else is `#if os(iOS)` only

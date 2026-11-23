@@ -15,7 +15,6 @@
     "pack": "npm run pack:chrome && npm run pack:firefox && npm run pack:safari",
     "safari:customize-app": "node scripts/customize-safari-app.js",
     "safari:app": "bash scripts/build-safari-app.sh",
-    "safari:app:export": "bash scripts/export-safari-app.sh",
     "publish:chrome": "bash scripts/publish-chrome.sh",
     "dev": "node dev.js",
     "dev:firefox": "node dev.js --firefox",
