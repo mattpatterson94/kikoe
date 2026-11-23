@@ -488,22 +488,41 @@ function showSaveState(message) {
   if (message) savedTimer = setTimeout(() => { get('saveState').textContent = ''; }, 2500);
 }
 
-async function save() {
-  if (!lastSaved) return; // not loaded yet
-  const values = readForm();
+function unsavedChanges() {
   const changed = {};
-  for (const [key, value] of Object.entries(values)) {
+  for (const [key, value] of Object.entries(readForm())) {
     if (JSON.stringify(value) !== JSON.stringify(lastSaved[key])) changed[key] = value;
   }
-  if (!Object.keys(changed).length) return;
-  try {
-    await chrome.storage.sync.set(changed);
-    Object.assign(lastSaved, changed);
-    showSaveState('Saved');
-  } catch (err) {
-    console.error('[kikoe] could not save settings:', err);
-    showSaveState("Couldn't save. Try again in a moment.");
-  }
+  return changed;
+}
+
+// The write in flight, if any. Saves run one at a time: an edit made while a
+// write is pending compares against the value that write is about to store,
+// so the form is checked again after every write rather than skipped. (Change
+// a setting and back mid-write, and the second save would otherwise see
+// nothing new and leave the intermediate value stored.)
+let saving = null;
+
+function save() {
+  if (!lastSaved) return Promise.resolve(); // not loaded yet
+  if (saving) return saving;
+  saving = (async () => {
+    try {
+      for (;;) {
+        const changed = unsavedChanges();
+        if (!Object.keys(changed).length) break;
+        await chrome.storage.sync.set(changed);
+        Object.assign(lastSaved, changed);
+        showSaveState('Saved');
+      }
+    } catch (err) {
+      console.error('[kikoe] could not save settings:', err);
+      showSaveState("Couldn't save. Try again in a moment.");
+    } finally {
+      saving = null;
+    }
+  })();
+  return saving;
 }
 
 function scheduleSave(delay) {
