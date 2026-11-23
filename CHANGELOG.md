@@ -35,6 +35,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Chrome: the extension no longer asks for the `unlimitedStorage`
+  permission. It only keeps small settings in extension storage, and the
+  dictionary ships inside the package.
 - The extension options page is split into pages (General, WaniKani,
   BunPro, Advanced) picked from a sidebar, or a tab strip in narrow windows,
   instead of one long scroll. Settings save as you change them, so the Save
