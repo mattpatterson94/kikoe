@@ -111,6 +111,19 @@ describe('getSettings', () => {
     expect(settings.transcript).toBe(defaults.transcript);
     expect(settings.transcript_position).toBe(defaults.transcript_position);
   });
+
+  test('applies the site\'s own per-app values over the plain keys', async () => {
+    syncStore.transcript_position = 'top';
+    syncStore['bunpro:transcript_position'] = 'bottom';
+    syncStore['wanikani:turbo'] = false;
+    const bunpro = await getSettings('bunpro');
+    expect(bunpro.transcript_position).toBe('bottom');
+    expect(bunpro.turbo).toBe(defaults.turbo);
+    expect(bunpro).not.toHaveProperty('bunpro:transcript_position');
+    const wanikani = await getSettings('wanikani');
+    expect(wanikani.transcript_position).toBe('top');
+    expect(wanikani.turbo).toBe(false);
+  });
 });
 
 // ── migrateSettings ───────────────────────────────────────────────────────────

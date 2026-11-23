@@ -1,0 +1,6 @@
+// Signing and identity for the native Kikoe macOS app (target KikoeMac).
+// It shares every source file with the iOS app; see NOTES.md. It inherits
+// com.mattdoesdev.kikoe from Kikoe.xcconfig, so it ships as the macOS
+// platform of the existing Kikoe App Store record (universal purchase) and
+// replaces the Safari-extension Mac app there.
+#include "Kikoe.xcconfig"

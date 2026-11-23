@@ -3,9 +3,12 @@
 // fetches + caches subjects, and injects the bridge + app bundle into the
 // page context.
 
-import { defaults, encodeConfig } from '../src/settings';
+import {
+  defaults, encodeConfig, isSiteEnabled, SITE_SETTING_KEYS, siteSettingKey, applySiteOverrides, relaySiteChanges,
+} from '../src/settings';
 import type { Settings } from '../src/settings';
 import { detectSite } from '../src/site';
+import type { Site } from '../src/site';
 import { debugLog, setDebugLogging } from '../src/logger';
 import type { WanikaniSubject } from '../src/wanikani';
 
@@ -65,11 +68,22 @@ export async function migrateSettings(): Promise<void> {
   await chrome.storage.sync.set(patch);
 }
 
-export async function getSettings(): Promise<StoredSettings> {
+/** The raw sync values Kikoe reads: every plain key, plus each app's own
+ *  copy of the per-app settings (`<site>:<key>`). */
+export async function getStoredSettings(): Promise<Record<string, unknown>> {
   await migrateSettings();
-  const keys = Object.keys(defaults);
-  const stored = await chrome.storage.sync.get(keys);
-  return { ...defaults, ...stored };
+  const keys = [
+    ...Object.keys(defaults),
+    ...SITE_SETTING_KEYS.flatMap((key) => [siteSettingKey(key, 'wanikani'), siteSettingKey(key, 'bunpro')]),
+  ];
+  return await chrome.storage.sync.get(keys) as Record<string, unknown>;
+}
+
+/** Settings as `site`'s page sees them: its per-app overrides applied. */
+export async function getSettings(site?: Site): Promise<StoredSettings> {
+  const stored = await getStoredSettings();
+  const resolved = site ? applySiteOverrides(stored, site) : stored;
+  return { ...defaults, ...resolved } as StoredSettings;
 }
 
 export async function addCustomCorrection({ heard, intended }: Partial<{ heard: string; intended: string }>): Promise<boolean> {
@@ -556,8 +570,12 @@ async function main(): Promise<void> {
     return;
   }
 
-  const settings = await getSettings();
+  let stored = await getStoredSettings();
+  const settings = { ...defaults, ...applySiteOverrides(stored, site) } as StoredSettings;
   setDebugLogging(settings.debug);
+  // Turned off under Apps in settings. The token page above still runs, so
+  // "Find token" works even with WaniKani switched off.
+  if (!isSiteEnabled(settings, site)) return;
   const base = chrome.runtime.getURL('');
 
   // The API token (and subject fetching) is WaniKani-only — BunPro's accepted
@@ -636,8 +654,15 @@ async function main(): Promise<void> {
   let currentSettings = settings;
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== 'sync') return;
-    const updated = { ...currentSettings };
+    stored = { ...stored };
     for (const [k, { newValue }] of Object.entries(changes)) {
+      if (newValue === undefined) delete stored[k];
+      else stored[k] = newValue;
+    }
+    const relayed = relaySiteChanges(changes, stored, site);
+    if (!Object.keys(relayed).length) return;
+    const updated = { ...currentSettings };
+    for (const [k, { newValue }] of Object.entries(relayed)) {
       (updated as Record<string, unknown>)[k] = newValue;
     }
     currentSettings = updated;

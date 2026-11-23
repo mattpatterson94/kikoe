@@ -53,7 +53,9 @@ final class PageSession: NSObject, ObservableObject {
         self.site = site
         self.app = app
         let config = WKWebViewConfiguration()
+        #if os(iOS)
         config.allowsInlineMediaPlayback = true
+        #endif
         config.mediaTypesRequiringUserActionForPlayback = []
         webView = WKWebView(frame: .zero, configuration: config)
         super.init()
@@ -425,7 +427,7 @@ extension PageSession: WKNavigationDelegate, WKUIDelegate {
     /// rather than replacing the review page.
     func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration,
                  for navigationAction: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? {
-        if let url = navigationAction.request.url { UIApplication.shared.open(url) }
+        if let url = navigationAction.request.url { Platform.openExternally(url) }
         return nil
     }
 

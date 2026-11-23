@@ -1,25 +1,82 @@
 import SwiftUI
 import WebKit
+#if os(iOS)
+typealias PlatformView = UIView
+#else
+typealias PlatformView = NSView
+#endif
 
 @main
 struct KikoeApp: App {
+    @StateObject private var app = AppModel()
+
     var body: some Scene {
         WindowGroup {
             #if DEBUG
             if ProcessInfo.processInfo.arguments.contains("-probe") {
                 NavigationStack { ProbeView() }
             } else {
-                RootView()
+                RootView(app: app)
             }
             #else
-            RootView()
+            RootView(app: app)
             #endif
+        }
+        #if os(macOS)
+        .defaultSize(width: 1100, height: 820)
+        .commands { KikoeCommands(app: app) }
+        #endif
+    }
+}
+
+#if os(macOS)
+/// Menu bar equivalents of the More menu, so the Mac app works from the
+/// keyboard: Settings… (⌘,), Reload Page (⌘R), Listen In and Voice Commands.
+struct KikoeCommands: Commands {
+    @ObservedObject var app: AppModel
+
+    var body: some Commands {
+        CommandGroup(replacing: .appSettings) {
+            Button("Settings…") { app.showSettings = true }
+                .keyboardShortcut(",")
+                .disabled(!app.onboarded)
+        }
+        CommandGroup(replacing: .newItem) {}
+        CommandMenu("Review") {
+            Button("Reload Page") { app.current.reload() }
+                .keyboardShortcut("r")
+            Button("Listen In…") { app.showLanguageSheet = true }
+                .keyboardShortcut("l", modifiers: [.command, .shift])
+                .disabled(!app.onboarded)
+            VoiceCommandsMenuItem(session: app.current, onboarded: app.onboarded)
+            if app.enabledSites.count > 1 {
+                Divider()
+                ForEach(Array(app.enabledSites.enumerated()), id: \.element) { index, site in
+                    Button(site.name) { app.site = site }
+                        .keyboardShortcut(KeyEquivalent(Character("\(index + 1)")))
+                }
+            }
         }
     }
 }
 
+/// Observes the current page itself: AppModel doesn't republish a session's
+/// changes, so reading helpButtonVisible through it left the item disabled
+/// after the review page loaded.
+private struct VoiceCommandsMenuItem: View {
+    @ObservedObject var session: PageSession
+    let onboarded: Bool
+
+    var body: some View {
+        Button("Voice Commands") { session.sendAction("helpButtonTapped") }
+            .keyboardShortcut("/")
+            .disabled(!onboarded || !session.helpButtonVisible)
+    }
+}
+#endif
+
 struct RootView: View {
-    @StateObject private var app = AppModel()
+    @ObservedObject var app: AppModel
 
     var body: some View {
         Group {
@@ -30,9 +87,15 @@ struct RootView: View {
                 OnboardingView(app: app)
             }
         }
+        #if os(macOS)
+        .frame(minWidth: 720, minHeight: 560)
+        #endif
         .animation(.easeInOut(duration: 0.3), value: app.onboarded)
             .sheet(isPresented: $app.showSettings) {
                 SettingsView(app: app)
+                    #if os(macOS)
+                    .frame(minWidth: 560, idealWidth: 620, minHeight: 640, idealHeight: 760)
+                    #endif
             }
             .alert(app.alert?.message ?? "", isPresented: Binding(
                 get: { app.alert != nil },
@@ -59,28 +122,29 @@ struct RootView: View {
 struct SessionScreen: View {
     @ObservedObject var app: AppModel
     let session: PageSession
-    @State private var choosingLanguage = false
 
     var body: some View {
         NavigationStack {
-            SessionContent(session: session, choosingLanguage: $choosingLanguage)
+            SessionContent(session: session, choosingLanguage: $app.showLanguageSheet)
                 .toolbar { toolbar }
-                .navigationBarTitleDisplayMode(.inline)
+                .inlineNavigationTitle()
+                #if os(iOS)
                 .toolbarBackground(.visible, for: .navigationBar)
+                #endif
         }
     }
 
     @ToolbarContentBuilder
     private var toolbar: some ToolbarContent {
-        ToolbarItem(placement: .topBarLeading) {
+        ToolbarItem(placement: .barLeading) {
             // Keyed by page, so switching site starts their state afresh.
             IndicatorPillItem(session: session).id(ObjectIdentifier(session))
         }
         ToolbarItem(placement: .principal) {
             SiteMenu(app: app)
         }
-        ToolbarItem(placement: .topBarTrailing) {
-            SessionMenuItem(session: session, chooseLanguage: { choosingLanguage = true },
+        ToolbarItem(placement: .barTrailing) {
+            SessionMenuItem(session: session, chooseLanguage: { app.showLanguageSheet = true },
                             openSettings: { app.showSettings = true })
                 .id(ObjectIdentifier(session))
         }
@@ -272,6 +336,7 @@ enum SpeechLanguage {
 /// Hosts whichever session's web view is current. Only that one is in the
 /// window; the others stay alive off-screen, where WebKit marks their
 /// documents hidden and app.ts stops listening on its own.
+#if os(iOS)
 struct WebContainer: UIViewRepresentable {
     let session: PageSession
 
@@ -282,19 +347,42 @@ struct WebContainer: UIViewRepresentable {
     }
 
     func updateUIView(_ container: UIView, context: Context) {
-        let webView = session.webView
-        guard webView.superview !== container else { return }
-        container.subviews.forEach { $0.removeFromSuperview() }
-        webView.translatesAutoresizingMaskIntoConstraints = false
-        container.addSubview(webView)
-        NSLayoutConstraint.activate([
-            webView.leadingAnchor.constraint(equalTo: container.leadingAnchor),
-            webView.trailingAnchor.constraint(equalTo: container.trailingAnchor),
-            webView.topAnchor.constraint(equalTo: container.topAnchor),
-            webView.bottomAnchor.constraint(equalTo: container.bottomAnchor),
-        ])
-        session.didBecomeVisible()
+        attach(session, to: container)
     }
+}
+#else
+struct WebContainer: NSViewRepresentable {
+    let session: PageSession
+
+    func makeNSView(context: Context) -> NSView {
+        let container = NSView()
+        container.wantsLayer = true
+        container.layer?.backgroundColor = NSColor.windowBackgroundColor.cgColor
+        return container
+    }
+
+    func updateNSView(_ container: NSView, context: Context) {
+        attach(session, to: container)
+    }
+}
+#endif
+
+/// Puts the session's web view in the container, edge to edge, replacing
+/// whichever site's page was there before.
+@MainActor
+private func attach(_ session: PageSession, to container: PlatformView) {
+    let webView = session.webView
+    guard webView.superview !== container else { return }
+    container.subviews.forEach { $0.removeFromSuperview() }
+    webView.translatesAutoresizingMaskIntoConstraints = false
+    container.addSubview(webView)
+    NSLayoutConstraint.activate([
+        webView.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+        webView.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+        webView.topAnchor.constraint(equalTo: container.topAnchor),
+        webView.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+    ])
+    session.didBecomeVisible()
 }
 
 /// Developer: engine, locale and what was last heard, plus a TTS "Say"
@@ -313,7 +401,7 @@ struct DebugBar: View {
             Spacer()
             if showSayButton {
                 TextField("say", text: $sayText).font(.caption).frame(width: 90).textFieldStyle(.roundedBorder)
-                    .autocorrectionDisabled().textInputAutocapitalization(.never)
+                    .plainTextEntry()
                 Button("Say") { Task { await speech.injectSpeech(sayText) } }.font(.caption)
             }
         }

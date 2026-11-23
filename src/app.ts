@@ -1,7 +1,7 @@
 import { isJapanese } from 'wanakana';
 import { checkAnswer, trimTrailingPunctuation } from './flashcards';
 import type { CheckResult } from './flashcards';
-import { createRecognition, setLanguage } from './recognition';
+import { createRecognition, setLanguage, webSpeechOptions } from './recognition';
 import { answerHints, getNativeSpeechHandler } from './native_recognition';
 import * as wanikani from './wanikani';
 import * as bunpro from './bunpro';
@@ -794,7 +794,13 @@ async function startListener(dictionary: Dictionary): Promise<void> {
     if (state) setIdleIndicatorState(state);
   }
 
-  const recognitionOrNull = createRecognition(() => site.getLanguage(), handleRecognitionResult, handleRecognitionError);
+  const recognitionOrNull = createRecognition(
+    () => site.getLanguage(),
+    handleRecognitionResult,
+    handleRecognitionError,
+    // Read on every session start, so a settings change applies on the next one.
+    () => webSpeechOptions(getSettings()),
+  );
 
   if (!recognitionOrNull) {
     // No Web Speech support (e.g. Firefox) — nothing below this point can
@@ -806,7 +812,8 @@ async function startListener(dictionary: Dictionary): Promise<void> {
   // Closures below (and handleRecognitionResult above) capture this non-null
   // binding; the callback only ever fires once a recognizer exists.
   const recognition = recognitionOrNull;
-  // Engines that support biasing (the native host's) hear about each card's
+  // Engines that support biasing (the native host's, or Chrome on-device with
+  // contextual hints on) hear about each card's
   // accepted answers; this seeds the first card before listening starts.
   recognition.setHints?.(answerHints(context));
 

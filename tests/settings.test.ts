@@ -1,4 +1,5 @@
-import { defaults, initSettings, updateSettings, getSettings, isTurboOn, encodeConfig, decodeConfig } from '../src/settings';
+import { defaults, initSettings, updateSettings, getSettings, isTurboOn, encodeConfig, decodeConfig, isSiteEnabled,
+  SITE_SETTING_KEYS, siteSettingKey, splitSiteSettingKey, applySiteOverrides, relaySiteChanges } from '../src/settings';
 
 // Reset module state between tests by re-calling initSettings with defaults.
 beforeEach(() => {
@@ -108,5 +109,68 @@ describe('config encoding', () => {
     expect(decodeConfig(undefined)).toBeNull();
     expect(decodeConfig('')).toBeNull();
     expect(decodeConfig('not json {')).toBeNull();
+  });
+});
+
+describe('isSiteEnabled', () => {
+  test('both sites are on by default', () => {
+    expect(isSiteEnabled(defaults, 'wanikani')).toBe(true);
+    expect(isSiteEnabled(defaults, 'bunpro')).toBe(true);
+  });
+
+  test('each site follows its own toggle', () => {
+    const settings = { site_wanikani: false, site_bunpro: true };
+    expect(isSiteEnabled(settings, 'wanikani')).toBe(false);
+    expect(isSiteEnabled(settings, 'bunpro')).toBe(true);
+  });
+});
+
+describe('recognizer defaults', () => {
+  test('keep the existing Web Speech behaviour until turned on', () => {
+    expect(defaults.recognizer).toBe('cloud');
+    expect(defaults.noise_reduction).toBe(false);
+    expect(defaults.contextual_hints).toBe(true);
+  });
+});
+
+describe('per-app settings', () => {
+  test('keys are prefixed with the site', () => {
+    expect(siteSettingKey('turbo', 'bunpro')).toBe('bunpro:turbo');
+    expect(splitSiteSettingKey('wanikani:transcript')).toEqual({ site: 'wanikani', base: 'transcript' });
+    expect(splitSiteSettingKey('turbo')).toBeNull();
+    expect(splitSiteSettingKey('other:turbo')).toBeNull();
+  });
+
+  test('matches the iOS app\'s list of per-app keys', () => {
+    expect([...SITE_SETTING_KEYS].sort()).toEqual([
+      'ippatsu_meaning', 'ippatsu_reading', 'show_help_button', 'speed_show_info',
+      'strict_kanji_readings', 'transcript', 'transcript_position', 'transcript_theme', 'turbo',
+    ]);
+  });
+
+  test('applySiteOverrides lays the site\'s values over the plain keys and drops prefixed keys', () => {
+    const stored = { turbo: true, debug: true, 'bunpro:turbo': false, 'wanikani:transcript': false };
+    expect(applySiteOverrides(stored, 'bunpro')).toEqual({ turbo: false, debug: true });
+    expect(applySiteOverrides(stored, 'wanikani')).toEqual({ turbo: true, debug: true, transcript: false });
+  });
+
+  test('relaySiteChanges turns own overrides into plain-key changes and drops other sites\'', () => {
+    const stored = { turbo: true, 'bunpro:turbo': false };
+    expect(relaySiteChanges({ 'bunpro:turbo': { newValue: false } }, stored, 'bunpro'))
+      .toEqual({ turbo: { newValue: false } });
+    expect(relaySiteChanges({ 'bunpro:turbo': { newValue: false } }, stored, 'wanikani')).toEqual({});
+  });
+
+  test('relaySiteChanges ignores a plain key the site overrides, but passes it on otherwise', () => {
+    const stored = { turbo: false, 'bunpro:turbo': true };
+    expect(relaySiteChanges({ turbo: { newValue: false } }, stored, 'bunpro')).toEqual({});
+    expect(relaySiteChanges({ turbo: { newValue: false } }, stored, 'wanikani')).toEqual({ turbo: { newValue: false } });
+    expect(relaySiteChanges({ debug: { newValue: true } }, stored, 'bunpro')).toEqual({ debug: { newValue: true } });
+  });
+
+  test('a removed override falls back to the plain setting', () => {
+    const stored = { transcript_position: 'top' };
+    expect(relaySiteChanges({ 'bunpro:transcript_position': { oldValue: 'bottom' } }, stored, 'bunpro'))
+      .toEqual({ transcript_position: { newValue: 'top' } });
   });
 });
