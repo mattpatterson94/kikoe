@@ -48,9 +48,7 @@ struct KikoeCommands: Commands {
             Button("Listen In…") { app.showLanguageSheet = true }
                 .keyboardShortcut("l", modifiers: [.command, .shift])
                 .disabled(!app.onboarded)
-            Button("Voice Commands") { app.current.sendAction("helpButtonTapped") }
-                .keyboardShortcut("/")
-                .disabled(!app.onboarded || !app.current.helpButtonVisible)
+            VoiceCommandsMenuItem(session: app.current, onboarded: app.onboarded)
             if app.enabledSites.count > 1 {
                 Divider()
                 ForEach(Array(app.enabledSites.enumerated()), id: \.element) { index, site in
@@ -59,6 +57,20 @@ struct KikoeCommands: Commands {
                 }
             }
         }
+    }
+}
+
+/// Observes the current page itself: AppModel doesn't republish a session's
+/// changes, so reading helpButtonVisible through it left the item disabled
+/// after the review page loaded.
+private struct VoiceCommandsMenuItem: View {
+    @ObservedObject var session: PageSession
+    let onboarded: Bool
+
+    var body: some View {
+        Button("Voice Commands") { session.sendAction("helpButtonTapped") }
+            .keyboardShortcut("/")
+            .disabled(!onboarded || !session.helpButtonVisible)
     }
 }
 #endif
