@@ -42,6 +42,24 @@ const MIN_HEALTHY_SESSION_MS = 1000;
 const LIVENESS_TIMEOUT_MS = 45000;
 const LIVENESS_CHECK_INTERVAL_MS = 5000;
 
+// Chrome finalizes a result once its endpointer hears the speaker stop, and a
+// room that never goes quiet (a fan, music, a TV) can keep that from ever
+// happening: the words show live but never arrive as a final, and voice
+// commands only run from finals. A live result that has stood unchanged this
+// long is sent as final instead, and the session is cut so the engine's late
+// final for the same audio is dropped. It sits above Chrome's own endpoint
+// delay (about a second), so it only steps in where Chrome didn't. The iOS
+// app does the same for its English recognizer.
+const STALLED_INTERIM_MS = 1200;
+
+// True for a transcript with no letters or digits in it — what an engine
+// emits when it finalizes a stretch of noise as "." or "?". Such a result
+// can't be an answer or a command, and passing it on would only reach the
+// app as an empty final.
+export function isPunctuationOnly(text: string): boolean {
+  return !/[\p{L}\p{N}]/u.test(text);
+}
+
 // How hard a contextual hint pulls the on-device model toward it. The spec
 // allows 0–10; a moderate boost lets a hinted reading win a near tie without
 // drowning out an answer that really was different.
@@ -270,18 +288,90 @@ export function createRecognition(
     lastActivityAt = Date.now();
   };
 
+  // ── live results not yet finalized ──────────────────────────────────────
+  // The latest interim text per result index in this session. Chrome splits
+  // a live utterance across indices (a stable head and an unstable tail) and
+  // finalizes it into the lowest of them, so the live text for a final at
+  // index i is everything recorded from i onward, joined.
+  const liveText = new Map<number, string>();
+  let stalledTimer: ReturnType<typeof setTimeout> | undefined;
+  let stalledText = '';
+  // A session whose live result was sent as final: anything it still emits
+  // is the late final for that same audio.
+  let cutSession = -1;
+
+  function liveFrom(index: number): string {
+    return [...liveText.entries()]
+      .filter(([i]) => i >= index)
+      .sort(([a], [b]) => a - b)
+      .map(([, text]) => text)
+      .join('')
+      .trim();
+  }
+
+  function clearLive(): void {
+    liveText.clear();
+    clearTimeout(stalledTimer);
+    stalledTimer = undefined;
+    stalledText = '';
+  }
+
+  // (Re)arms the stall timer for whatever is live now. Only a change of text
+  // pushes the deadline out: Chrome re-emits an unchanged interim whenever it
+  // hears sound, which is exactly what a noisy room produces.
+  function watchForStall(): void {
+    const text = liveFrom(0);
+    if (!text) {
+      clearLive();
+      return;
+    }
+    if (text === stalledText && stalledTimer !== undefined) return;
+    stalledText = text;
+    clearTimeout(stalledTimer);
+    const session = sessionId;
+    stalledTimer = setTimeout(() => {
+      stalledTimer = undefined;
+      if (session !== sessionId || !liveText.size || !shouldAutoRestart) return;
+      const first = Math.min(...liveText.keys());
+      const live = liveFrom(first);
+      clearLive();
+      cutSession = session;
+      callback([live], true, `${session}:${first}`);
+      safeAbort();
+    }, STALLED_INTERIM_MS);
+  }
+
   recognition.onresult = (event) => {
     unhealthyRestarts = 0;
     sawErrorThisSession = false;
     lastActivityAt = Date.now();
+    if (sessionId === cutSession) return;
 
     for (let i = event.resultIndex; i < event.results.length; ++i) {
       const result = event.results[i];
       // Interim results are only ever given one alternative by the engine;
       // final results may carry up to maxAlternatives, ranked by confidence.
-      const transcripts = Array.from(result, alt => alt.transcript.trim());
+      const transcripts = Array.from(result, alt => alt.transcript.trim())
+        .filter(t => !isPunctuationOnly(t));
+      if (result.isFinal) {
+        // A final can come back worse than the live text it replaces — a
+        // command heard clearly live, then finalized as a different word.
+        // Offer the live text as the last alternative, so it is only used
+        // when none of the engine's own picks match.
+        const live = liveFrom(i);
+        for (const index of [...liveText.keys()]) if (index >= i) liveText.delete(index);
+        if (live && !isPunctuationOnly(live) && !transcripts.includes(live)) transcripts.push(live);
+      } else {
+        // An interim that is only noise is left out of the live text, but a
+        // real one still counts as the speaker still being mid-result.
+        const text = result[0]?.transcript ?? '';
+        if (isPunctuationOnly(text)) liveText.delete(i);
+        else liveText.set(i, text);
+        if (!transcripts.length) continue;
+      }
       callback(transcripts, result.isFinal, `${sessionId}:${i}`);
     }
+    watchForStall();
   };
 
   recognition.onerror = (event) => {
@@ -327,6 +417,8 @@ export function createRecognition(
     // A session is unhealthy if it reported an error or barely ran at all.
     // Anything else — including the engine's ordinary idle timeout during
     // silence — resets the streak and restarts without delay.
+    // Whatever was live belonged to the session that just ended.
+    clearLive();
     const tooShort = Date.now() - sessionStartedAt < MIN_HEALTHY_SESSION_MS;
     if (sawErrorThisSession || tooShort) unhealthyRestarts++;
     else unhealthyRestarts = 0;
@@ -368,6 +460,7 @@ export function createRecognition(
 
   recognition.pause = () => {
     shouldAutoRestart = false;
+    clearLive();
     safeStop();
     releaseNoiseTrack();
   };
@@ -380,6 +473,7 @@ export function createRecognition(
 
   recognition.restart = () => {
     shouldAutoRestart = true;
+    clearLive();
     safeAbort();
   };
 

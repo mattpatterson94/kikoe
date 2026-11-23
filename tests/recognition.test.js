@@ -217,6 +217,167 @@ describe('createRecognition', () => {
     }
   });
 
+  test('drops punctuation-only alternatives', () => {
+    const callback = vi.fn();
+    createRecognition('en-US', callback);
+    const native = recognitionInstances[0];
+
+    native.onresult({ resultIndex: 0, results: [makeResult(['.', 'next', '?'], true)] });
+
+    expect(callback).toHaveBeenCalledWith(['next'], true, '0:0');
+  });
+
+  test('a punctuation-only final still reaches the app as an empty final', () => {
+    const callback = vi.fn();
+    createRecognition('en-US', callback);
+    const native = recognitionInstances[0];
+
+    native.onresult({ resultIndex: 0, results: [makeResult(['.'], true)] });
+
+    expect(callback).toHaveBeenCalledWith([], true, '0:0');
+  });
+
+  test('a punctuation-only interim is not passed on', () => {
+    const callback = vi.fn();
+    createRecognition('en-US', callback);
+    const native = recognitionInstances[0];
+
+    native.onresult({ resultIndex: 0, results: [makeResult(['.'], false)] });
+
+    expect(callback).not.toHaveBeenCalled();
+  });
+
+  // A final that lost the word the live result had ("incorrect" live, "to"
+  // final) still offers the live text, ranked last.
+  test('appends the live text to a final that lost it', () => {
+    const callback = vi.fn();
+    createRecognition('en-US', callback);
+    const native = recognitionInstances[0];
+
+    native.onresult({ resultIndex: 0, results: [makeResult(['incorrect'], false)] });
+    native.onresult({ resultIndex: 0, results: [makeResult(['to', 'two'], true)] });
+
+    expect(callback).toHaveBeenLastCalledWith(['to', 'two', 'incorrect'], true, '0:0');
+  });
+
+  test('does not repeat live text the final already has', () => {
+    const callback = vi.fn();
+    createRecognition('en-US', callback);
+    const native = recognitionInstances[0];
+
+    native.onresult({ resultIndex: 0, results: [makeResult(['next'], false)] });
+    native.onresult({ resultIndex: 0, results: [makeResult(['next'], true)] });
+
+    expect(callback).toHaveBeenLastCalledWith(['next'], true, '0:0');
+  });
+
+  // Chrome splits a live utterance into a stable head and an unstable tail,
+  // then finalizes the whole of it at the head's index.
+  test('joins a split live result when offering it to the final', () => {
+    const callback = vi.fn();
+    createRecognition('en-US', callback);
+    const native = recognitionInstances[0];
+
+    native.onresult({
+      resultIndex: 0,
+      results: [makeResult(['to'], false), makeResult([' eat'], false)],
+    });
+    native.onresult({ resultIndex: 0, results: [makeResult(['two'], true)] });
+
+    expect(callback).toHaveBeenLastCalledWith(['two', 'to eat'], true, '0:0');
+  });
+
+  describe('a live result that never finalizes', () => {
+    beforeEach(() => vi.useFakeTimers());
+    afterEach(() => vi.useRealTimers());
+
+    test('is sent as final once it has stood still, and the session is cut', () => {
+      const callback = vi.fn();
+      const recognition = createRecognition('en-US', callback);
+      const native = recognitionInstances[0];
+      recognition.start();
+
+      native.onresult({ resultIndex: 0, results: [makeResult(['incorrect'], false)] });
+      vi.advanceTimersByTime(1199);
+      expect(callback).toHaveBeenCalledTimes(1);
+
+      vi.advanceTimersByTime(1);
+      expect(callback).toHaveBeenLastCalledWith(['incorrect'], true, '1:0');
+      expect(native.nativeAbort).toHaveBeenCalledTimes(1);
+    });
+
+    test('an unchanged re-emission does not push the deadline out', () => {
+      const callback = vi.fn();
+      const recognition = createRecognition('en-US', callback);
+      const native = recognitionInstances[0];
+      recognition.start();
+
+      native.onresult({ resultIndex: 0, results: [makeResult(['next'], false)] });
+      vi.advanceTimersByTime(800);
+      native.onresult({ resultIndex: 0, results: [makeResult(['next'], false)] });
+      vi.advanceTimersByTime(400);
+
+      expect(callback).toHaveBeenLastCalledWith(['next'], true, '1:0');
+    });
+
+    test('changing text restarts the wait', () => {
+      const callback = vi.fn();
+      const recognition = createRecognition('en-US', callback);
+      const native = recognitionInstances[0];
+      recognition.start();
+
+      native.onresult({ resultIndex: 0, results: [makeResult(['to'], false)] });
+      vi.advanceTimersByTime(800);
+      native.onresult({ resultIndex: 0, results: [makeResult(['to eat'], false)] });
+      vi.advanceTimersByTime(800);
+      expect(callback.mock.calls.every(([, isFinal]) => !isFinal)).toBe(true);
+
+      vi.advanceTimersByTime(400);
+      expect(callback).toHaveBeenLastCalledWith(['to eat'], true, '1:0');
+    });
+
+    test('drops the late final of a cut session', () => {
+      const callback = vi.fn();
+      const recognition = createRecognition('en-US', callback);
+      const native = recognitionInstances[0];
+      recognition.start();
+
+      native.onresult({ resultIndex: 0, results: [makeResult(['incorrect'], false)] });
+      vi.advanceTimersByTime(1200);
+      native.onresult({ resultIndex: 0, results: [makeResult(['incorrect'], true)] });
+
+      expect(callback.mock.calls.filter(([, isFinal]) => isFinal)).toHaveLength(1);
+    });
+
+    test('a real final in time cancels it', () => {
+      const callback = vi.fn();
+      const recognition = createRecognition('en-US', callback);
+      const native = recognitionInstances[0];
+      recognition.start();
+
+      native.onresult({ resultIndex: 0, results: [makeResult(['next'], false)] });
+      vi.advanceTimersByTime(900);
+      native.onresult({ resultIndex: 0, results: [makeResult(['next'], true)] });
+      vi.advanceTimersByTime(5000);
+
+      expect(callback.mock.calls.filter(([, isFinal]) => isFinal)).toHaveLength(1);
+      expect(native.nativeAbort).not.toHaveBeenCalled();
+    });
+
+    test('pausing cancels it', () => {
+      const callback = vi.fn();
+      const recognition = createRecognition('en-US', callback);
+      const native = recognitionInstances[0];
+      recognition.start();
+
+      native.onresult({ resultIndex: 0, results: [makeResult(['next'], false)] });
+      recognition.pause();
+      vi.advanceTimersByTime(5000);
+
+      expect(callback.mock.calls.filter(([, isFinal]) => isFinal)).toHaveLength(0);
+    });
+  });
+
   // Regression: createRecognition returned null when webkitSpeechRecognition
   // was missing, but nothing checked for it — callers would crash calling
   // .restart()/.pause()/.resume() on null. See setLanguage's null-safety below.

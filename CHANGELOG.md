@@ -58,6 +58,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Extension: the answering fixes from the iOS app now apply to Web Speech
+  too. A live result that stands unchanged for 1.2 s without a final (a
+  noisy room can stop Chrome from finalizing) is sent as final and the
+  session is cut, so commands like "incorrect" no longer show live and then
+  do nothing. A final that loses the word the live result had still offers
+  the live text as its last alternative, and punctuation-only results are
+  dropped.
 - iOS app: English answers with SpeechTranscriber no longer stall or miss.
   Its English finals often lose the word the live result had right ("Water."
   finalizes as "." or "to."), so a correct answer either never finished or
