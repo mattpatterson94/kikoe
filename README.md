@@ -55,7 +55,7 @@ npm run pack:safari # safari only → dist/kikoe-safari-web-extension.zip
 ```bash
 npm run publish:chrome             # upload a draft to the Chrome Web Store
 npm run publish:chrome -- --publish # upload and submit for review
-npm run safari:app -- <build>      # build the Safari apps for Transporter
+npm run safari:app -- <build>      # build the iOS and Mac (with Safari extension) apps
 ```
 
 `publish:chrome` uploads a draft by default — submitting for review stays a
@@ -78,15 +78,9 @@ for how to create them. Safari App Store builds are covered in
 ### Safari Web Extension
 
 1. Run `npm run build`.
-2. Convert the generated `safari/` extension with Apple's Safari Web Extension converter:
-
-   ```bash
-   xcrun safari-web-extension-converter safari/
-   ```
-
-3. Open the generated Xcode project, choose the iOS/iPadOS or macOS containing app target, and run it on a device or simulator.
-4. Enable the extension in Safari and grant site access for WaniKani and BunPro.
-5. Proceed to [First-time setup](#first-time-setup).
+2. Open `ios/Kikoe.xcodeproj`, choose the `KikoeMac` scheme (it embeds the extension) and run it.
+3. Enable the extension in Safari and grant site access for WaniKani and BunPro.
+4. Proceed to [First-time setup](#first-time-setup).
 
 See [docs/safari.md](docs/safari.md) for the current spike notes and real-device validation checklist.
 
