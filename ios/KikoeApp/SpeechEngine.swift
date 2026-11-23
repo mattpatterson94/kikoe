@@ -87,6 +87,16 @@ final class MicCapture {
     /// background noise and cancels echo, so room sound and the page's own
     /// reading audio reach the recognizer less. Applied on the next start.
     var voiceProcessing = true
+    /// On the Mac, voice processing on this input-only engine faults on
+    /// every render cycle ("failed to run downlink DSP") and the recognizer
+    /// gets nothing it can transcribe, even with the output node wired up.
+    /// Mac microphones are usually in a quieter room anyway, so it stays off
+    /// there and Settings hides the toggle.
+    #if os(iOS)
+    static let supportsVoiceProcessing = true
+    #else
+    static let supportsVoiceProcessing = false
+    #endif
     /// Live input level for the listening bar's meter.
     let level = MicLevel()
 
@@ -105,9 +115,10 @@ final class MicCapture {
         try session.setActive(true)
         #endif
         let input = audioEngine.inputNode
-        if input.isVoiceProcessingEnabled != voiceProcessing {
-            do { try input.setVoiceProcessingEnabled(voiceProcessing) } catch {
-                NSLog("[kikoe] voice processing \(voiceProcessing) failed: \(error)")
+        let wantVoiceProcessing = voiceProcessing && Self.supportsVoiceProcessing
+        if input.isVoiceProcessingEnabled != wantVoiceProcessing {
+            do { try input.setVoiceProcessingEnabled(wantVoiceProcessing) } catch {
+                NSLog("[kikoe] voice processing \(wantVoiceProcessing) failed: \(error)")
             }
         }
         if input.isVoiceProcessingEnabled {

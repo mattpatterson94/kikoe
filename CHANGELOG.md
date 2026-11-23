@@ -14,6 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   windows, Apple's on-device transcribers (SpeechTranscriber, SpeechAnalyzer,
   SFSpeechRecognizer), the native overlays, and a Review menu with keyboard
   shortcuts (⌘R reload, ⇧⌘L Listen In, ⌘/ voice commands, ⌘1/⌘2 switch app).
+  Background noise reduction stays iOS-only: Apple's voice processing
+  stopped recognition working on the Mac.
 - The extension options page now matches the app's Settings: general
   settings, an Apps section that turns WaniKani or BunPro off, and a card per
   app. Turbo, show item info, strict kanji readings, Ippatsu and the live

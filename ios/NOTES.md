@@ -188,6 +188,11 @@ measured: hours of real reviews on a device. That still needs doing.
   echo cancellation, so the page's reading audio isn't heard as an answer)
   with minimum ducking. Settings → General → Reduce background noise, on
   by default; toggling restarts the mic. Not yet compared on a device.
+  iOS only: on the Mac, voice processing on our input-only engine faults
+  every render cycle ("failed to run downlink DSP") and the recognizer
+  returns nothing, even with the main mixer wired to the output node. So
+  `MicCapture.supportsVoiceProcessing` is false there and Settings hides
+  the toggle.
 - **Error noise:**
   - Server SFSpeech emits `203 Empty recognition` / `203 Retry` constantly in
     silence. These are now restarted quietly instead of being surfaced as

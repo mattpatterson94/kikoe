@@ -26,8 +26,10 @@ struct SettingsView: View {
                     Toggle(isOn: settings.bool("keep_screen_awake")) {
                         labelled("Keep screen awake while listening", "A hands-free review has no touches to reset the idle timer")
                     }
-                    Toggle(isOn: $speech.noiseReduction) {
-                        labelled("Reduce background noise", "Filter out room noise and the page's own audio, like a phone call does. Other audio plays slightly quieter while Kikoe listens")
+                    if MicCapture.supportsVoiceProcessing {
+                        Toggle(isOn: $speech.noiseReduction) {
+                            labelled("Reduce background noise", "Filter out room noise and the page's own audio, like a phone call does. Other audio plays slightly quieter while Kikoe listens")
+                        }
                     }
                     NavigationLink {
                         CorrectionsView()
