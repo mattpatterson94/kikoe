@@ -1,4 +1,3 @@
-import CoreAudio
 import Accelerate
 import AVFoundation
 import Speech
@@ -88,6 +87,16 @@ final class MicCapture {
     /// background noise and cancels echo, so room sound and the page's own
     /// reading audio reach the recognizer less. Applied on the next start.
     var voiceProcessing = true
+    /// On the Mac, voice processing on this input-only engine faults on
+    /// every render cycle ("failed to run downlink DSP") and the recognizer
+    /// gets nothing it can transcribe, even with the output node wired up.
+    /// Mac microphones are usually in a quieter room anyway, so it stays off
+    /// there and Settings hides the toggle.
+    #if os(iOS)
+    static let supportsVoiceProcessing = true
+    #else
+    static let supportsVoiceProcessing = false
+    #endif
     /// Live input level for the listening bar's meter.
     let level = MicLevel()
 
@@ -96,19 +105,20 @@ final class MicCapture {
     func start(consumer: @escaping MicConsumer) throws {
         self.consumer.set(consumer)
         if isRunning { return }
-        #if !targetEnvironment(macCatalyst)
+        #if os(iOS)
         let session = AVAudioSession.sharedInstance()
         // playAndRecord so WaniKani's reading audio still plays while we
         // listen; mixWithOthers keeps the webview's own media from being
-        // interrupted. macOS has no audio session; it mixes by default.
+        // interrupted. macOS has no audio session to configure.
         try session.setCategory(.playAndRecord, mode: .default,
                                 options: [.defaultToSpeaker, .allowBluetoothHFP, .mixWithOthers])
         try session.setActive(true)
         #endif
         let input = audioEngine.inputNode
-        if input.isVoiceProcessingEnabled != voiceProcessing {
-            do { try input.setVoiceProcessingEnabled(voiceProcessing) } catch {
-                NSLog("[kikoe] voice processing \(voiceProcessing) failed: \(error)")
+        let wantVoiceProcessing = voiceProcessing && Self.supportsVoiceProcessing
+        if input.isVoiceProcessingEnabled != wantVoiceProcessing {
+            do { try input.setVoiceProcessingEnabled(wantVoiceProcessing) } catch {
+                NSLog("[kikoe] voice processing \(wantVoiceProcessing) failed: \(error)")
             }
         }
         if input.isVoiceProcessingEnabled {
@@ -144,7 +154,7 @@ final class MicCapture {
         guard isRunning else { return }
         audioEngine.inputNode.removeTap(onBus: 0)
         audioEngine.stop()
-        #if !targetEnvironment(macCatalyst)
+        #if os(iOS)
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
         #endif
         isRunning = false

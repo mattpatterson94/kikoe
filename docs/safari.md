@@ -10,65 +10,44 @@ npm run build
 
 The build assembles the unpacked extension in `safari/`. On macOS that folder
 ships inside the native Kikoe app: `ios/Kikoe.xcodeproj` has a
-`KikoeSafariExtension` target (an appex) whose build phase
-(`ios/scripts/copy-safari-extension.sh`) copies `safari/` into its resources,
-and the Mac Catalyst build of the `Kikoe` target embeds it. There is no
-converter step any more, and nothing generated is committed. To try it, run
-`npm run build`, open `ios/Kikoe.xcodeproj`, pick the **My Mac (Mac Catalyst)**
-destination and run, then turn Kikoe on in Safari > Settings > Extensions.
+`KikoeSafariExtension` target (an appex, `com.mattdoesdev.kikoe.Extension`)
+whose build phase (`ios/scripts/copy-safari-extension.sh`) copies `safari/` into
+its resources, and the `KikoeMac` target embeds it. There is no converter step
+and nothing generated is committed. To try it, run `npm run build`, build and
+run the `KikoeMac` scheme, then turn Kikoe on in Safari > Settings >
+Extensions.
 
 ## App Store Builds
 
-For an actual App Store submission use the script, which builds the web bundles,
-syncs the version, and archives and exports both platforms:
-
 ```bash
-npm run safari:app -- <build-number>
+npm run safari:app -- <build-number> [--upload]
 ```
 
-The marketing version comes from `package.json`. Output lands in
-`dist/safari-app/ios/Kikoe.ipa` and `dist/safari-app/macos/Kikoe.pkg`, ready to
-drag into Transporter.
+runs `ios/scripts/build.sh` (iOS/iPadOS) and `ios/scripts/build-mac.sh` (macOS,
+including the Safari extension) with the same build number. Without `--upload`
+the exports land in `ios/build/export` (.ipa) and `ios/build/export-mac` (.pkg),
+ready for Transporter. The marketing version comes from `package.json`.
 
-The iOS and macOS apps are the same project and bundle identifier
-(`com.mattdoesdev.kikoe`; the extension is `com.mattdoesdev.kikoe.Extension`),
-so the Mac app is a universal purchase with the iPhone/iPad one. The macOS app
-is a Mac Catalyst build: the native SwiftUI reviewer (see `ios/NOTES.md`) plus
-the Safari extension. The App Sandbox, microphone and outgoing-network
-entitlements live in `ios/Config/Kikoe.entitlements` (macOS only), and
-`LSApplicationCategoryType` / `ITSAppUsesNonExemptEncryption` are build
-settings in the project, so no `plutil` patching is needed. Kikoe only speaks
-HTTPS to the WaniKani API through OS frameworks, which is exempt from export
-compliance.
+Both apps share the bundle id `com.mattdoesdev.kikoe`, so the Mac app is a
+universal purchase with the iPhone/iPad one. Entitlements (App Sandbox,
+microphone, outgoing network) are in `ios/Config/KikoeMac.entitlements`, and
+`LSApplicationCategoryType` / `ITSAppUsesNonExemptEncryption` are build settings
+in the project. The extension is sandboxed too
+(`ios/Config/KikoeSafariExtension.entitlements`). Kikoe only speaks HTTPS to the
+WaniKani API through OS frameworks, which is exempt from export compliance.
 
-The build number is a floor rather than an exact value: Xcode's export step asks
-App Store Connect whether that number is already taken and increments past it if
-so. The export prints what each artifact actually got — trust that over what you
-passed in.
+Build numbers are shared across iOS and macOS, not tracked per platform: a
+macOS package numbered below an already-uploaded iOS build is rejected as a 409.
+Pass a build number above the highest one uploaded for *either* platform.
 
-Build numbers are shared across iOS and macOS, not tracked per platform. Both
-apps ship under one bundle identifier, so a macOS package numbered below an
-already-uploaded iOS build is rejected as a 409 even though no macOS build ever
-used that number. Xcode's own auto-increment doesn't account for this and will
-happily export a macOS build that App Store Connect then refuses, so pass a
-build number above the highest one uploaded for *either* platform.
+Two certificates are required in the login keychain (Xcode > Settings >
+Accounts > Manage Certificates): **Apple Distribution** and **Mac Installer
+Distribution** (for the macOS `.pkg`).
 
-Two certificates are required in the login keychain, both created from Xcode >
-Settings > Accounts > Manage Certificates: **Apple Distribution** (signs both
-apps) and **Mac Installer Distribution** (produces the macOS `.pkg`).
-
-To retry just the signing and packaging after fixing a certificate, skip
-straight to the export — the archives are already built:
-
-```bash
-npm run safari:app:export
-```
-
-On iPhone and iPad the Safari extension is not shipped; the native app replaces
-it. On the Mac the app does not yet have a button that opens Safari's Extensions
-pane (the old converter page had one via
-`SFSafariApplication.showPreferencesForExtension`); users enable Kikoe in
-Safari > Settings > Extensions themselves.
+iPhone and iPad no longer ship the Safari extension; the native app replaces it.
+The Mac app has no button that opens Safari's Extensions pane (the old converter
+page had one via `SFSafariApplication.showPreferencesForExtension`), so users
+enable Kikoe in Safari > Settings > Extensions themselves.
 
 ## What This Reuses
 

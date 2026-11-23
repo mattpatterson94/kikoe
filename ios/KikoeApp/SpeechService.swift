@@ -1,5 +1,4 @@
 import AVFoundation
-import UIKit
 
 /// The one recognizer every page shares; there is only one microphone.
 ///
@@ -65,9 +64,6 @@ final class SpeechService: ObservableObject {
     @Published private(set) var runningKind: EngineKind
     private weak var owner: PageSession?
     private var permissionsGranted = false
-    #if targetEnvironment(macCatalyst)
-    private var awakeActivity: NSObjectProtocol?
-    #endif
     private var pageHints: [String] = []
 
     /// Automatic on iOS 26 (see automaticUsesDictation for what it picks).
@@ -222,20 +218,7 @@ final class SpeechService: ObservableObject {
     /// API and honours the same keep_screen_awake setting.
     func updateIdleTimer() {
         let keepAwake = ExtensionStorage.value("keep_screen_awake") as? Bool ?? true
-        let hold = listening && keepAwake
-        #if targetEnvironment(macCatalyst)
-        // Catalyst ignores isIdleTimerDisabled; a process activity keeps the
-        // display (and so the review) from sleeping instead.
-        if hold, awakeActivity == nil {
-            awakeActivity = ProcessInfo.processInfo.beginActivity(
-                options: [.idleDisplaySleepDisabled, .userInitiated], reason: "Kikoe review in progress")
-        } else if !hold, let activity = awakeActivity {
-            ProcessInfo.processInfo.endActivity(activity)
-            awakeActivity = nil
-        }
-        #else
-        UIApplication.shared.isIdleTimerDisabled = hold
-        #endif
+        Platform.setKeepAwake(listening && keepAwake)
     }
 
     private func swapEngine(to kind: EngineKind, restart: Bool = true) {

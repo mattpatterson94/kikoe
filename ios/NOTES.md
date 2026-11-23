@@ -18,6 +18,29 @@ iOS app target. Architecture first, then the original spike notes.
 | Overlays | `Overlays.swift`: the JS side posts overlay state to `kikoeUI` (see `src/native_ui.ts`) and draws no DOM chips. Native: mic pill in the nav bar, a green or red icon for on/off (tap = mute/unmute); a floating transcript bubble (bottom by default, top per the transcript position setting, theme from settings) that stays up for the whole review: between answers it shows the mic state, a live input-level meter fed from the capture tap (`MicLevel`) and "Listening", or the problem that needs attention (tap = same as the pill, e.g. opens the token page). Results ("M no match ＋") show as a separate chip next to that pill rather than replacing it, and fade after 3 s (8 s with a correction offer) or as soon as new speech arrives, so it's always visible that Kikoe went back to listening. With the bubble off, a warning banner shows problem states instead. The nav bar's More menu (an `.equatable()` view of plain values, since a Menu rebuilt mid-tap by the screen's constant re-renders dropped the tap) has Reload Page, Listen In (a small sheet: Automatic / Japanese / English; overrides the recognizer locale for the current card only; cleared on the next card. The matcher still grades by card type), Voice Commands (the help sheet, when the help button setting is on) and Settings. Also a small correction sheet, "Count “M” as まい?" with Not Now / Save (dispatches `kikoe:addCorrection` in the page world, the same path the DOM `confirm()` uses), help sheet, first-run hint toast. |
 | Settings | `SettingsView.swift`: native Form mirroring `extension/options.html`, writing the same sync keys. The root holds what applies to everything (keep screen awake, noise reduction, corrections, advanced, developer) an Enabled apps page (`EnabledAppsView`, tick-to-toggle, the last one stays on) and a list of the enabled apps, WaniKani flagged with a warning while it has no token; each opens its own page (`AppSettingsView`) with Turbo, show item info, strict kanji readings, Ippatsu, the live transcript settings and the recognizer. Those are per site, stored as `<site>:<key>` (`SiteSettings.swift`), falling back to the plain key. `PageSession` hands each page its own site's values under the plain keys, on `storage.get` and in the change relay, so the web code is untouched. The token section sits on the WaniKani page: paste/reveal, live check against `api.wanikani.com/v2/user`, and "Find my token" (arms content.ts's discovery flags and opens the token page; on capture settings reopen). Corrections list with add/edit/delete. Each app page's recognizer picker is stored under `kikoe.engine.<site>`. The default on iOS 26 is Automatic (`automaticUsesDictation`): DictationTranscriber for WaniKani readings, whose single words the kana hints pin down, and SpeechTranscriber for WaniKani meanings and all of BunPro, which is better with sentence context. The analyzer engine picks the module per locale, so Automatic needs no engine swap between cards and contextual hints. Developer (off by default): debug bar, TTS "Say" button, recognition probe. |
 
+### macOS
+
+The `KikoeMac` target compiles the same `KikoeApp/` sources (shared synchronized
+group) for macOS 26 with the iOS bundle ID, `com.mattdoesdev.kikoe`
+(`Config/KikoeMac.xcconfig`; sandbox, network client and audio input in
+`Config/KikoeMac.entitlements`). It ships as the macOS platform of the Kikoe
+App Store record (universal purchase), replacing the Safari extension's Mac
+app there, so don't upload macOS builds of the Safari project any more.
+The Mac app now embeds the Safari Web Extension: the `KikoeSafariExtension`
+target (sandboxed appex, `com.mattdoesdev.kikoe.Extension`) copies `../safari/`
+into its resources via `scripts/copy-safari-extension.sh`, and `KikoeMac`
+embeds it and depends on it. `scripts/build-safari-app.sh` now just runs
+`build.sh` and `build-mac.sh`; the converter is no longer used.
+ Platform differences live in `Platform.swift`:
+privacy settings URL, app-activation notification, opening links, keep-awake
+(an IOPM display-sleep assertion on the Mac), background colours, toolbar
+placements and text-entry modifiers. Everything else is `#if os(iOS)` only
+where AppKit has no equivalent (AVAudioSession, inline media playback,
+EditButton). The Mac app adds menu commands (`KikoeCommands` in
+`KikoeApp.swift`): Settings… (⌘,), and a Review menu with Reload Page,
+Listen In, Voice Commands and site switching. Build with
+`xcodebuild -scheme KikoeMac -destination 'platform=macOS'`.
+
 Native-only preferences (engine, hints, last site, enabled apps, onboarded, developer toggles) are in
 UserDefaults under `kikoe.*`. The user-agent override from the spike is gone.
 
@@ -171,6 +194,11 @@ measured: hours of real reviews on a device. That still needs doing.
   echo cancellation, so the page's reading audio isn't heard as an answer)
   with minimum ducking. Settings → General → Reduce background noise, on
   by default; toggling restarts the mic. Not yet compared on a device.
+  iOS only: on the Mac, voice processing on our input-only engine faults
+  every render cycle ("failed to run downlink DSP") and the recognizer
+  returns nothing, even with the main mixer wired to the output node. So
+  `MicCapture.supportsVoiceProcessing` is false there and Settings hides
+  the toggle.
 - **Error noise:**
   - Server SFSpeech emits `203 Empty recognition` / `203 Retry` constantly in
     silence. These are now restarted quietly instead of being surfaced as
@@ -241,10 +269,7 @@ measured: hours of real reviews on a device. That still needs doing.
 
 - The app ships as the iOS/iPadOS version of the existing Kikoe listing:
   bundle id `com.mattdoesdev.kikoe`, the same as the Safari-extension app.
-  The macOS version is the same app built for Mac Catalyst, with the Safari
-  Web Extension embedded as an appex (`scripts/build-safari-app.sh` builds and
-  exports both platforms; see `docs/safari.md`). One bundle id, universal
-  purchase.
+  The macOS version stays the Safari extension (`scripts/build-safari-app.sh`).
   iOS and macOS builds of that bundle id share build numbers, so pick one
   above both (0.21.0 is build 102).
 - `ios/scripts/build.sh <build> --upload` builds the web bundles, syncs the
@@ -257,40 +282,7 @@ measured: hours of real reviews on a device. That still needs doing.
   recognition, native settings and overlays; guideline 4.2) and that the user
   signs in to their own WaniKani/BunPro accounts (5.2.2).
 
-## macOS (Mac Catalyst) and the embedded Safari extension
-
-- `SUPPORTS_MACCATALYST = YES` on both targets, `TARGETED_DEVICE_FAMILY = 1,2,6`,
-  macOS deployment target 14.0. Catalyst was picked over a native macOS target
-  because the SwiftUI/UIKit code (`WebContainer: UIViewRepresentable`, toolbars,
-  `UIApplication`) builds unchanged; native macOS would need AppKit twins.
-- Catalyst guards (`#if targetEnvironment(macCatalyst)`): no `AVAudioSession`
-  (macOS has none; the engine mixes by default), the keep-awake setting uses
-  `ProcessInfo.beginActivity(.idleDisplaySleepDisabled)` instead of the idle
-  timer, and `SystemSettings` points the denied-permission link at System
-  Settings.
-- Entitlements (`Config/Kikoe.entitlements`, applied only for `sdk=macosx*`):
-  App Sandbox, microphone (`device.audio-input`), outgoing network. Speech
-  recognition needs only the usage string. `LSApplicationCategoryType` and
-  `ITSAppUsesNonExemptEncryption` are the same build settings as iOS.
-- `KikoeSafariExtension` target: `com.apple.Safari.web-extension` appex,
-  bundle id `com.mattdoesdev.kikoe.Extension`, sandboxed. A build phase copies
-  `../safari/` (output of `npm run build`) into its resources. The app's
-  embed phase and target dependency are filtered to Mac Catalyst, so iOS builds
-  skip it.
-- Debug runs of the Mac app: the sandbox blocks `KIKOE_FIXTURE` paths outside
-  the container, so for fixture runs build with
-  `CODE_SIGN_ENTITLEMENTS=<a file without app-sandbox>` and launch the binary
-  directly.
-- Not yet verified: a signed, exported `.pkg` (needs the distribution
-  certificates), the extension actually loading in Safari from the signed app,
-  live microphone recognition on macOS from the sandboxed build, and a
-  Safari-extensions shortcut inside the app.
-
-## Release pipeline change (historical)
-
-The notes below were written before the Mac app moved into the project;
-`build-safari-app.sh` no longer runs the converter, `sed` or `plutil`.
-
+## Release pipeline change
 
 Today, `scripts/build-safari-app.sh`:
 
