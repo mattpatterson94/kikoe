@@ -151,9 +151,21 @@ get('findApiToken').addEventListener('click', findApiToken);
 
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area === 'sync' && changes.apiToken?.newValue) {
-    get('apiToken').value = changes.apiToken.newValue;
-    if (lastSaved) lastSaved.apiToken = changes.apiToken.newValue;
-    setTokenStatus('Token found and saved.', 'ok');
+    const stored = changes.apiToken.newValue;
+    const field = get('apiToken');
+    // The field holds an edit not yet saved when it differs from the last
+    // saved token. That edit is newer than this write (often just the echo
+    // of an autosave of an earlier keystroke), so keep it and let the save
+    // loop store it; only a field with nothing unsaved takes the new token.
+    const dirty = !!lastSaved && field.value !== (lastSaved.apiToken ?? '');
+    const found = !dirty && field.value !== stored;
+    if (lastSaved) lastSaved.apiToken = stored;
+    if (dirty && field.value !== stored) {
+      scheduleSave(0);
+    } else if (found) {
+      field.value = stored;
+      setTokenStatus('Token found and saved.', 'ok');
+    }
     refreshTokenBanner();
   }
   if (area === 'local' && changes[apiTokenDiscoveryStatusKey]?.newValue) {

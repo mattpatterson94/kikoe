@@ -300,8 +300,8 @@ export function createRecognition(
   // is the late final for that same audio.
   let cutSession = -1;
 
-  function liveFrom(index: number): string {
-    return [...liveText.entries()]
+  function liveFrom(index: number, from: Map<number, string> = liveText): string {
+    return [...from.entries()]
       .filter(([i]) => i >= index)
       .sort(([a], [b]) => a - b)
       .map(([, text]) => text)
@@ -347,6 +347,16 @@ export function createRecognition(
     lastActivityAt = Date.now();
     if (sessionId === cutSession) return;
 
+    // A final takes over the live text it replaces, including the tail of a
+    // split result that has just collapsed into it, so read that from before
+    // this update. Otherwise an index the engine no longer reports was
+    // withdrawn (['to', ' eat'] revised to ['two']), and its text must not
+    // outlive it.
+    const liveBefore = new Map(liveText);
+    for (const index of [...liveText.keys()]) {
+      if (index >= event.results.length) liveText.delete(index);
+    }
+
     for (let i = event.resultIndex; i < event.results.length; ++i) {
       const result = event.results[i];
       // Interim results are only ever given one alternative by the engine;
@@ -358,7 +368,7 @@ export function createRecognition(
         // command heard clearly live, then finalized as a different word.
         // Offer the live text as the last alternative, so it is only used
         // when none of the engine's own picks match.
-        const live = liveFrom(i);
+        const live = liveFrom(i, liveBefore);
         for (const index of [...liveText.keys()]) if (index >= i) liveText.delete(index);
         if (live && !isPunctuationOnly(live) && !transcripts.includes(live)) transcripts.push(live);
       } else {

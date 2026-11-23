@@ -336,6 +336,22 @@ describe('createRecognition', () => {
       expect(callback).toHaveBeenLastCalledWith(['to eat'], true, '1:0');
     });
 
+    test('does not send live text the engine has withdrawn', () => {
+      const callback = vi.fn();
+      const recognition = createRecognition('en-US', callback);
+      const native = recognitionInstances[0];
+      recognition.start();
+
+      native.onresult({
+        resultIndex: 0,
+        results: [makeResult(['to'], false), makeResult([' eat'], false)],
+      });
+      native.onresult({ resultIndex: 0, results: [makeResult(['two'], false)] });
+      vi.advanceTimersByTime(1200);
+
+      expect(callback).toHaveBeenLastCalledWith(['two'], true, '1:0');
+    });
+
     test('drops the late final of a cut session', () => {
       const callback = vi.fn();
       const recognition = createRecognition('en-US', callback);
