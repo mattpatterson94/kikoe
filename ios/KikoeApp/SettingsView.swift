@@ -26,8 +26,10 @@ struct SettingsView: View {
                     Toggle(isOn: settings.bool("keep_screen_awake")) {
                         labelled("Keep screen awake while listening", "A hands-free review has no touches to reset the idle timer")
                     }
-                    Toggle(isOn: $speech.noiseReduction) {
-                        labelled("Reduce background noise", "Filter out room noise and the page's own audio, like a phone call does. Other audio plays slightly quieter while Kikoe listens")
+                    if MicCapture.supportsVoiceProcessing {
+                        Toggle(isOn: $speech.noiseReduction) {
+                            labelled("Reduce background noise", "Filter out room noise and the page's own audio, like a phone call does. Other audio plays slightly quieter while Kikoe listens")
+                        }
                     }
                     NavigationLink {
                         CorrectionsView()
@@ -99,8 +101,9 @@ struct SettingsView: View {
                     LabeledContent("Version", value: Self.version)
                 }
             }
+            .formStyle(.grouped)
             .navigationTitle("Settings")
-            .navigationBarTitleDisplayMode(.inline)
+            .inlineNavigationTitle()
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } }
             }
@@ -195,8 +198,9 @@ private struct EnabledAppsView: View {
                 Text("Turn off the ones you don't use. Kikoe needs at least one on, and each one that's on gets its own settings page.")
             }
         }
+        .formStyle(.grouped)
         .navigationTitle("Enabled apps")
-        .navigationBarTitleDisplayMode(.inline)
+        .inlineNavigationTitle()
     }
 }
 
@@ -264,13 +268,14 @@ private struct AppSettingsView: View {
                     if let reason = speech.fallbackReason {
                         Text(reason)
                     } else {
-                        Text("Automatic uses DictationTranscriber for WaniKani readings, which follows the card's hints, and SpeechTranscriber for meanings and for BunPro, which is better with grammar in context. Both need iOS 26; SFSpeechRecognizer works everywhere.")
+                        Text("Automatic uses DictationTranscriber for WaniKani readings, which follows the card's hints, and SpeechTranscriber for meanings and for BunPro, which is better with grammar in context. Both need \(Platform.isMac ? "macOS 26" : "iOS 26"); SFSpeechRecognizer works everywhere.")
                     }
                 }
             }
         }
+        .formStyle(.grouped)
         .navigationTitle(site.name)
-        .navigationBarTitleDisplayMode(.inline)
+        .inlineNavigationTitle()
     }
 
     private var availableEngines: [EngineKind] {
@@ -299,8 +304,7 @@ private struct TokenSection: View {
                     }
                 }
                 .font(.body.monospaced())
-                .autocorrectionDisabled()
-                .textInputAutocapitalization(.never)
+                .plainTextEntry()
                 .onSubmit(save)
                 Button { revealed.toggle() } label: {
                     Image(systemName: revealed ? "eye.slash" : "eye")
@@ -411,8 +415,8 @@ private struct PermissionSection: View {
             if denied {
                 Section {
                     Label("Kikoe can't use the microphone or speech recognition.", systemImage: "mic.slash")
-                    if let url = URL(string: UIApplication.openSettingsURLString) {
-                        Link("Open iOS Settings", destination: url)
+                    if let url = Platform.privacySettingsURL {
+                        Link("Open \(Platform.privacySettingsName)", destination: url)
                     }
                 } header: { Text("Microphone access") }
             }
@@ -462,9 +466,11 @@ private struct CorrectionsView: View {
                 Button { adding = true } label: { Image(systemName: "plus") }
                     .accessibilityLabel("Add correction")
             }
+            #if os(iOS)
             if !settings.corrections.isEmpty {
                 ToolbarItem(placement: .topBarTrailing) { EditButton() }
             }
+            #endif
         }
         .sheet(item: $editing) { correction in
             CorrectionEditor(original: correction)
@@ -498,10 +504,10 @@ private struct CorrectionEditor: View {
                     }
                 }
             }
-            .autocorrectionDisabled()
-            .textInputAutocapitalization(.never)
+            .formStyle(.grouped)
+            .plainTextEntry()
             .navigationTitle(original == nil ? "New correction" : "Edit correction")
-            .navigationBarTitleDisplayMode(.inline)
+            .inlineNavigationTitle()
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {

@@ -1,4 +1,5 @@
 import { createNativeRecognition, getNativeSpeechHandler } from './native_recognition';
+import type { Settings } from './settings';
 
 // Short utterances and common on'yomi (かい, けい, どう, ...) are frequently
 // autocorrected by the recognizer into an unrelated real word, since its
@@ -41,6 +42,75 @@ const MIN_HEALTHY_SESSION_MS = 1000;
 const LIVENESS_TIMEOUT_MS = 45000;
 const LIVENESS_CHECK_INTERVAL_MS = 5000;
 
+// Chrome finalizes a result once its endpointer hears the speaker stop, and a
+// room that never goes quiet (a fan, music, a TV) can keep that from ever
+// happening: the words show live but never arrive as a final, and voice
+// commands only run from finals. A live result that has stood unchanged this
+// long is sent as final instead, and the session is cut so the engine's late
+// final for the same audio is dropped. It sits above Chrome's own endpoint
+// delay (about a second), so it only steps in where Chrome didn't. The iOS
+// app does the same for its English recognizer.
+const STALLED_INTERIM_MS = 1200;
+
+// True for a transcript with no letters or digits in it — what an engine
+// emits when it finalizes a stretch of noise as "." or "?". Such a result
+// can't be an answer or a command, and passing it on would only reach the
+// app as an empty final.
+export function isPunctuationOnly(text: string): boolean {
+  return !/[\p{L}\p{N}]/u.test(text);
+}
+
+// How hard a contextual hint pulls the on-device model toward it. The spec
+// allows 0–10; a moderate boost lets a hinted reading win a near tie without
+// drowning out an answer that really was different.
+const HINT_BOOST = 3;
+
+// Browser recognizer options, the Web Speech counterparts of the iOS app's
+// Advanced settings. Each one is feature-detected and silently skipped by an
+// engine that lacks it (Safari, older Chrome):
+// - onDevice: SpeechRecognition.processLocally. Falls back to the cloud
+//   recognizer for any language the browser reports it can't do locally.
+// - contextualHints: SpeechRecognition.phrases, seeded per card like the
+//   native host's contextual strings. Chrome only supports these on-device.
+// - noiseReduction: capture through getUserMedia with noise suppression and
+//   echo cancellation and pass that track to start().
+export interface WebSpeechOptions {
+  onDevice: boolean;
+  contextualHints: boolean;
+  noiseReduction: boolean;
+}
+
+const DEFAULT_WEB_SPEECH_OPTIONS: WebSpeechOptions = {
+  onDevice: false,
+  contextualHints: false,
+  noiseReduction: false,
+};
+
+export function webSpeechOptions(
+  settings: Pick<Settings, 'recognizer' | 'contextual_hints' | 'noise_reduction'>,
+): WebSpeechOptions {
+  return {
+    onDevice: settings.recognizer === 'on_device',
+    contextualHints: !!settings.contextual_hints,
+    noiseReduction: !!settings.noise_reduction,
+  };
+}
+
+// Not in @types/dom-speech-recognition yet.
+interface SpeechRecognitionPhraseLike {
+  readonly phrase: string;
+  readonly boost: number;
+}
+type PhraseConstructor = new (phrase: string, boost?: number) => SpeechRecognitionPhraseLike;
+interface PhraseCapable {
+  phrases: SpeechRecognitionPhraseLike[];
+}
+
+function phraseConstructor(): PhraseConstructor | null {
+  const ctor = (window as unknown as { SpeechRecognitionPhrase?: unknown }).SpeechRecognitionPhrase;
+  return typeof ctor === 'function' ? ctor as PhraseConstructor : null;
+}
+
 export type TranscriptCallback = (transcripts: string[], isFinal: boolean, resultId: string) => void;
 
 // The surface app.ts drives, shared by the Web Speech recognizer below and the
@@ -66,6 +136,7 @@ export function createRecognition(
   lang: string | (() => string),
   callback: TranscriptCallback,
   onError?: (error: SpeechRecognitionErrorCode) => void,
+  getOptions: () => WebSpeechOptions = () => DEFAULT_WEB_SPEECH_OPTIONS,
 ): RecognitionControls | null {
   // Accept a function so callers can supply a live language getter; this ensures
   // every auto-restart picks up the correct language even if setLanguage was
@@ -105,12 +176,86 @@ export function createRecognition(
   // is optional on non-Chromium implementations.
   const abort = typeof recognition.abort === 'function' ? recognition.abort.bind(recognition) : null;
 
+  // ── optional engine features ────────────────────────────────────────────
+  const supportsLocal = 'processLocally' in recognition;
+  const Phrase = phraseConstructor();
+  const supportsPhrases = !!Phrase && 'phrases' in recognition;
+  // Languages the browser turned down for local recognition this page load;
+  // those go back to the cloud recognizer rather than failing every session.
+  const localUnavailable = new Set<string>();
+  let phrasesRejected = false;
+  let usingLocal = false;
+  let hints: string[] = [];
+  let appliedHints = '';
+  // The noise-suppressed capture track, shared by every session until a
+  // pause releases it (so the browser's mic indicator goes off with Kikoe).
+  let noiseTrack: MediaStreamTrack | null = null;
+  let noiseTrackPending = false;
+  let noiseTrackFailed = false;
+
+  function hintsInEffect(options: WebSpeechOptions): boolean {
+    return options.contextualHints && supportsPhrases && usingLocal && !phrasesRejected;
+  }
+
+  function applyOptions(): WebSpeechOptions {
+    const options = getOptions();
+    const lang = recognition.lang;
+    usingLocal = supportsLocal && options.onDevice && !localUnavailable.has(lang);
+    if (supportsLocal) recognition.processLocally = usingLocal;
+    if (supportsPhrases && Phrase) {
+      const active = hintsInEffect(options) ? hints : [];
+      (recognition as unknown as PhraseCapable).phrases = active.map((h) => new Phrase(h, HINT_BOOST));
+      appliedHints = active.join('\n');
+    }
+    return options;
+  }
+
+  function releaseNoiseTrack(): void {
+    noiseTrack?.stop();
+    noiseTrack = null;
+  }
+
+  // getUserMedia is asynchronous and start() isn't, so the first session
+  // after turning this on runs on the default capture; once the track is
+  // ready the session restarts onto it.
+  function ensureNoiseTrack(): MediaStreamTrack | null {
+    if (noiseTrack?.readyState === 'ended') noiseTrack = null;
+    if (noiseTrack || noiseTrackPending || noiseTrackFailed) return noiseTrack;
+    if (!navigator.mediaDevices?.getUserMedia) {
+      noiseTrackFailed = true;
+      return null;
+    }
+    noiseTrackPending = true;
+    navigator.mediaDevices.getUserMedia({
+      audio: { noiseSuppression: true, echoCancellation: true, autoGainControl: true },
+    }).then((stream) => {
+      noiseTrackPending = false;
+      const [track] = stream.getAudioTracks();
+      if (!track) return;
+      if (!shouldAutoRestart || !getOptions().noiseReduction) {
+        track.stop();
+        return;
+      }
+      noiseTrack = track;
+      safeAbort();
+    }, (err: unknown) => {
+      noiseTrackPending = false;
+      noiseTrackFailed = true;
+      console.error('[kikoe] noise-reduced capture unavailable; using default microphone:', err);
+    });
+    return null;
+  }
+
   function safeStart(): void {
     recognition.lang = getLang();
     sessionStartedAt = Date.now();
     sawErrorThisSession = false;
+    const options = applyOptions();
+    if (!options.noiseReduction) releaseNoiseTrack();
+    const track = options.noiseReduction ? ensureNoiseTrack() : null;
     try {
-      start();
+      if (track) start(track);
+      else start();
       sessionId++;
     } catch (err) {
       if (!(err instanceof Error) || err.name !== 'InvalidStateError') throw err;
@@ -143,18 +288,100 @@ export function createRecognition(
     lastActivityAt = Date.now();
   };
 
+  // ── live results not yet finalized ──────────────────────────────────────
+  // The latest interim text per result index in this session. Chrome splits
+  // a live utterance across indices (a stable head and an unstable tail) and
+  // finalizes it into the lowest of them, so the live text for a final at
+  // index i is everything recorded from i onward, joined.
+  const liveText = new Map<number, string>();
+  let stalledTimer: ReturnType<typeof setTimeout> | undefined;
+  let stalledText = '';
+  // A session whose live result was sent as final: anything it still emits
+  // is the late final for that same audio.
+  let cutSession = -1;
+
+  function liveFrom(index: number, from: Map<number, string> = liveText): string {
+    return [...from.entries()]
+      .filter(([i]) => i >= index)
+      .sort(([a], [b]) => a - b)
+      .map(([, text]) => text)
+      .join('')
+      .trim();
+  }
+
+  function clearLive(): void {
+    liveText.clear();
+    clearTimeout(stalledTimer);
+    stalledTimer = undefined;
+    stalledText = '';
+  }
+
+  // (Re)arms the stall timer for whatever is live now. Only a change of text
+  // pushes the deadline out: Chrome re-emits an unchanged interim whenever it
+  // hears sound, which is exactly what a noisy room produces.
+  function watchForStall(): void {
+    const text = liveFrom(0);
+    if (!text) {
+      clearLive();
+      return;
+    }
+    if (text === stalledText && stalledTimer !== undefined) return;
+    stalledText = text;
+    clearTimeout(stalledTimer);
+    const session = sessionId;
+    stalledTimer = setTimeout(() => {
+      stalledTimer = undefined;
+      if (session !== sessionId || !liveText.size || !shouldAutoRestart) return;
+      const first = Math.min(...liveText.keys());
+      const live = liveFrom(first);
+      clearLive();
+      cutSession = session;
+      callback([live], true, `${session}:${first}`);
+      safeAbort();
+    }, STALLED_INTERIM_MS);
+  }
+
   recognition.onresult = (event) => {
     unhealthyRestarts = 0;
     sawErrorThisSession = false;
     lastActivityAt = Date.now();
+    if (sessionId === cutSession) return;
+
+    // A final takes over the live text it replaces, including the tail of a
+    // split result that has just collapsed into it, so read that from before
+    // this update. Otherwise an index the engine no longer reports was
+    // withdrawn (['to', ' eat'] revised to ['two']), and its text must not
+    // outlive it.
+    const liveBefore = new Map(liveText);
+    for (const index of [...liveText.keys()]) {
+      if (index >= event.results.length) liveText.delete(index);
+    }
 
     for (let i = event.resultIndex; i < event.results.length; ++i) {
       const result = event.results[i];
       // Interim results are only ever given one alternative by the engine;
       // final results may carry up to maxAlternatives, ranked by confidence.
-      const transcripts = Array.from(result, alt => alt.transcript.trim());
+      const transcripts = Array.from(result, alt => alt.transcript.trim())
+        .filter(t => !isPunctuationOnly(t));
+      if (result.isFinal) {
+        // A final can come back worse than the live text it replaces — a
+        // command heard clearly live, then finalized as a different word.
+        // Offer the live text as the last alternative, so it is only used
+        // when none of the engine's own picks match.
+        const live = liveFrom(i, liveBefore);
+        for (const index of [...liveText.keys()]) if (index >= i) liveText.delete(index);
+        if (live && !isPunctuationOnly(live) && !transcripts.includes(live)) transcripts.push(live);
+      } else {
+        // An interim that is only noise is left out of the live text, but a
+        // real one still counts as the speaker still being mid-result.
+        const text = result[0]?.transcript ?? '';
+        if (isPunctuationOnly(text)) liveText.delete(i);
+        else liveText.set(i, text);
+        if (!transcripts.length) continue;
+      }
       callback(transcripts, result.isFinal, `${sessionId}:${i}`);
     }
+    watchForStall();
   };
 
   recognition.onerror = (event) => {
@@ -164,10 +391,31 @@ export function createRecognition(
     if (event.error === 'no-speech' || event.error === 'aborted') {
       return;
     }
+    // On-device asked for a language this browser can't do locally (model
+    // not installed, or not offered at all): use the cloud recognizer for it.
+    if (event.error === 'language-not-supported' && usingLocal) {
+      console.warn(`[kikoe] on-device recognition unavailable for ${recognition.lang}; using the browser's default recognizer`);
+      localUnavailable.add(recognition.lang);
+      // Chromium reports this before a session starts and sends no end
+      // event, so onend's auto-restart never runs. Start again here, unless
+      // a session has started since.
+      const failedSession = sessionId;
+      setTimeout(() => {
+        if (shouldAutoRestart && sessionId === failedSession) safeStart();
+      }, 0);
+      return;
+    }
+    if ((event.error as string) === 'phrases-not-supported') {
+      console.warn('[kikoe] this recognizer does not accept contextual hints; continuing without them');
+      phrasesRejected = true;
+      return;
+    }
     console.error('[kikoe] error occurred in recognition:', event.error);
 
     if (FATAL_ERRORS.has(event.error)) {
       shouldAutoRestart = false;
+      // Nothing restarts after a fatal error, so don't leave the mic open.
+      releaseNoiseTrack();
     } else {
       sawErrorThisSession = true;
     }
@@ -179,6 +427,8 @@ export function createRecognition(
     // A session is unhealthy if it reported an error or barely ran at all.
     // Anything else — including the engine's ordinary idle timeout during
     // silence — resets the streak and restarts without delay.
+    // Whatever was live belonged to the session that just ended.
+    clearLive();
     const tooShort = Date.now() - sessionStartedAt < MIN_HEALTHY_SESSION_MS;
     if (sawErrorThisSession || tooShort) unhealthyRestarts++;
     else unhealthyRestarts = 0;
@@ -186,7 +436,9 @@ export function createRecognition(
     if (!shouldAutoRestart) return;
     const delay = Math.min(unhealthyRestarts * RESTART_BACKOFF_MS, MAX_RESTART_BACKOFF_MS);
     if (delay > 0) {
-      setTimeout(() => { if (shouldAutoRestart) safeStart(); }, delay);
+      // Skipped if something else (a fallback restart) started one meanwhile.
+      const endedSession = sessionId;
+      setTimeout(() => { if (shouldAutoRestart && sessionId === endedSession) safeStart(); }, delay);
     } else {
       safeStart();
     }
@@ -218,7 +470,9 @@ export function createRecognition(
 
   recognition.pause = () => {
     shouldAutoRestart = false;
+    clearLive();
     safeStop();
+    releaseNoiseTrack();
   };
 
   recognition.resume = () => {
@@ -229,12 +483,25 @@ export function createRecognition(
 
   recognition.restart = () => {
     shouldAutoRestart = true;
+    clearLive();
     safeAbort();
   };
 
   recognition.isPaused = () => {
     return !shouldAutoRestart;
   };
+
+  // Phrases are read when a session starts, so new hints only reach the
+  // engine on a restart. That's only worth doing when they're in effect:
+  // otherwise the next routine restart picks them up for free.
+  if (supportsPhrases) {
+    recognition.setHints = (next: string[]) => {
+      hints = [...next];
+      if (!hintsInEffect(getOptions())) return;
+      if (hints.join('\n') === appliedHints || !shouldAutoRestart) return;
+      safeAbort();
+    };
+  }
 
   return recognition;
 }

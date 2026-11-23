@@ -132,17 +132,17 @@ struct OnboardingView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     Label("Access is turned off", systemImage: "mic.slash.fill")
                         .foregroundStyle(.orange).font(.headline)
-                    Text("Kikoe can't listen without it. Turn on Microphone and Speech Recognition for Kikoe in iOS Settings.")
+                    Text("Kikoe can't listen without it. Turn on Microphone and Speech Recognition for Kikoe in \(Platform.privacySettingsName).")
                         .font(.subheadline).foregroundStyle(.secondary)
-                    if let url = URL(string: UIApplication.openSettingsURLString) {
-                        Link("Open iOS Settings", destination: url).font(.subheadline.weight(.semibold))
+                    if let url = Platform.privacySettingsURL {
+                        Link("Open \(Platform.privacySettingsName)", destination: url).font(.subheadline.weight(.semibold))
                     }
                 }
             case .undetermined:
                 EmptyView()
             }
         }
-        .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
+        .onReceive(NotificationCenter.default.publisher(for: Platform.didBecomeActive)) { _ in
             permission = .current
         }
     }
@@ -331,8 +331,7 @@ private struct TokenStep: View {
                 Text("Or paste a token").font(.subheadline.weight(.semibold)).foregroundStyle(.secondary)
                 SecureField("Personal access token", text: $draft)
                     .font(draft.isEmpty ? .body : .body.monospaced())
-                    .autocorrectionDisabled()
-                    .textInputAutocapitalization(.never)
+                    .plainTextEntry()
                     .padding(12)
                     .background(.background, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                     .onSubmit { Task { await check() } }

@@ -7,7 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Added
+
+- A native macOS app (Kikoe for Mac) built from
+  the same SwiftUI code as the iOS app: WaniKani and BunPro in their own
+  windows, Apple's on-device transcribers (SpeechTranscriber, SpeechAnalyzer,
+  SFSpeechRecognizer), the native overlays, and a Review menu with keyboard
+  shortcuts (⌘R reload, ⇧⌘L Listen In, ⌘/ voice commands, ⌘1/⌘2 switch app).
+  Background noise reduction stays iOS-only: Apple's voice processing
+  stopped recognition working on the Mac.
+- The extension options page now matches the app's Settings: general
+  settings, an Apps section that turns WaniKani or BunPro off, and a card per
+  app. Turbo, show item info, strict kanji readings, Ippatsu and the live
+  transcript are set separately for each app, stored the same way as the iOS
+  app (`<app>:<key>`, falling back to the shared value), so a setting saved
+  on either side means the same thing.
+- Chrome: an on-device recognizer option with a model download button,
+  contextual hints (the card's expected answers sent as recognition phrases)
+  and noise reduction. Each is hidden where the browser doesn't support it.
+
+### Notes
+
+- Firefox is still unsupported: release Firefox ships without
+  SpeechRecognition enabled.
+
 ### Changed
+
+- The extension options page is split into pages (General, WaniKani,
+  BunPro, Advanced) picked from a sidebar, or a tab strip in narrow windows,
+  instead of one long scroll. Settings save as you change them, so the Save
+  button is gone, and a missing WaniKani token shows as a banner with a link
+  to fix it.
 
 - iOS app: Settings is reorganised into sub pages. The top level keeps what
   applies to everything (keep screen awake, background noise, custom
@@ -28,6 +58,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Extension: the answering fixes from the iOS app now apply to Web Speech
+  too. A live result that stands unchanged for 1.2 s without a final (a
+  noisy room can stop Chrome from finalizing) is sent as final and the
+  session is cut, so commands like "incorrect" no longer show live and then
+  do nothing. A final that loses the word the live result had still offers
+  the live text as its last alternative, and punctuation-only results are
+  dropped.
 - iOS app: English answers with SpeechTranscriber no longer stall or miss.
   Its English finals often lose the word the live result had right ("Water."
   finalizes as "." or "to."), so a correct answer either never finished or

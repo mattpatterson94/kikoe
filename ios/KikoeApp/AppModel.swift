@@ -14,6 +14,8 @@ final class AppModel: ObservableObject {
     @Published private(set) var enabledSites: [Site]
     @Published private(set) var onboarded: Bool
     @Published var showSettings = false
+    /// Listen In: from the More menu, or Review → Listen In… on the Mac.
+    @Published var showLanguageSheet = false
     @Published var alert: PageAlert?
 
     /// Every enabled site stays loaded once visited, so switching back keeps

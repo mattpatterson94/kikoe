@@ -18,6 +18,23 @@ iOS app target. Architecture first, then the original spike notes.
 | Overlays | `Overlays.swift`: the JS side posts overlay state to `kikoeUI` (see `src/native_ui.ts`) and draws no DOM chips. Native: mic pill in the nav bar, a green or red icon for on/off (tap = mute/unmute); a floating transcript bubble (bottom by default, top per the transcript position setting, theme from settings) that stays up for the whole review: between answers it shows the mic state, a live input-level meter fed from the capture tap (`MicLevel`) and "Listening", or the problem that needs attention (tap = same as the pill, e.g. opens the token page). Results ("M no match ＋") show as a separate chip next to that pill rather than replacing it, and fade after 3 s (8 s with a correction offer) or as soon as new speech arrives, so it's always visible that Kikoe went back to listening. With the bubble off, a warning banner shows problem states instead. The nav bar's More menu (an `.equatable()` view of plain values, since a Menu rebuilt mid-tap by the screen's constant re-renders dropped the tap) has Reload Page, Listen In (a small sheet: Automatic / Japanese / English; overrides the recognizer locale for the current card only; cleared on the next card. The matcher still grades by card type), Voice Commands (the help sheet, when the help button setting is on) and Settings. Also a small correction sheet, "Count “M” as まい?" with Not Now / Save (dispatches `kikoe:addCorrection` in the page world, the same path the DOM `confirm()` uses), help sheet, first-run hint toast. |
 | Settings | `SettingsView.swift`: native Form mirroring `extension/options.html`, writing the same sync keys. The root holds what applies to everything (keep screen awake, noise reduction, corrections, advanced, developer) an Enabled apps page (`EnabledAppsView`, tick-to-toggle, the last one stays on) and a list of the enabled apps, WaniKani flagged with a warning while it has no token; each opens its own page (`AppSettingsView`) with Turbo, show item info, strict kanji readings, Ippatsu, the live transcript settings and the recognizer. Those are per site, stored as `<site>:<key>` (`SiteSettings.swift`), falling back to the plain key. `PageSession` hands each page its own site's values under the plain keys, on `storage.get` and in the change relay, so the web code is untouched. The token section sits on the WaniKani page: paste/reveal, live check against `api.wanikani.com/v2/user`, and "Find my token" (arms content.ts's discovery flags and opens the token page; on capture settings reopen). Corrections list with add/edit/delete. Each app page's recognizer picker is stored under `kikoe.engine.<site>`. The default on iOS 26 is Automatic (`automaticUsesDictation`): DictationTranscriber for WaniKani readings, whose single words the kana hints pin down, and SpeechTranscriber for WaniKani meanings and all of BunPro, which is better with sentence context. The analyzer engine picks the module per locale, so Automatic needs no engine swap between cards and contextual hints. Developer (off by default): debug bar, TTS "Say" button, recognition probe. |
 
+### macOS
+
+The `KikoeMac` target compiles the same `KikoeApp/` sources (shared synchronized
+group) for macOS 26 with the iOS bundle ID, `com.mattdoesdev.kikoe`
+(`Config/KikoeMac.xcconfig`; sandbox, network client and audio input in
+`Config/KikoeMac.entitlements`). It ships as the macOS platform of the Kikoe
+App Store record (universal purchase), replacing the Safari extension's Mac
+app there, so don't upload macOS builds of the Safari project any more. Platform differences live in `Platform.swift`:
+privacy settings URL, app-activation notification, opening links, keep-awake
+(an IOPM display-sleep assertion on the Mac), background colours, toolbar
+placements and text-entry modifiers. Everything else is `#if os(iOS)` only
+where AppKit has no equivalent (AVAudioSession, inline media playback,
+EditButton). The Mac app adds menu commands (`KikoeCommands` in
+`KikoeApp.swift`): Settings… (⌘,), and a Review menu with Reload Page,
+Listen In, Voice Commands and site switching. Build with
+`xcodebuild -scheme KikoeMac -destination 'platform=macOS'`.
+
 Native-only preferences (engine, hints, last site, enabled apps, onboarded, developer toggles) are in
 UserDefaults under `kikoe.*`. The user-agent override from the spike is gone.
 
@@ -171,6 +188,11 @@ measured: hours of real reviews on a device. That still needs doing.
   echo cancellation, so the page's reading audio isn't heard as an answer)
   with minimum ducking. Settings → General → Reduce background noise, on
   by default; toggling restarts the mic. Not yet compared on a device.
+  iOS only: on the Mac, voice processing on our input-only engine faults
+  every render cycle ("failed to run downlink DSP") and the recognizer
+  returns nothing, even with the main mixer wired to the output node. So
+  `MicCapture.supportsVoiceProcessing` is false there and Settings hides
+  the toggle.
 - **Error noise:**
   - Server SFSpeech emits `203 Empty recognition` / `203 Retry` constantly in
     silence. These are now restarted quietly instead of being surfaced as

@@ -1,5 +1,7 @@
 const defaults = {
   apiToken: '',
+  site_wanikani: true,
+  site_bunpro: true,
   turbo: true,
   speed_show_info: true,
   ippatsu_meaning: false,
@@ -10,6 +12,9 @@ const defaults = {
   show_help_button: true,
   keep_screen_awake: true,
   strict_kanji_readings: true,
+  recognizer: 'cloud',
+  contextual_hints: true,
+  noise_reduction: false,
   debug: false,
   customCorrections: [],
 };
@@ -18,11 +23,32 @@ const apiTokenPageUrl = 'https://www.wanikani.com/settings/personal_access_token
 const apiTokenDiscoveryRequestedKey = 'kikoe_api_token_discovery_requested';
 const apiTokenDiscoveryStatusKey = 'kikoe_api_token_discovery_status';
 
+// Settings each app keeps its own copy of, stored as `<site>:<key>` with the
+// plain key as the fallback. Mirrors SITE_SETTING_KEYS in src/settings.ts and
+// SiteSettings.swift (options.js is copied verbatim, so it can't import).
+const sites = ['wanikani', 'bunpro'];
+const siteSettingKeys = [
+  'turbo', 'speed_show_info', 'ippatsu_meaning', 'ippatsu_reading',
+  'transcript', 'transcript_theme', 'transcript_position', 'show_help_button',
+  'strict_kanji_readings',
+];
+const siteKey = (site, key) => `${site}:${key}`;
+
 // Keys read/written via a same-id form element. customCorrections is edited
-// through the dynamic row list below instead.
-const fields = Object.keys(defaults).filter((k) => k !== 'customCorrections');
+// through the dynamic row list below instead, and the per-app keys through
+// each app card's copy of the template.
+const fields = Object.keys(defaults)
+  .filter((k) => k !== 'customCorrections' && !siteSettingKeys.includes(k));
 
 function get(id) { return document.getElementById(id); }
+
+// Each app panel gets the per-app controls, with ids like `bunpro:turbo`.
+for (const site of sites) {
+  const content = get('appSettingsTemplate').content.cloneNode(true);
+  for (const el of content.querySelectorAll('[data-key]')) el.id = siteKey(site, el.dataset.key);
+  for (const label of content.querySelectorAll('label[data-for]')) label.htmlFor = siteKey(site, label.dataset.for);
+  get(`app_${site}`).appendChild(content);
+}
 
 function setTokenStatus(message, state = '') {
   const status = get('tokenStatus');
@@ -92,6 +118,7 @@ function correctionRow({ heard = '', intended = '' } = {}) {
   remove.addEventListener('click', () => {
     row.remove();
     refreshCorrectionsChrome();
+    scheduleSave(0);
   });
 
   row.append(heardInput, intendedInput, remove);
@@ -124,8 +151,22 @@ get('findApiToken').addEventListener('click', findApiToken);
 
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area === 'sync' && changes.apiToken?.newValue) {
-    get('apiToken').value = changes.apiToken.newValue;
-    setTokenStatus('Token found and saved.', 'ok');
+    const stored = changes.apiToken.newValue;
+    const field = get('apiToken');
+    // The field holds an edit not yet saved when it differs from the last
+    // saved token. That edit is newer than this write (often just the echo
+    // of an autosave of an earlier keystroke), so keep it and let the save
+    // loop store it; only a field with nothing unsaved takes the new token.
+    const dirty = !!lastSaved && field.value !== (lastSaved.apiToken ?? '');
+    const found = !dirty && field.value !== stored;
+    if (lastSaved) lastSaved.apiToken = stored;
+    if (dirty && field.value !== stored) {
+      scheduleSave(0);
+    } else if (found) {
+      field.value = stored;
+      setTokenStatus('Token found and saved.', 'ok');
+    }
+    refreshTokenBanner();
   }
   if (area === 'local' && changes[apiTokenDiscoveryStatusKey]?.newValue) {
     handleTokenDiscoveryStatus(changes[apiTokenDiscoveryStatusKey].newValue);
@@ -245,16 +286,157 @@ document.addEventListener('visibilitychange', () => {
   if (!document.hidden) checkSiteAccess();
 });
 
-// ── form load/save ────────────────────────────────────────────────────────────
+// ── sections ──────────────────────────────────────────────────────────────────
+//
+// One panel at a time, picked from the sidebar and kept in the URL hash so a
+// reload (or the token banner's link) lands on the same one.
 
+const panelNames = ['general', 'wanikani', 'bunpro', 'advanced'];
+
+function navLink(name) {
+  return document.querySelector(`nav.sections a[data-panel="${name}"]`);
+}
+
+function showPanel(name) {
+  if (!panelNames.includes(name) || navLink(name).hidden) name = 'general';
+  for (const panel of document.querySelectorAll('.panel')) panel.hidden = panel.dataset.panel !== name;
+  for (const link of document.querySelectorAll('nav.sections a')) {
+    if (link.dataset.panel === name) link.setAttribute('aria-current', 'page');
+    else link.removeAttribute('aria-current');
+  }
+}
+
+function showPanelFromHash() {
+  showPanel(location.hash.slice(1));
+}
+
+window.addEventListener('hashchange', showPanelFromHash);
+
+// ── apps ──────────────────────────────────────────────────────────────────────
+//
+// Same rule as the iOS app's Settings → Apps: at least one stays on, so the
+// last checked box is locked. An app's own page only shows while it's on.
+
+function refreshApps() {
+  const toggles = [...document.querySelectorAll('.site-toggle')];
+  const on = toggles.filter((t) => t.checked);
+  for (const t of toggles) t.disabled = t.checked && on.length === 1;
+  for (const site of sites) navLink(site).hidden = !get(`site_${site}`).checked;
+  refreshTokenBanner();
+  showPanelFromHash();
+}
+
+// WaniKani does nothing without a token, so say so wherever you are.
+function refreshTokenBanner() {
+  const missing = get('site_wanikani').checked && !get('apiToken').value.trim();
+  get('tokenBanner').hidden = !missing || location.hash === '#wanikani';
+  get('tokenDot').hidden = !missing;
+}
+
+window.addEventListener('hashchange', refreshTokenBanner);
+
+for (const toggle of document.querySelectorAll('.site-toggle')) {
+  toggle.addEventListener('change', refreshApps);
+}
+
+// ── recognizer (Web Speech extras) ────────────────────────────────────────────
+//
+// The counterparts of the iOS app's Advanced recognizer settings, shown only
+// where the browser's SpeechRecognition has the feature (recognition.ts
+// feature-detects the same way at runtime). Safari and Firefox hide them.
+
+const onDeviceLangs = ['ja-JP', 'en-US'];
+const SpeechRecognitionCtor = globalThis.SpeechRecognition || globalThis.webkitSpeechRecognition;
+const speechProto = SpeechRecognitionCtor?.prototype;
+const supportsOnDevice = !!speechProto && 'processLocally' in speechProto
+  && typeof SpeechRecognitionCtor.available === 'function';
+const supportsHints = supportsOnDevice && typeof globalThis.SpeechRecognitionPhrase === 'function';
+// start(audioTrack) has no feature test of its own; it shipped in Chrome
+// before processLocally did, so a browser with on-device support has it.
+const supportsNoiseReduction = supportsOnDevice && !!navigator.mediaDevices?.getUserMedia;
+
+function langName(lang) {
+  return lang.startsWith('ja') ? 'Japanese' : 'English';
+}
+
+async function refreshOnDeviceModels() {
+  const status = get('onDeviceModelsStatus');
+  const button = get('installOnDeviceModels');
+  try {
+    const states = await Promise.all(onDeviceLangs.map((lang) =>
+      SpeechRecognitionCtor.available({ langs: [lang], processLocally: true })));
+    const describe = { available: 'ready', downloadable: 'not downloaded', downloading: 'downloading…', unavailable: 'not offered' };
+    status.textContent = onDeviceLangs.map((lang, i) => `${langName(lang)}: ${describe[states[i]] || states[i]}`).join(' · ');
+    button.hidden = !states.some((s) => s === 'downloadable');
+  } catch (err) {
+    console.error('[kikoe] could not check on-device models:', err);
+    status.textContent = "Couldn't check on-device models.";
+    button.hidden = true;
+  }
+}
+
+async function installOnDeviceModels() {
+  const button = get('installOnDeviceModels');
+  button.disabled = true;
+  get('onDeviceModelsStatus').textContent = 'Downloading…';
+  try {
+    await SpeechRecognitionCtor.install({ langs: onDeviceLangs, processLocally: true });
+  } catch (err) {
+    console.error('[kikoe] on-device model install failed:', err);
+  }
+  button.disabled = false;
+  await refreshOnDeviceModels();
+}
+
+function refreshRecognizer() {
+  const onDevice = get('recognizer').value === 'on_device';
+  get('onDeviceModelsField').hidden = !onDevice;
+  get('contextual_hints').disabled = !onDevice;
+  if (onDevice) refreshOnDeviceModels();
+}
+
+get('recognizerGroup').hidden = !supportsOnDevice;
+get('recognizerField').hidden = !supportsOnDevice;
+get('contextualHintsField').hidden = !supportsHints;
+get('noiseReductionField').hidden = !supportsNoiseReduction;
+get('recognizer').addEventListener('change', refreshRecognizer);
+get('installOnDeviceModels').addEventListener('click', installOnDeviceModels);
+
+{
+  const manifest = chrome.runtime.getManifest?.();
+  if (manifest?.version) get('version').textContent = `Kikoe ${manifest.version}`;
+}
+
+// ── form load/save ────────────────────────────────────────────────────────────
+//
+// Changes save as they're made: toggles and selects at once, typed text once
+// typing pauses. Only the keys that differ from what was last stored are
+// written, which keeps well clear of chrome.storage.sync's write quota.
+
+function readField(el) {
+  if (el.type === 'checkbox') return el.checked;
+  if (el.type === 'number') return parseFloat(el.value);
+  return el.value;
+}
+
+function writeField(el, value, fallback) {
+  if (el.type === 'checkbox') el.checked = !!value;
+  else el.value = value ?? fallback;
+}
+
+// Each app's own copy of every per-app setting is written. The plain keys are
+// left as they were, as the fallback older versions still read.
 function readForm() {
   const values = {};
   for (const key of fields) {
     const el = get(key);
-    if (!el) continue;
-    if (el.type === 'checkbox') values[key] = el.checked;
-    else if (el.type === 'number') values[key] = parseFloat(el.value);
-    else values[key] = el.value;
+    if (el) values[key] = readField(el);
+  }
+  for (const site of sites) {
+    for (const key of siteSettingKeys) {
+      const el = get(siteKey(site, key));
+      if (el) values[siteKey(site, key)] = readField(el);
+    }
   }
   values.customCorrections = readCorrections();
   return values;
@@ -263,11 +445,17 @@ function readForm() {
 function populateForm(settings) {
   for (const key of fields) {
     const el = get(key);
-    if (!el) continue;
-    if (el.type === 'checkbox') el.checked = !!settings[key];
-    else el.value = settings[key] ?? defaults[key];
+    if (el) writeField(el, settings[key], defaults[key]);
+  }
+  for (const site of sites) {
+    for (const key of siteSettingKeys) {
+      const el = get(siteKey(site, key));
+      if (el) writeField(el, settings[siteKey(site, key)] ?? settings[key], defaults[key]);
+    }
   }
   renderCorrections(settings.customCorrections);
+  refreshApps();
+  if (supportsOnDevice) refreshRecognizer();
 }
 
 // Mirrors migrateSettings in content.ts, which can't be imported here. Runs
@@ -289,25 +477,85 @@ async function migrateSettings() {
 async function load() {
   await migrateSettings();
   const [stored, discovery] = await Promise.all([
-    chrome.storage.sync.get(Object.keys(defaults)),
+    chrome.storage.sync.get([
+      ...Object.keys(defaults),
+      ...sites.flatMap((site) => siteSettingKeys.map((key) => siteKey(site, key))),
+    ]),
     chrome.storage.local.get(apiTokenDiscoveryStatusKey),
   ]);
   populateForm({ ...defaults, ...stored });
+  lastSaved = readForm();
   if (stored.apiToken) {
     handleTokenDiscoveryStatus(discovery[apiTokenDiscoveryStatusKey]);
   }
 }
 
-get('save').addEventListener('click', async () => {
-  const values = readForm();
-  await chrome.storage.sync.set(values);
-  // Reflect what was actually stored (e.g. half-filled rows are dropped).
-  renderCorrections(values.customCorrections);
-  const save = get('save');
-  save.textContent = 'Saved.';
-  save.disabled = true;
-  setTimeout(() => { save.textContent = 'Save settings'; save.disabled = false; }, 2000);
+let lastSaved = null;
+let saveTimer = null;
+let savedTimer = null;
+
+function showSaveState(message) {
+  get('saveState').textContent = message;
+  clearTimeout(savedTimer);
+  if (message) savedTimer = setTimeout(() => { get('saveState').textContent = ''; }, 2500);
+}
+
+function unsavedChanges() {
+  const changed = {};
+  for (const [key, value] of Object.entries(readForm())) {
+    if (JSON.stringify(value) !== JSON.stringify(lastSaved[key])) changed[key] = value;
+  }
+  return changed;
+}
+
+// The write in flight, if any. Saves run one at a time: an edit made while a
+// write is pending compares against the value that write is about to store,
+// so the form is checked again after every write rather than skipped. (Change
+// a setting and back mid-write, and the second save would otherwise see
+// nothing new and leave the intermediate value stored.)
+let saving = null;
+
+function save() {
+  if (!lastSaved) return Promise.resolve(); // not loaded yet
+  if (saving) return saving;
+  // Nothing to write: don't take the lock.
+  if (!Object.keys(unsavedChanges()).length) return Promise.resolve();
+  saving = (async () => {
+    // Yield first, so the finally below can never run before `saving` is
+    // assigned: if it did, the lock would stay held by a settled promise and
+    // every later save would return it without writing.
+    await null;
+    try {
+      for (;;) {
+        const changed = unsavedChanges();
+        if (!Object.keys(changed).length) break;
+        await chrome.storage.sync.set(changed);
+        Object.assign(lastSaved, changed);
+        showSaveState('Saved');
+      }
+    } catch (err) {
+      console.error('[kikoe] could not save settings:', err);
+      showSaveState("Couldn't save. Try again in a moment.");
+    } finally {
+      saving = null;
+    }
+  })();
+  return saving;
+}
+
+function scheduleSave(delay) {
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => { save(); }, delay);
+}
+
+const main = document.querySelector('main');
+main.addEventListener('change', () => scheduleSave(0));
+main.addEventListener('input', (event) => {
+  if (event.target.matches('input[type=text], input[type=password]')) scheduleSave(600);
+  if (event.target.id === 'apiToken') refreshTokenBanner();
 });
+// Don't lose a pending text save when the tab closes.
+window.addEventListener('pagehide', () => { if (saveTimer) save(); });
 
 load();
 checkSiteAccess();

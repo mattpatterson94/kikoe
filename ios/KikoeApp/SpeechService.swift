@@ -1,5 +1,4 @@
 import AVFoundation
-import UIKit
 
 /// The one recognizer every page shares; there is only one microphone.
 ///
@@ -219,7 +218,7 @@ final class SpeechService: ObservableObject {
     /// API and honours the same keep_screen_awake setting.
     func updateIdleTimer() {
         let keepAwake = ExtensionStorage.value("keep_screen_awake") as? Bool ?? true
-        UIApplication.shared.isIdleTimerDisabled = listening && keepAwake
+        Platform.setKeepAwake(listening && keepAwake)
     }
 
     private func swapEngine(to kind: EngineKind, restart: Bool = true) {

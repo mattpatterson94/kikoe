@@ -103,12 +103,11 @@ This changes only if [local speech recognition](https://github.com/mattpatterson
 ## First-time Setup
 
 1. Click the extension icon in your browser toolbar (or open the options page from the extensions menu).
-2. Paste your WaniKani **API Token** into the API Token field, or click **Find token** to open WaniKani's token settings page and let Kikoe fill in a visible token when the page loads.
+2. On the **WaniKani** page, paste your **API Token** into the API Token field, or click **Find token** to open WaniKani's token settings page and let Kikoe fill in a visible token when the page loads.
    - Get one from [WaniKani -> Settings -> Personal Access Tokens](https://www.wanikani.com/settings/personal_access_tokens). A read-only token is sufficient.
    - Skip this step if you only use BunPro, since no token is needed there.
-3. Click **Save settings**.
-4. Open a WaniKani or BunPro review page.
-5. When Kikoe starts listening, allow the browser to access your microphone.
+3. Open a WaniKani or BunPro review page.
+4. When Kikoe starts listening, allow the browser to access your microphone.
 
 On iPhone and iPad, Safari extension access and microphone access are separate.
 After enabling the extension in Safari settings, open a review page so Safari can
@@ -170,7 +169,18 @@ The extension applies several candidate transformations to improve recognition a
 
 ## Settings
 
-Open the extension options page (via the toolbar icon or extensions menu) to configure:
+Open the extension options page (via the toolbar icon or extensions menu) to configure. Like the iOS and macOS app's Settings screen, it's split into pages: **General** (apps, listening, custom corrections), one page per app that's on, and **Advanced**. Changes save as you make them; reload an open review page for them to apply.
+
+Turbo, show item info, strict kanji readings, Ippatsu and the live transcript are set **separately for WaniKani and BunPro**. Each app's value is stored as `<app>:<key>` (e.g. `bunpro:transcript_position`), falling back to the plain key, so settings saved before this keep applying to both apps until you change them.
+
+### Apps
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| WaniKani | On | Run Kikoe on WaniKani review and lesson pages |
+| BunPro | On | Run Kikoe on BunPro review pages |
+
+At least one app stays on. Turning an app off hides its card (for WaniKani, that includes the API token).
 
 ### WaniKani API
 
@@ -248,7 +258,12 @@ itself evidence you said おとな.
 
 | Setting | Default | Description |
 |---------|---------|-------------|
+| Recognizer | Browser default | **On-device** asks the browser to recognise speech locally (`processLocally`). If the language model isn't installed the options page offers to download it; until then Kikoe falls back to the browser's default recogniser |
+| Noise reduction | Off | Records through a microphone track with noise suppression, echo cancellation and auto gain, and hands it to the recogniser |
+| Contextual hints | On | Sends the current card's expected answers as recognition phrases, so the recogniser favours them. On-device recognizer only |
 | Debug mode | Off | Logs diagnostic details (speech matching, subject loading) to the browser console, prefixed with `[kikoe]` |
+
+Recognizer, noise reduction and contextual hints only appear when the browser supports them (recent Chrome). They stay hidden in Safari and Firefox.
 
 ## Development
 
