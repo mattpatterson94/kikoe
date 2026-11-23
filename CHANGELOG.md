@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- A native macOS app (Kikoe for Mac, `com.mattdoesdev.kikoe.mac`) built from
+- A native macOS app (Kikoe for Mac) built from
   the same SwiftUI code as the iOS app: WaniKani and BunPro in their own
   windows, Apple's on-device transcribers (SpeechTranscriber, SpeechAnalyzer,
   SFSpeechRecognizer), the native overlays, and a Review menu with keyboard

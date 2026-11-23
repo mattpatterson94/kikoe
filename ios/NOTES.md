@@ -21,10 +21,11 @@ iOS app target. Architecture first, then the original spike notes.
 ### macOS
 
 The `KikoeMac` target compiles the same `KikoeApp/` sources (shared synchronized
-group) for macOS 26 with bundle ID `com.mattdoesdev.kikoe.mac`
+group) for macOS 26 with the iOS bundle ID, `com.mattdoesdev.kikoe`
 (`Config/KikoeMac.xcconfig`; sandbox, network client and audio input in
-`Config/KikoeMac.entitlements`). The Safari extension's Mac app keeps
-`com.mattdoesdev.kikoe`. Platform differences live in `Platform.swift`:
+`Config/KikoeMac.entitlements`). It ships as the macOS platform of the Kikoe
+App Store record (universal purchase), replacing the Safari extension's Mac
+app there, so don't upload macOS builds of the Safari project any more. Platform differences live in `Platform.swift`:
 privacy settings URL, app-activation notification, opening links, keep-awake
 (an IOPM display-sleep assertion on the Mac), background colours, toolbar
 placements and text-entry modifiers. Everything else is `#if os(iOS)` only
