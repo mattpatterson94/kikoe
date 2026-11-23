@@ -1,3 +1,4 @@
+import CoreAudio
 import AVFoundation
 import Speech
 

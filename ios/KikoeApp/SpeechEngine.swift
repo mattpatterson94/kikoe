@@ -1,3 +1,4 @@
+import CoreAudio
 import Accelerate
 import AVFoundation
 import Speech
@@ -95,13 +96,15 @@ final class MicCapture {
     func start(consumer: @escaping MicConsumer) throws {
         self.consumer.set(consumer)
         if isRunning { return }
+        #if !targetEnvironment(macCatalyst)
         let session = AVAudioSession.sharedInstance()
         // playAndRecord so WaniKani's reading audio still plays while we
         // listen; mixWithOthers keeps the webview's own media from being
-        // interrupted.
+        // interrupted. macOS has no audio session; it mixes by default.
         try session.setCategory(.playAndRecord, mode: .default,
                                 options: [.defaultToSpeaker, .allowBluetoothHFP, .mixWithOthers])
         try session.setActive(true)
+        #endif
         let input = audioEngine.inputNode
         if input.isVoiceProcessingEnabled != voiceProcessing {
             do { try input.setVoiceProcessingEnabled(voiceProcessing) } catch {
@@ -141,7 +144,9 @@ final class MicCapture {
         guard isRunning else { return }
         audioEngine.inputNode.removeTap(onBus: 0)
         audioEngine.stop()
+        #if !targetEnvironment(macCatalyst)
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        #endif
         isRunning = false
         level.value = 0
     }

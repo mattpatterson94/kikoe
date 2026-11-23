@@ -411,8 +411,8 @@ private struct PermissionSection: View {
             if denied {
                 Section {
                     Label("Kikoe can't use the microphone or speech recognition.", systemImage: "mic.slash")
-                    if let url = URL(string: UIApplication.openSettingsURLString) {
-                        Link("Open iOS Settings", destination: url)
+                    if let url = SystemSettings.url {
+                        Link("Open \(SystemSettings.name)", destination: url)
                     }
                 } header: { Text("Microphone access") }
             }

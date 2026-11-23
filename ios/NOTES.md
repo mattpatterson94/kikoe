@@ -241,7 +241,10 @@ measured: hours of real reviews on a device. That still needs doing.
 
 - The app ships as the iOS/iPadOS version of the existing Kikoe listing:
   bundle id `com.mattdoesdev.kikoe`, the same as the Safari-extension app.
-  The macOS version stays the Safari extension (`scripts/build-safari-app.sh`).
+  The macOS version is the same app built for Mac Catalyst, with the Safari
+  Web Extension embedded as an appex (`scripts/build-safari-app.sh` builds and
+  exports both platforms; see `docs/safari.md`). One bundle id, universal
+  purchase.
   iOS and macOS builds of that bundle id share build numbers, so pick one
   above both (0.21.0 is build 102).
 - `ios/scripts/build.sh <build> --upload` builds the web bundles, syncs the
@@ -254,7 +257,40 @@ measured: hours of real reviews on a device. That still needs doing.
   recognition, native settings and overlays; guideline 4.2) and that the user
   signs in to their own WaniKani/BunPro accounts (5.2.2).
 
-## Release pipeline change
+## macOS (Mac Catalyst) and the embedded Safari extension
+
+- `SUPPORTS_MACCATALYST = YES` on both targets, `TARGETED_DEVICE_FAMILY = 1,2,6`,
+  macOS deployment target 14.0. Catalyst was picked over a native macOS target
+  because the SwiftUI/UIKit code (`WebContainer: UIViewRepresentable`, toolbars,
+  `UIApplication`) builds unchanged; native macOS would need AppKit twins.
+- Catalyst guards (`#if targetEnvironment(macCatalyst)`): no `AVAudioSession`
+  (macOS has none; the engine mixes by default), the keep-awake setting uses
+  `ProcessInfo.beginActivity(.idleDisplaySleepDisabled)` instead of the idle
+  timer, and `SystemSettings` points the denied-permission link at System
+  Settings.
+- Entitlements (`Config/Kikoe.entitlements`, applied only for `sdk=macosx*`):
+  App Sandbox, microphone (`device.audio-input`), outgoing network. Speech
+  recognition needs only the usage string. `LSApplicationCategoryType` and
+  `ITSAppUsesNonExemptEncryption` are the same build settings as iOS.
+- `KikoeSafariExtension` target: `com.apple.Safari.web-extension` appex,
+  bundle id `com.mattdoesdev.kikoe.Extension`, sandboxed. A build phase copies
+  `../safari/` (output of `npm run build`) into its resources. The app's
+  embed phase and target dependency are filtered to Mac Catalyst, so iOS builds
+  skip it.
+- Debug runs of the Mac app: the sandbox blocks `KIKOE_FIXTURE` paths outside
+  the container, so for fixture runs build with
+  `CODE_SIGN_ENTITLEMENTS=<a file without app-sandbox>` and launch the binary
+  directly.
+- Not yet verified: a signed, exported `.pkg` (needs the distribution
+  certificates), the extension actually loading in Safari from the signed app,
+  live microphone recognition on macOS from the sandboxed build, and a
+  Safari-extensions shortcut inside the app.
+
+## Release pipeline change (historical)
+
+The notes below were written before the Mac app moved into the project;
+`build-safari-app.sh` no longer runs the converter, `sed` or `plutil`.
+
 
 Today, `scripts/build-safari-app.sh`:
 

@@ -132,10 +132,10 @@ struct OnboardingView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     Label("Access is turned off", systemImage: "mic.slash.fill")
                         .foregroundStyle(.orange).font(.headline)
-                    Text("Kikoe can't listen without it. Turn on Microphone and Speech Recognition for Kikoe in iOS Settings.")
+                    Text("Kikoe can't listen without it. Turn on Microphone and Speech Recognition for Kikoe in \(SystemSettings.name).")
                         .font(.subheadline).foregroundStyle(.secondary)
-                    if let url = URL(string: UIApplication.openSettingsURLString) {
-                        Link("Open iOS Settings", destination: url).font(.subheadline.weight(.semibold))
+                    if let url = SystemSettings.url {
+                        Link("Open \(SystemSettings.name)", destination: url).font(.subheadline.weight(.semibold))
                     }
                 }
             case .undetermined:
