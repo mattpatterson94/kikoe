@@ -62,6 +62,10 @@ final class AnalyzerSpeechEngine: SpeechEngine {
     private var helper = Segments()
     private var utteranceId: Double?
     private var flushTask: Task<Void, Never>?
+    /// The text last sent to the page as live, so a repeat of it (the
+    /// transcriber re-reporting an unchanged result) doesn't push the
+    /// timer that sends it as final further out.
+    private var lastLive: [String] = []
     /// Audio time (on the active pipeline's clock) up to which results have
     /// been delivered or discarded; anything ending before it is stale.
     private var consumedThrough: Double = 0
@@ -311,6 +315,13 @@ final class AnalyzerSpeechEngine: SpeechEngine {
         guard !transcripts.isEmpty else { return }
         onEvent?(.result(transcripts: transcripts, isFinal: false, resultId: resultId))
 
+        // A non-final repeat of what is already pending keeps its original
+        // deadline; otherwise noise that keeps re-reporting the same words
+        // would postpone the final, and commands only run from finals.
+        let repeated = !r.isFinal && flushTask != nil && transcripts == lastLive
+        lastLive = transcripts
+        if repeated { return }
+
         flushTask?.cancel()
         let hasFinal = primary.hasFinal || helper.hasFinal
         let wait = r.isFinal ? Self.utteranceGap : hasFinal ? Self.volatileTimeout : Self.unfinalizedTimeout
@@ -343,6 +354,7 @@ final class AnalyzerSpeechEngine: SpeechEngine {
     private func dropUtterance() {
         flushTask?.cancel()
         flushTask = nil
+        lastLive = []
         primary = Segments()
         helper = Segments()
         utteranceId = nil
