@@ -172,9 +172,11 @@ final class AnalyzerSpeechEngine: SpeechEngine {
 
     private func activate(_ p: Pipeline) {
         active = p
-        p.feed.resetEndpointing()
-        consumedThrough = p.feed.fedSeconds
-        p.cutoff = consumedThrough
+        // While inactive this pipeline kept hearing the room, so it may hold
+        // an unfinished segment. Close it (and drop what it heard) before
+        // taking speech: otherwise the next answer extends that segment,
+        // starts before the cutoff, and is thrown away with it.
+        cut(p)
         applyContext(p)
         syncRoute()
         prewarmCounterpart(of: p.locale)
@@ -252,7 +254,9 @@ final class AnalyzerSpeechEngine: SpeechEngine {
         feed.onEndpoint = { [weak self, weak p] seconds in
             DispatchQueue.main.async {
                 MainActor.assumeIsolated {
-                    guard let self, let p, self.active === p else { return }
+                    // Inactive pipelines finalize too, so they never sit on
+                    // an open segment across a language switch.
+                    guard let self, let p, p.alive else { return }
                     Task { try? await p.analyzer.finalize(through: CMTime(seconds: seconds, preferredTimescale: 48_000)) }
                 }
             }
