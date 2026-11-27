@@ -10,6 +10,9 @@ const Selectors = {
   Input: '#user-response',
 };
 
+// The answer field, for callers that need to treat it specially (see keyboard_suppress.ts).
+export const INPUT_SELECTOR = Selectors.Input;
+
 // Path segment matchers, anchored so lookalikes (e.g. "/preview", a
 // "vocabulary" query param, a future "/reviews-dashboard" page) don't
 // false-positive the way a bare href substring match would.
