@@ -132,7 +132,7 @@ struct OnboardingView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     Label("Access is turned off", systemImage: "mic.slash.fill")
                         .foregroundStyle(.orange).font(.headline)
-                    Text("Kikoe can't listen without it. Turn on Microphone and Speech Recognition for Kikoe in \(Platform.privacySettingsName).")
+                    Text("Turn on Microphone and Speech Recognition for Kikoe in \(Platform.privacySettingsName).")
                         .font(.subheadline).foregroundStyle(.secondary)
                     if let url = Platform.privacySettingsURL {
                         Link("Open \(Platform.privacySettingsName)", destination: url).font(.subheadline.weight(.semibold))
@@ -314,7 +314,7 @@ private struct TokenStep: View {
                         .font(.title2).foregroundStyle(findTokenAfter ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Find it for me").font(.headline)
-                        Text("After setup, Kikoe opens WaniKani's token page. Sign in, and it reads the token from the page. If you don't have one yet, create one there with the default read-only permissions.")
+                        Text("Kikoe will open WaniKani's token page and read the token once you sign in. Create one there if you don't have one.")
                             .font(.subheadline).foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
                     }
