@@ -65,7 +65,7 @@ export function getLanguage(): string {
 // the title and visible text (whole words) the same way clickNext matches by
 // title, since BunPro's class names churn but the labels are stable.
 const RevealLabels = {
-  reveal: ['show answer', 'reveal answer', 'reveal'],
+  reveal: ['show answer', 'see answer', 'reveal answer', 'reveal'],
   good: ['good'],
   bad: ['bad'],
 };
@@ -79,7 +79,7 @@ const InfoLabels = ['show info', 'item info'];
 
 function findLabeledButton(labels: string[]): HTMLButtonElement | null {
   for (const button of document.querySelectorAll('button')) {
-    const haystack = `${button.title} ${button.textContent}`.toLowerCase();
+    const haystack = `${button.title} ${button.getAttribute('aria-label') ?? ''} ${button.textContent}`.toLowerCase();
     if (labels.some((label) => new RegExp(`\\b${label}\\b`).test(haystack))) return button;
   }
   return null;
@@ -256,9 +256,23 @@ export function markWrong(): boolean {
 // Best-effort: only needed for accounts without BunPro's native Lightning
 // Mode, which otherwise auto-advances on a correct answer.
 export function clickNext(): boolean {
-  for (const button of document.querySelectorAll<HTMLButtonElement>('button[title]')) {
-    if (button.title.toLowerCase().includes('next question')) {
+  // Title first (desktop), then aria-label / visible text, which compact
+  // layouts (iPad, phones) use instead of a title tooltip.
+  for (const button of document.querySelectorAll<HTMLButtonElement>('button')) {
+    const label = `${button.title} ${button.getAttribute('aria-label') ?? ''}`.toLowerCase();
+    if (label.includes('next question')) {
       button.click();
+      return true;
+    }
+  }
+  if (findLabeledButton(['next question', 'next', 'continue'])) {
+    return clickLabeledButton(['next question', 'next', 'continue']);
+  }
+  // Once graded, BunPro's submit button is the "next" button.
+  if (getMetadata()?.dataset.metaIsPostAttempt === 'true') {
+    const submit = document.querySelector<HTMLButtonElement>(Selectors.Submit);
+    if (submit) {
+      submit.click();
       return true;
     }
   }
