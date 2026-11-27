@@ -13,6 +13,9 @@ const Selectors = {
   Hint: 'button[title="Toggle the hint level"]',
 };
 
+// The answer field, for callers that need to treat it specially (see keyboard_suppress.ts).
+export const INPUT_SELECTOR = Selectors.Input;
+
 // The card's identity payload embedded in data-meta-info.
 interface MetaInfo {
   id?: number | string;

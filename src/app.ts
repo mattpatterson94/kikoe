@@ -14,6 +14,7 @@ import { startSpeedEnhancer as startBunproSpeedEnhancer } from './bunpro_speed';
 import { createTranscriptContainer, logTranscript, showIdleIndicator, setIdleIndicatorState } from './live_transcript';
 import { acquireWakeLock, releaseWakeLock } from './wake_lock';
 import { watchMicPermission } from './mic_permission';
+import { suppressAutofocusKeyboard } from './keyboard_suppress';
 import {
   isTouchPrimaryDevice,
   watchOnscreenKeyboard,
@@ -1004,6 +1005,10 @@ async function startListener(dictionary: Dictionary): Promise<void> {
   }
 
   watchOnscreenKeyboard();
+  suppressAutofocusKeyboard(
+    SITE === 'bunpro' ? bunpro.INPUT_SELECTOR : wanikani.INPUT_SELECTOR,
+    isTouchPrimaryDevice(),
+  );
   document.addEventListener('visibilitychange', updateRecognitionForPageActivity);
   window.addEventListener('focus', handleWindowBlurOrFocus);
   window.addEventListener('blur', handleWindowBlurOrFocus);
