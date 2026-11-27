@@ -359,6 +359,26 @@ describe('clickNext', () => {
   test('returns false when no such button exists', () => {
     expect(clickNext()).toBe(false);
   });
+
+  test('matches an aria-label or visible "Next" when there is no title', () => {
+    const button = document.createElement('button');
+    button.textContent = 'Next';
+    button.addEventListener('click', () => { button.clicked = true; });
+    document.body.appendChild(button);
+    expect(clickNext()).toBe(true);
+    expect(button.clicked).toBe(true);
+  });
+});
+
+describe('reveal label', () => {
+  test('clicks a "See answer" button', () => {
+    const button = document.createElement('button');
+    button.textContent = 'See answer';
+    button.addEventListener('click', () => { button.clicked = true; });
+    document.body.appendChild(button);
+    expect(reveal()).toBe(true);
+    expect(button.clicked).toBe(true);
+  });
 });
 
 // ── reveal / gradeGood / gradeBad ─────────────────────────────────────────────
@@ -542,6 +562,12 @@ describe('clickAnswer', () => {
   // The graded card's button renders a tick icon beside the word.
   test('clicks the "✓ Answer" button', () => {
     const button = addButton('✓ Answer');
+    expect(clickAnswer()).toBe(true);
+    expect(button.clicked).toBe(true);
+  });
+
+  test('clicks the "✓ See Answer" button shown on iPad', () => {
+    const button = addButton('✓ See Answer');
     expect(clickAnswer()).toBe(true);
     expect(button.clicked).toBe(true);
   });

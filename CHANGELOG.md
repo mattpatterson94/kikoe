@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Fixed
+
+- iOS app: a live result the transcriber keeps re-reporting unchanged no longer postpones its 1.2 s promotion to final, so "incorrect" and "next" on English cards run sooner in noisy rooms.
+- BunPro: the "See Answer" button (iPad wording) is now clicked after a wrong answer, and "next" falls back to the graded card's submit button when the next button has no "next question" title.
+
 ## [0.22.0] - 2026-11-24
 
 ### Added
