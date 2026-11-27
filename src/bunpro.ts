@@ -351,9 +351,12 @@ function bareLabel(text: string): string {
 // the answer given to the correct one. Matched on the whole label, ignoring
 // the tick: the word-boundary match the other buttons use would also catch a
 // Reveal & Grade card's "Show Answer".
+// 'see answer' is what wider layouts (iPad) call the same button.
+const AnswerLabels = ['answer', 'see answer'];
+
 export function clickAnswer(): boolean {
   for (const button of document.querySelectorAll('button')) {
-    if (bareLabel(button.textContent ?? '') === 'answer' || bareLabel(button.title) === 'answer') {
+    if (AnswerLabels.includes(bareLabel(button.textContent ?? '')) || AnswerLabels.includes(bareLabel(button.title))) {
       button.click();
       return true;
     }

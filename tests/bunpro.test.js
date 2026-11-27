@@ -566,6 +566,12 @@ describe('clickAnswer', () => {
     expect(button.clicked).toBe(true);
   });
 
+  test('clicks the "✓ See Answer" button shown on iPad', () => {
+    const button = addButton('✓ See Answer');
+    expect(clickAnswer()).toBe(true);
+    expect(button.clicked).toBe(true);
+  });
+
   test('matches by title as well as text', () => {
     const button = addButton('', 'Answer');
     expect(clickAnswer()).toBe(true);
