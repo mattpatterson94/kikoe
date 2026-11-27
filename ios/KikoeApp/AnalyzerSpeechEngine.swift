@@ -39,8 +39,12 @@ final class AnalyzerSpeechEngine: SpeechEngine {
     /// rebuilding anything when the card's language changes.
     private let usesDictation: @MainActor (String) -> Bool
     private let dictationAssist: Bool
-    /// The feed the mic tap writes to: the active pipeline's, or nil.
-    private let route = LockedValue<AudioFeed?>(nil)
+    /// The feeds the mic tap writes to: every live pipeline's, while running.
+    /// Only the active pipeline's results are used, but the others keep
+    /// hearing the room so their models are already warm and in the middle
+    /// of a stream when a card switches to their language; an analyzer that
+    /// only starts receiving audio at the switch mishears the first answer.
+    private let route = LockedValue<[AudioFeed]>([])
     private var pipelines: [String: Pipeline] = [:]
     private var building: [String: Task<Pipeline?, Never>] = [:]
     /// Bumped by shutdown(), so a pipeline that finishes building afterwards
@@ -93,13 +97,16 @@ final class AnalyzerSpeechEngine: SpeechEngine {
         running = true
         let route = self.route
         do {
-            try mic.start { buffer, rms in route.get()?.ingest(buffer, rms: rms) }
+            try mic.start { buffer, rms in
+                for feed in route.get() { feed.ingest(buffer, rms: rms) }
+            }
         } catch {
             NSLog("[kikoe] mic start failed: \(error)")
             onEvent?(.error("audio-capture"))
             running = false
             return
         }
+        syncRoute()
         if let active, active.locale == locale, active.alive {
             // Same language: a start is a reconfigure (new hints). A pause
             // already cut the audio before it.
@@ -126,7 +133,7 @@ final class AnalyzerSpeechEngine: SpeechEngine {
         if let active { cut(active) }
         active = nil
         locale = nil
-        route.set(nil)
+        route.set([])
         mic.stop()
     }
 
@@ -146,7 +153,6 @@ final class AnalyzerSpeechEngine: SpeechEngine {
         dropUtterance()
         if let old = active { cut(old) }
         active = nil
-        route.set(nil)
         self.locale = locale
         if let ready = pipelines[locale], ready.alive {
             activate(ready)
@@ -170,8 +176,13 @@ final class AnalyzerSpeechEngine: SpeechEngine {
         consumedThrough = p.feed.fedSeconds
         p.cutoff = consumedThrough
         applyContext(p)
-        route.set(p.feed)
+        syncRoute()
         prewarmCounterpart(of: p.locale)
+    }
+
+    /// Point the mic at every live pipeline while running, none otherwise.
+    private func syncRoute() {
+        route.set(running ? pipelines.values.filter(\.alive).map(\.feed) : [])
     }
 
     /// WaniKani alternates languages card by card, so build the other one in
@@ -207,6 +218,7 @@ final class AnalyzerSpeechEngine: SpeechEngine {
         }
         building[locale] = nil
         if let p { pipelines[locale] = p }
+        syncRoute()
         return p
     }
 
@@ -271,9 +283,9 @@ final class AnalyzerSpeechEngine: SpeechEngine {
             guard let self, p.alive else { return }
             p.close()
             if self.pipelines[p.locale] === p { self.pipelines[p.locale] = nil }
+            self.syncRoute()
             if self.active === p, self.running, let locale = self.locale {
                 self.active = nil
-                self.route.set(nil)
                 try? await Task.sleep(for: .milliseconds(500))
                 if self.running, self.active == nil, self.locale == locale { self.switchTo(locale) }
             }
@@ -494,8 +506,20 @@ struct Segments {
     /// Returns false when there was nothing to add.
     @discardableResult
     mutating func add(_ texts: [String], isFinal: Bool, end: Double, separator: String) -> Bool {
-        let texts = isFinal ? dedupe(texts + volatile) : texts
-        if isFinal { volatile = [] } else if !texts.isEmpty { volatile = texts }
+        var texts = texts
+        if isFinal {
+            // A stray fragment ("to.") where the live text had a real word
+            // goes behind it, so the page shows (and ranks first) what the
+            // user watched appear. Every alternative is still matched.
+            if Self.isStrayFragment(texts.first), let live = volatile.first, !Self.isStrayFragment(live) {
+                texts = dedupe(volatile + texts)
+            } else {
+                texts = dedupe(texts + volatile)
+            }
+            volatile = []
+        } else if !texts.isEmpty {
+            volatile = texts
+        }
         guard !texts.isEmpty else { return false }
         transcripts = Self.join(finished, texts, separator: separator)
         self.end = max(self.end, end)
@@ -508,6 +532,14 @@ struct Segments {
             })
         }
         return true
+    }
+
+    /// One or two ASCII letters, ignoring punctuation: what SpeechTranscriber's
+    /// English finals degrade to ("to.", "a"). Japanese is never matched.
+    static func isStrayFragment(_ text: String?) -> Bool {
+        guard let text else { return false }
+        let letters = text.filter { !".,!?;:。、！？ ".contains($0) }
+        return letters.count <= 2 && letters.allSatisfy { $0.isASCII && $0.isLetter }
     }
 
     /// Every prefix × segment pairing, best combined rank first, so the
