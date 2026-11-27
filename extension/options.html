@@ -615,36 +615,35 @@
       <section class="panel" data-panel="general" aria-labelledby="generalTitle">
         <div class="panel-head">
           <h1 id="generalTitle">General</h1>
-          <p>Changes save as you make them. Reload an open review page for them to apply.</p>
+          <p>Reload an open review page for changes to apply.</p>
         </div>
 
         <div class="group">
           <h2>Apps</h2>
           <div class="card">
             <div class="field">
-              <label for="site_wanikani">WaniKani<span class="hint">Kanji and vocabulary reviews and lessons</span></label>
+              <label for="site_wanikani">WaniKani</label>
               <input type="checkbox" id="site_wanikani" class="site-toggle">
             </div>
             <div class="field">
-              <label for="site_bunpro">BunPro<span class="hint">Grammar and vocabulary reviews</span></label>
+              <label for="site_bunpro">BunPro</label>
               <input type="checkbox" id="site_bunpro" class="site-toggle">
             </div>
           </div>
-          <p class="group-foot">Kikoe only loads the apps that are on. Each has its own page for review settings.</p>
-        </div>
+                  </div>
 
         <div class="group">
           <h2>Listening</h2>
           <div class="card">
             <div class="field">
-              <span class="label">Microphone<span class="hint">Start listening on a review page and choose Allow when the browser asks</span></span>
+              <span class="label">Microphone<span class="hint">Choose Allow when the browser asks</span></span>
             </div>
             <div class="field">
-              <label for="keep_screen_awake">Keep screen awake while listening<span class="hint">Hands-free reviews don't move the mouse to reset the idle timer</span></label>
+              <label for="keep_screen_awake">Keep screen awake while listening<span class="hint">Stops the screen from sleeping during hands-free reviews</span></label>
               <input type="checkbox" id="keep_screen_awake">
             </div>
             <div class="field" id="noiseReductionField" hidden>
-              <label for="noise_reduction">Reduce background noise<span class="hint">Filter out room noise and speaker echo before the recognizer hears it</span></label>
+              <label for="noise_reduction">Reduce background noise<span class="hint">Filters room noise and speaker echo</span></label>
               <input type="checkbox" id="noise_reduction">
             </div>
           </div>
@@ -666,8 +665,7 @@
           </div>
           <p class="group-foot">
             Replace something the recognizer keeps mishearing with the answer
-            you meant, in both apps. Click a “no match” transcript during
-            reviews to add one.
+            you meant. Click a “no match” transcript to add one.
           </p>
         </div>
       </section>
@@ -675,7 +673,7 @@
       <section class="panel" data-panel="wanikani" id="app_wanikani" data-site="wanikani" aria-labelledby="wanikaniTitle" hidden>
         <div class="panel-head">
           <h1 id="wanikaniTitle">WaniKani</h1>
-          <p>These apply only on WaniKani; BunPro keeps its own.</p>
+          
         </div>
         <div class="group">
           <h2>API token</h2>
@@ -688,8 +686,7 @@
             <p class="status" id="tokenStatus" role="status" aria-live="polite"></p>
           </div>
           <p class="group-foot">
-            “Find token” opens <a href="https://www.wanikani.com/settings/personal_access_tokens" target="_blank">WaniKani settings</a>
-            and reads a read-only personal access token from the page.
+            “Find token” reads it from <a href="https://www.wanikani.com/settings/personal_access_tokens" target="_blank">WaniKani settings</a>.
           </p>
         </div>
       </section>
@@ -697,7 +694,7 @@
       <section class="panel" data-panel="bunpro" id="app_bunpro" data-site="bunpro" aria-labelledby="bunproTitle" hidden>
         <div class="panel-head">
           <h1 id="bunproTitle">BunPro</h1>
-          <p>These apply only on BunPro; WaniKani keeps its own.</p>
+          
         </div>
       </section>
 
@@ -708,15 +705,15 @@
           <h2>Review flow</h2>
           <div class="card">
             <div class="field">
-              <label data-for="turbo">Turbo mode<span class="hint">Auto-advance on a correct answer</span></label>
+              <label data-for="turbo">Turbo mode<span class="hint">Advance automatically on a correct answer</span></label>
               <input type="checkbox" data-key="turbo">
             </div>
             <div class="field">
-              <label data-for="speed_show_info">Show item info on wrong answer<span class="hint">Opens the item info panel when you answer incorrectly</span></label>
+              <label data-for="speed_show_info">Show item info on wrong answer<span class="hint">Open the item info panel after a wrong answer</span></label>
               <input type="checkbox" data-key="speed_show_info">
             </div>
             <div class="field">
-              <label data-for="strict_kanji_readings">Strict kanji readings<span class="hint">For a single kanji, only accept kana the recognizer actually heard</span></label>
+              <label data-for="strict_kanji_readings">Strict kanji readings<span class="hint">On single-kanji prompts, only accept kana the recognizer actually heard</span></label>
               <input type="checkbox" data-key="strict_kanji_readings">
             </div>
           </div>
@@ -725,21 +722,21 @@
           <h2>Ippatsu mode（一発）</h2>
           <div class="card">
             <div class="field">
-              <label data-for="ippatsu_meaning">Meaning questions<span class="hint">English answers</span></label>
+              <label data-for="ippatsu_meaning">Meaning questions<span class="hint">English</span></label>
               <input type="checkbox" data-key="ippatsu_meaning">
             </div>
             <div class="field">
-              <label data-for="ippatsu_reading">Reading questions<span class="hint">Japanese answers</span></label>
+              <label data-for="ippatsu_reading">Reading questions<span class="hint">Japanese</span></label>
               <input type="checkbox" data-key="ippatsu_reading">
             </div>
           </div>
-          <p class="group-foot">One shot per question: a wrong answer is submitted instead of letting you retry.</p>
+          <p class="group-foot">A wrong answer is submitted instead of letting you retry.</p>
         </div>
         <div class="group">
           <h2>Live transcript</h2>
           <div class="card">
             <div class="field">
-              <label data-for="transcript">Show live transcript<span class="hint">Whether Kikoe is listening and what it hears, over the page</span></label>
+              <label data-for="transcript">Show live transcript<span class="hint">Show what Kikoe hears over the page</span></label>
               <input type="checkbox" data-key="transcript">
             </div>
             <div class="field">
@@ -758,7 +755,7 @@
               </select>
             </div>
             <div class="field">
-              <label data-for="show_help_button">Show help button<span class="hint">A ? button with voice commands and tips; saying “help” works either way</span></label>
+              <label data-for="show_help_button">Show help button<span class="hint">A ? button listing voice commands</span></label>
               <input type="checkbox" data-key="show_help_button">
             </div>
           </div>
@@ -773,7 +770,7 @@
           <h2>Recognizer</h2>
           <div class="card">
             <div class="field" id="recognizerField" hidden>
-              <label for="recognizer">Recognizer<span class="hint">On-device keeps your voice on this computer and accepts contextual hints</span></label>
+              <label for="recognizer">Recognizer<span class="hint">Keeps your voice on this computer</span></label>
               <select id="recognizer">
                 <option value="cloud">Browser default</option>
                 <option value="on_device">On-device</option>
@@ -784,17 +781,16 @@
               <button type="button" class="secondary" id="installOnDeviceModels">Download</button>
             </div>
             <div class="field" id="contextualHintsField" hidden>
-              <label for="contextual_hints">Contextual hints<span class="hint">Bias the recognizer toward the card's accepted answers (on-device only)</span></label>
+              <label for="contextual_hints">Contextual hints<span class="hint">Bias the recognizer toward the card's accepted answers</span></label>
               <input type="checkbox" id="contextual_hints">
             </div>
           </div>
-          <p class="group-foot">Languages without a downloaded on-device model use the browser's default.</p>
-        </div>
+                  </div>
         <div class="group">
           <h2>Troubleshooting</h2>
           <div class="card">
             <div class="field">
-              <label for="debug">Debug logging<span class="hint">Log speech matching, subject loading and token discovery to the browser console</span></label>
+              <label for="debug">Debug logging<span class="hint">Log to the browser console</span></label>
               <input type="checkbox" id="debug">
             </div>
           </div>

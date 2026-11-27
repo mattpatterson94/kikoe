@@ -263,8 +263,6 @@ private struct AppSettingsView: View {
                 } footer: {
                     if let reason = speech.fallbackReason {
                         Text(reason)
-                    } else {
-                        Text("Automatic picks the best recognizer for each card. The transcribers need \(Platform.isMac ? "macOS 26" : "iOS 26"); SFSpeechRecognizer works on any version.")
                     }
                 }
             }
